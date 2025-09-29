@@ -90,9 +90,10 @@ st.divider()
 #User input, search criteria
 st.subheader("Specify Imagery Search Criteria")
 st.text("Enter the acquisition date range, cloud cover percentage, and Landsat mission type. " \
-"Current platform support Landsat 1,2 and 4 at sensor radiance and Landsat 5-9 Collection 2 Surface Reflectance Analysis Ready Data (ARD), excluding the thermal bands. Landsat mission avaliability is as follows:")
+"Current platform support Landsat 1-4 at sensor radiance and Landsat 5-9 Collection 2 Surface Reflectance Analysis Ready Data (ARD), excluding the thermal bands. Landsat mission avaliability is as follows:")
 st.markdown("1. Landsat 1 Multispectral Scanner/MSS (1972 - 1978)")
 st.markdown("2. Landsat 2 Multispectral Scanner/MSS (1978 - 1982)")
+st.markdown("3. Landsat 3 Multispectral Scanner/MSS (1978 - 1983)")
 st.markdown("3. Landsat 4 Thematic Mapper/TM (1982 - 1993)")
 st.markdown("4. Landsat 5 Thematic Mapper/TM (1984 - 2012)")
 st.markdown("5. Landsat 7 Enhanced Thematic Mapper Plus/ETM+ (1999 - 2021)")

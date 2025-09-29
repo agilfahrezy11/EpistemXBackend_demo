@@ -21,12 +21,19 @@ class Reflectance_Data:
             'sensor': 'L1',
             'description': 'Landsat 1 Multispectral Scanner Raw Collection'
         },
-        'L2_Raw': {
+        'L2_RAW': {
             'collection': 'LANDSAT/LM02/C02/T1',
             'cloud_property': 'CLOUD_COVER_LAND',
             'type': 'landsat_raw',
             'sensor': 'L2',
             'description': 'Landsat 2 Multispectral Scanner Raw Collection'            
+        },
+        'L3_RAW':{
+            'collection': 'LANDSAT/LM03/C02/T1',
+            'cloud_property': 'CLOUD_COVER_LAND',
+            'type': 'landsat_raw',
+            'sensor': 'L3',
+            'description': 'Landsat 3 Multispectral Scanner Raw Collection'
         },
         'L4_SR': {
             'collection': 'LANDSAT/LT04/C02/T1_L2',
@@ -166,7 +173,7 @@ class Reflectance_Data:
                 ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'], 
                 ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
             )
-        elif sensor_type in ['L1', 'L2']:
+        elif sensor_type in ['L1', 'L2', 'L3']:
             return image.select(
                 ['B4', 'B5', 'B6', 'B7'],
                 ['GREEN', 'RED', 'NIR1', 'NIR2']
