@@ -150,7 +150,7 @@ class Reflectance_Data:
         """
         Standardize Landsat Surface Reflectance (SR) band names 
         based on sensor type (L5, L7, L8, L9).
-        
+
         Parameters
         ----------
         image : ee.Image. Landsat SR image
@@ -160,11 +160,16 @@ class Reflectance_Data:
         ee.Image
             Image with standardized band names
         """
-        if sensor_type in ['L5', 'L7']:
+        if sensor_type in ['L4','L5', 'L7']:
             # Landsat 5/7 SR bands
             return image.select(
                 ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'], 
                 ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
+            )
+        elif sensor_type in ['L1', 'L2']:
+            return image.select(
+                ['B4', 'B5', 'B6', 'B7'],
+                ['GREEN', 'RED', 'NIR1', 'NIR2']
             )
         elif sensor_type in ['L8', 'L9']:
             # Landsat 8/9 SR bands
