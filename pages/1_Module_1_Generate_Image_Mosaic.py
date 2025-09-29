@@ -23,7 +23,15 @@ st.sidebar.title("About")
 st.sidebar.info(markdown)
 logo = "logos\logo_epistem.png"
 st.sidebar.image(logo)
-
+# Initialize session state for storing collection and composite
+if 'collection' not in st.session_state:
+    st.session_state.collection = None
+if 'composite' not in st.session_state:
+    st.session_state.composite = None
+if 'aoi' not in st.session_state:
+    st.session_state.AOI = None
+if 'export_tasks' not in st.session_state:
+    st.session_state.export_tasks = []
 #Based on early experiments, shapefile with complex geometry often cause issues in GEE
 #The following functions are used to handle the common geometry issues
 
@@ -119,6 +127,7 @@ optical_data = sensor_dict[selected_sensor_name]  # This is what you pass to you
 #Date selection
 #Year only
 st.subheader("Select Time Period")
+st.markdown("If 'select by year' is choosen, the system automatically search imagery from January 1 untill December 31 ")
 date_mode = st.radio(
     "Choose date selection mode:",
     ["Select by year", "Custom date range"],
@@ -147,7 +156,7 @@ else:
 cloud_cover = st.slider("Maximum Cloud Cover (%):", 0, 100, 30)
 
 #Search the landsat imagery
-if st.button("Search Landsat Imagery") and aoi:
+if st.button("Search Landsat Imagery", type="primary", use_container_width=True) and aoi:
     reflectance = Reflectance_Data()
     collection, meta = reflectance.get_optical_data(
         aoi=aoi,
@@ -161,7 +170,14 @@ if st.button("Search Landsat Imagery") and aoi:
     stats = Reflectance_Stats()
     detailed_stats = stats.get_collection_statistics(collection, compute_stats=True, print_report=True)
     st.success(f"Found {detailed_stats['total_images']} images.")
-        # Debug: check collection size (safe server-side call)
+    #Store the metadata for export
+    st.session_state.search_metadata = {
+        'sensor': optical_data,
+        'start_date': start_date,
+        'end_date': end_date,
+        'num_images': detailed_stats['total_images']
+        }
+    #Debug: check collection size (safe server-side call)
     try:
         coll_size = int(collection.size().getInfo())
     except Exception as e:
@@ -225,6 +241,88 @@ if st.button("Search Landsat Imagery") and aoi:
         m.to_streamlit(height=600)
 else:
     st.info("Upload an AOI and specify search criteria to begin.")
+
+#export the data
+if st.session_state.composite is not None:
+    st.subheader("Export Mosaic to Google Drive")
+    with st.expander("Export Setting", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            #FileNaming
+            default_name = f"Landsat_{st.session_state.search_metadata['sensor']}_{st.session_state.search_metadata['start_date']}_{st.session_state.search_metadata['end_date']}_mosaic"
+            export_name = st.text_input(
+                "Export Filename:",
+                value=default_name,
+                help = "The output will be saved as GeoTIFF (.tif)"
+            )
+            drive_folder = st.text_input(
+                "Google Drive Folder:",
+                value="Earth Engine Export",
+                help = "Google Drive Folder to stored the result"
+            )
+        with col2:
+            crs = {
+                "WGS 84 (EPSG:4326)": "EPSG:4326",
+                "Custom EPSG": "CUSTOM"
+            }
+            crs_choice = st.selectbox(
+                "Coordinate Reference System:",
+                options = list(crs.keys()),
+                index = 0
+            )
+            if crs_choice == 'Custom EPSG':
+                custom_epsg = st.text_input(
+                    "Enter EPSG Code:",
+                    value="4326",
+                    help = "Example: 3278 (UTM Zone 48S)"
+                )
+            else:
+                export_crs = crs[crs_choice]
+            scale = st.number_input(
+                    "Pixel Size (meters):",
+                    min_value=10,
+                    max_value=1000,
+                    value = 30,
+                    step=10)
+        if st.button("Start Export to Google Drive", type="primary"):
+            try:
+                with st.spinner("Preparing export task..."):
+                    # Use the composite that is already computed and clipped
+                    export_image = st.session_state.composite
+                    # Export all bands
+                    export_image = export_image.select(export_image.bandNames())
+                    def ensure_geometry(aoi):
+                        """Convert AOI to ee.Geometry if needed."""
+                        if isinstance(aoi, ee.FeatureCollection):
+                            return aoi.geometry()
+                        elif isinstance(aoi, ee.Feature):
+                            return aoi.geometry()
+                        elif isinstance(aoi, ee.Geometry):
+                            return aoi
+                        else:
+                            raise ValueError("AOI is not a valid ee object")
+                    #region = ensure_geometry(st.session_state.AOI)
+                    # Set export parameters
+                    export_params = {
+                        "image": export_image,
+                        "description": export_name,
+                        "folder": drive_folder,
+                        "fileNamePrefix": export_name,
+                        "scale": scale,
+                        "crs": "EPSG:4326",   # or detect from AOI if you prefer
+                        "maxPixels": 1e13,
+                        "fileFormat": "GeoTIFF",
+                        "formatOptions": {"cloudOptimized": True},
+                        "region": ensure_geometry(st.session_state.AOI)
+                    }
+
+                    task = ee.batch.Export.image.toDrive(**export_params)
+                    task.start()
+
+                    st.success(f"✅ Export task '{export_name}' submitted!")
+                    st.info(f"Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks)")
+            except Exception as e:
+                st.error(f"Export failed: {str(e)}")
 #Link the next page
 st.divider()
 st.subheader("Module Navigation")

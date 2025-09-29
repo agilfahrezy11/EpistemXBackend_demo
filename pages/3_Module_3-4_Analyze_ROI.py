@@ -312,6 +312,8 @@ if st.session_state.get("analysis_complete", False):
         else:
             st.write("No problematic pairs data available")            
 
+
+
 st.divider()
 st.subheader("Module Navigation")
 

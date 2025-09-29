@@ -34,6 +34,6 @@ markdown = """
 
 st.markdown(markdown)
 
-m = leafmap.Map(minimap_control=True)
+m = leafmap.Map(center = [-5.003394, 113.598633], zoom = 5)
 m.add_basemap("OpenTopoMap")
 m.to_streamlit(height=500)
