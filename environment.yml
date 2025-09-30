@@ -1,0 +1,19 @@
+name: epistemx
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pip
+  - streamlit
+  - pandas
+  - geopandas
+  - earthengine-api
+  - leafmap
+  - geemap
+  - numpy
+  - matplotlib
+  - seaborn
+  - altair
+  - tqdm
+  - pillow
+  - shapely
