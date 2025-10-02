@@ -73,6 +73,12 @@ Activate the `epistemx` environment (prepackaged or locally built) and use the t
 
 **Running the Jupyter Notebooks**
 
+Before launching, install the `epistemx` package into the active environment so notebooks can import the source modules:
+
+```bash
+python -m pip install -e .
+```
+
 Launch Jupyter Lab (or Jupyter Notebook) from the project root to explore the project's modules and workflows:
 
 ```bash
@@ -88,5 +94,3 @@ streamlit run home.py
 ```
 
 This will open the application in your default web browser.
-
-
