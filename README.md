@@ -2,16 +2,13 @@
 
 This repository contains the core backend algorithms and modules for the Epistem land use land cover mapping platform.
 
-## File Structure Explanation
+## File Structure
 
-The repository is organized as follows:
-
-- **`home.py` & `pages/`**: A minimal Streamlit application for testing and demonstrating the backend algorithms.
 - **`src/epistemx/`**: The core Python package for this project. It contains all the backend logic, helper functions, and modules for interacting with Google Earth Engine.
 - **`notebooks/`**: Jupyter notebooks used for development, experimentation, and demonstrating the functionality of the core modules.
+- **`home.py` & `pages/`**: A minimal Streamlit application for testing and demonstrating the backend algorithms.
 - **`environment.yml`**: The environment file for creating a reproducible environment. It lists all necessary Python packages and dependencies.
 - **`pyproject.toml`**: The standard Python project configuration file. It defines project metadata and core dependencies for `pip`.
-- **`README.md`**: This file, providing an overview and instructions for the project.
 
 ## Getting Started
 
@@ -32,7 +29,8 @@ conda --version
 
 ### 2. Set Up the Python Environment
 
-**Recommended (prepackaged Conda-Pack environment)**
+**Recommended (prepackaged Conda-Pack environment)**  
+
 _Prepared on Windows 11 x64; follow this path on Windows 11 x64 machines for the smoothest setup._
 
 1. Download the prepackaged `epistemx` conda-pack archive from [SharePoint](https://icrafcifor.sharepoint.com/:u:/r/sites/EPISTEM/Shared%20Documents/EPISTEM%20Consortium/1%20Monitoring%20Technology/Prototyping/python_environment/epistemx.tar.gz?csf=1&web=1&e=eGbscP). You will need access to the EPISTEM SharePoint workspace.
@@ -46,10 +44,11 @@ _Prepared on Windows 11 x64; follow this path on Windows 11 x64 machines for the
    conda-unpack
    ```
 
-3. After running `conda-unpack`, reactivate the environment. The `epistemx` environment now includes Jupyter Notebook, JupyterLab, and all project dependencies.
+3. After running `conda-unpack`, reactivate the environment. The `epistemx` environment now includes all Earth Engine dependencies JupyterLab, and Streamlit.
 
-**Alternative (build from `environment.yml`)**
-_Recommended for macOS and Linux systems, and for Windows users with a fast, reliable internet connection._
+**Alternative (build from `environment.yml`)**  
+
+_Recommended for macOS and Linux systems._
 
 If you prefer to build the environment locally, use the provided `environment.yml` with [Miniforge](https://github.com/conda-forge/miniforge):
 
@@ -79,7 +78,7 @@ Before launching, install the `epistemx` package into the active environment so 
 python -m pip install -e .
 ```
 
-Launch Jupyter Lab (or Jupyter Notebook) from the project root to explore the project's modules and workflows:
+Launch Jupyter Lab from the project root to explore the project's modules and workflows:
 
 ```bash
 jupyter lab
