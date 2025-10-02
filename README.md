@@ -33,10 +33,11 @@ conda --version
 ### 2. Set Up the Python Environment
 
 **Recommended (prepackaged Conda-Pack environment)**
+_Prepared on Windows 11 x64; follow this path on Windows 11 x64 machines for the smoothest setup._
 
 1. Download the prepackaged `epistemx` conda-pack archive from [SharePoint](https://icrafcifor.sharepoint.com/:u:/r/sites/EPISTEM/Shared%20Documents/EPISTEM%20Consortium/1%20Monitoring%20Technology/Prototyping/python_environment/epistemx.tar.gz?csf=1&web=1&e=eGbscP). You will need access to the EPISTEM SharePoint workspace.
 
-2. Unpack the archive and make it usable on your machine by following [these instructions](https://gist.github.com/pmbaumgartner/2626ce24adb7f4030c0075d2b35dda32) for restoring a conda-pack environment. In short, place the archive in the directory where you keep your Conda/Mamba environments, extract it, and run `conda-unpack` inside the environment. Example commands (adapt paths to your platform):
+2. Unpack the archive and make it usable on your machine by following [these instructions](https://gist.github.com/pmbaumgartner/2626ce24adb7f4030c0075d2b35dda32) for restoring a conda-pack environment. In short, place the archive in the directory where you keep your Conda environments, extract it, and run `conda-unpack` inside the environment. Example commands (adapt paths to your platform):
 
    ```bash
    mkdir -p ~/miniconda3/envs/epistemx
@@ -48,12 +49,13 @@ conda --version
 3. After running `conda-unpack`, reactivate the environment. The `epistemx` environment now includes Jupyter Notebook, JupyterLab, and all project dependencies.
 
 **Alternative (build from `environment.yml`)**
+_Recommended for macOS and Linux systems, and for Windows users with a fast, reliable internet connection._
 
-If you prefer to build the environment locally, use the provided `environment.yml` with Micromamba:
+If you prefer to build the environment locally, use the provided `environment.yml` with [Miniforge](https://github.com/conda-forge/miniforge):
 
 ```bash
-micromamba create -f environment.yml -n epistemx
-micromamba activate epistemx
+conda create -f environment.yml -n epistemx
+conda activate epistemx
 ```
 
 ### 3. Clone the Repository
@@ -86,3 +88,5 @@ streamlit run home.py
 ```
 
 This will open the application in your default web browser.
+
+
