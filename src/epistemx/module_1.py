@@ -1,5 +1,4 @@
 import ee
-ee.Initialize()
 from datetime import datetime
 import logging
 
