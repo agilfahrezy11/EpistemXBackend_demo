@@ -1,0 +1,20 @@
+[project]
+name = "epistemx"
+version = "0.1.0"
+description = "A Streamlit application for the Epistem land cover mapping platform."
+dependencies = [
+    "streamlit",
+    "pandas",
+    "geopandas",
+    "earthengine-api",
+    "leafmap",
+    "geemap",
+    "numpy",
+    "matplotlib",
+    "seaborn",
+    "altair",
+    "tqdm",
+    "pillow",
+    "shapely",
+]
+requires-python = ">=3.9"
