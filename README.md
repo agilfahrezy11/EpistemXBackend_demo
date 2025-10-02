@@ -22,38 +22,52 @@ Follow these instructions to set up and run the project on your local machine.
 Before you begin, ensure you have the following installed on your system:
 
 - **Git**: A version control system for cloning the repository. [Installation Guide](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
-- **Micromamba**: A lightweight, fast, cross-platform package manager. [Micromamba Installation Guide](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html).
+- **Micromamba or Miniconda**: A lightweight, fast, cross-platform package manager. [Micromamba Installation Guide](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html).
 
-### 2. Installation
+### 2. Set Up the Python Environment
 
-**Step 1: Clone the repository**
+**Recommended (prepackaged Conda-Pack environment)**
 
-Open your terminal, navigate to the directory where you want to store the project, and run the following command:
+1. Download the prepackaged `epistemx` conda-pack archive from [SharePoint](https://icrafcifor.sharepoint.com/:u:/r/sites/EPISTEM/Shared%20Documents/EPISTEM%20Consortium/1%20Monitoring%20Technology/Prototyping/python_environment/epistemx.tar.gz?csf=1&web=1&e=eGbscP). You will need access to the EPISTEM SharePoint workspace.
 
-```bash
-git clone https://github.com/epistem-io/EpistemXBackend.git
-cd EpistemXBackend
-```
+2. Unpack the archive and make it usable on your machine by following [these instructions](https://gist.github.com/pmbaumgartner/2626ce24adb7f4030c0075d2b35dda32) for restoring a conda-pack environment. In short, place the archive in the directory where you keep your Conda/Mamba environments, extract it, and run `conda-unpack` inside the environment. Example commands (adapt paths to your platform):
 
-**Step 2: Create and activate the Micromamba environment**
+   ```bash
+   mkdir -p ~/miniconda3/envs/epistemx
+   tar -xzf epistemx.tar.gz -C ~/miniconda3/envs/epistemx
+   conda activate ~/miniconda3/envs/epistemx
+   conda-unpack
+   ```
 
-Use the `environment.yml` file to create a new environment named `epistemx` that contains all the necessary dependencies.
+3. After running `conda-unpack`, reactivate the environment. The `epistemx` environment now includes Jupyter Notebook, JupyterLab, and all project dependencies.
+
+**Alternative (build from `environment.yml`)**
+
+If you prefer to build the environment locally, use the provided `environment.yml` with Micromamba:
 
 ```bash
 micromamba create -f environment.yml -n epistemx
 micromamba activate epistemx
 ```
 
-### 3. Usage
+### 3. Clone the Repository
 
-Once the environment is activated, you can run the notebooks or the Streamlit application.
+With the environment ready, clone the project and move into the repository:
+
+```bash
+git clone https://github.com/epistem-io/EpistemXBackend.git
+cd EpistemXBackend
+```
+
+### 4. Usage
+
+Activate the `epistemx` environment (prepackaged or locally built) and use the tooling included in it.
 
 **Running the Jupyter Notebooks**
 
-To explore the project's modules and workflows, you can run the Jupyter notebooks:
+Launch Jupyter Lab (or Jupyter Notebook) from the project root to explore the project's modules and workflows:
 
 ```bash
-# Launch Jupyter Lab (or jupyter notebook) from the project root
 jupyter lab
 ```
 
