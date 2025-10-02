@@ -22,7 +22,13 @@ Follow these instructions to set up and run the project on your local machine.
 Before you begin, ensure you have the following installed on your system:
 
 - **Git**: A version control system for cloning the repository. [Installation Guide](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
-- **Python environment manager**: If you do not yet have one installed, we recommend [Miniforge](https://github.com/conda-forge/miniforge); it is lightweight, no-frills compared to Anaconda, and works well for this project. If you already have Micromamba, Miniconda, or another Conda-compatible manager, you can continue using it.
+- **Python environment manager**: If you do not yet have one installed, we recommend [Miniforge](https://github.com/conda-forge/miniforge); it is lightweight, no-frills compared to Anaconda, and works well for this project. If you already have another Conda-compatible manager, you can continue using it.
+
+To confirm these tools are available in your shell, run:
+```bash
+git --version
+conda --version
+```
 
 ### 2. Set Up the Python Environment
 
