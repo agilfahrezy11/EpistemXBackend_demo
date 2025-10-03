@@ -298,7 +298,7 @@ class Generate_and_evaluate_LULC:
         print(f'Overall Accuracy:{evaluation["overall_accuracy"].getInfo():.4f}')
         print(f'Balanced Accuracy: {evaluation["balanced_accuracy"].getInfo():.4f}')
         print(f'Kappa Coefficient:{evaluation["kappa"].getInfo():.4f}')
-        print(f'Geometric Mean: {evaluation['geometric_mean'].getInfo():.4f}')
+        print(f'Geometric Mean: {evaluation["geometric_mean"].getInfo():.4f}')
 
         #Aggregate Metric
         print('Aggregate Metric:')
