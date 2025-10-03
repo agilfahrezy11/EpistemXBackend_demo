@@ -1,6 +1,8 @@
 import streamlit as st
 from src.utils_shapefile_validation_conversion import shapefile_validator, EE_converter
 from src.src_modul_3 import sample_quality
+from src.src_modul_3_part2 import spectral_plotter
+import matplotlib.pyplot as plt
 import geemap.foliumap as geemap
 import geopandas as gpd
 import ee
@@ -231,7 +233,7 @@ if "training_gdf" in st.session_state:
                 summary_df = analyzer.sum_separability(pixel_extract)
                 #store all separability data
                 st.session_state["separability_results"] = separability_df
-                st.session_state["lowest separability"] = lowest_sep
+                st.session_state["lowest_separability"] = lowest_sep
                 st.session_state["separability_summary"] = summary_df
                 st.session_state["separability_method"] = method
                 st.session_state["analysis_complete"] = True
@@ -260,26 +262,26 @@ if st.session_state.get("analysis_complete", False):
             st.metric("Total Pixels Extracted", total_pixels)
     if "separability_summary" in st.session_state and not st.session_state["separability_summary"].empty:
         with col4:
-            method_used = st.session_state.get("analysis_method", "N/A")
+            method_used = st.session_state.get("separability_method", "N/A")
             st.metric("Method", method_used)
 
     #Display the results in table format
     #ROI Stats
     with st.expander("ROI Statistics", expanded=False):
         if "sample_stats" in st.session_state:
-            st.dataframe(st.session_state["sample_stats"], use_container_width=True)
+            st.dataframe(st.session_state["sample_stats"], width='stretch')
         else:
             st.write("No sample statistics available")
     #Pixel stats
     with st.expander("Pixel Statistics", expanded=True):  
         if "pixel_stats" in st.session_state:
-            st.dataframe(st.session_state["pixel_stats"], use_container_width=True)
+            st.dataframe(st.session_state["pixel_stats"], width='stretch')
         else:
             st.write("No pixel statistics available")
     #Separability summary
     with st.expander("Separability Summary", expanded=True):
         if "separability_summary" in st.session_state:
-            st.dataframe(st.session_state["separability_summary"], use_container_width=True)
+            st.dataframe(st.session_state["separability_summary"], width='stretch')
             
             # Add interpretation
             summary = st.session_state["separability_summary"].iloc[0]
@@ -301,23 +303,249 @@ if st.session_state.get("analysis_complete", False):
     # Detailed Separability Results
     with st.expander("Detailed Separability Results", expanded=False):
         if "separability_results" in st.session_state:
-            st.dataframe(st.session_state["separability_results"], use_container_width=True)
+            st.dataframe(st.session_state["separability_results"], width='stretch')
         else:
             st.write("No detailed separability results available")
     # Most Problematic Class Pairs
     with st.expander("Most Problematic Class Pairs", expanded=True):
         if "lowest_separability" in st.session_state:
             st.markdown("*These class pairs have the lowest separability and may cause classification confusion:*")
-            st.dataframe(st.session_state["lowest_separability"], use_container_width=True)
+            st.dataframe(st.session_state["lowest_separability"], width='stretch')
         else:
             st.write("No problematic pairs data available")            
 
 st.divider()
 st.subheader("Feature Space Plot")
 st.markdown("You can visualize the ROI distribution between two bands using scatter plot. This allows the user to assess the overlap between classes, which might led to difficulties in separating them")
+if (st.session_state.get("analysis_complete", False) and 
+    "pixel_extract" in st.session_state and
+    "analyzer" in st.session_state and
+    not st.session_state["pixel_extract"].empty):
 
-
-
+    #initialize the plotter
+    try:
+        plotter = spectral_plotter(st.session_state["analyzer"])
+        pixel_data = st.session_state["pixel_extract"]
+        #verification
+        available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+        if not available_bands:
+            st.error("No valid spectral bands found in the extracted pixel data.")
+            st.stop()
+        #Tabs for different visualization
+        viz1, viz2, viz3, viz4 = st.tabs([
+            "Histograms",
+            "Box Plots",
+            "Scatter Plot",
+            "Multi Band Scatter"
+        ])
+        #Tab 1: Facet Histograms
+        with viz1:
+            st.markdown("### Distribution of Spectral Values by Class")
+            st.markdown("Histograms show the frequency distribution of reflectance values for each band across different classes.")
+            
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                # Band selection for histograms
+                available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+                selected_hist_bands = st.multiselect(
+                    "Select bands to plot:",
+                    options=available_bands,
+                    default=available_bands[:3] if len(available_bands) >= 3 else available_bands,
+                    key="hist_bands"
+                )
+            with col2:
+                bins = st.slider("Number of bins:", min_value=10, max_value=50, value=30, step=5)
+            
+            if st.button("Generate Histograms", key="btn_histogram"):
+                if selected_hist_bands:
+                    with st.spinner("Generating histograms..."):
+                        try:
+                            plotter.plot_facet_histograms(
+                                pixel_data, 
+                                bands=selected_hist_bands, 
+                                bins=bins
+                            )
+                            st.success("Histograms generated!")
+                            #For adding the plot in streamlit
+                            st.pyplot(plt.gcf())
+                            plt.close()
+                        except Exception as e:
+                            st.error(f"Error generating histograms: {str(e)}")
+                else:
+                    st.warning("Please select at least one band.")
+        
+        #Tab 2: Box Plots
+        with viz2:
+            st.markdown("### Box Plots - Spectral Value Distribution")
+            st.markdown("Box plots show the median, quartiles, and outliers for each class across selected bands.")
+            #Band selection for box plots
+            available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+            selected_box_bands = st.multiselect(
+                "Select bands to plot:",
+                options=available_bands,
+                default=available_bands[:5] if len(available_bands) >= 5 else available_bands,
+                key="box_bands"
+            )
+            #If box plot button is click
+            if st.button("Generate Box Plots", key="btn_boxplot"):
+                if selected_box_bands:
+                    with st.spinner("Generating box plots..."):
+                        try:
+                            plotter.plot_boxplots_by_band(
+                                pixel_data, 
+                                bands=selected_box_bands
+                            )
+                            st.success("Box plots generated!")
+                             #For adding the plot in streamlit
+                            st.pyplot(plt.gcf())
+                            plt.close()
+                        except Exception as e:
+                            st.error(f"Error generating box plots: {str(e)}")
+                else:
+                    st.warning("Please select at least one band.")
+        
+        # TAB 3: SINGLE SCATTER PLOT
+        with viz3:
+            st.markdown("### Feature Space Scatter Plot")
+            st.markdown("Visualize the relationship between two spectral bands and assess class separability in 2D feature space.")
+            
+            available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+            
+            if len(available_bands) >= 2:
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    x_band = st.selectbox(
+                        "X-axis band:",
+                        options=available_bands,
+                        index=0 if "RED" not in available_bands else available_bands.index("RED"),
+                        key="scatter_x"
+                    )
+                
+                with col2:
+                    y_band = st.selectbox(
+                        "Y-axis band:",
+                        options=available_bands,
+                        index=1 if "NIR" not in available_bands else available_bands.index("NIR"),
+                        key="scatter_y"
+                    )
+                
+                with col3:
+                    alpha = st.slider("Point transparency:", 0.1, 1.0, 0.6, 0.1)
+                
+                # Additional options
+                col4, col5 = st.columns(2)
+                with col4:
+                    add_ellipse = st.checkbox("Add confidence ellipses", value=False, 
+                                            help="Shows 2-sigma confidence ellipses for each class")
+                with col5:
+                    color_palette = st.selectbox("Color palette:", 
+                                                ["tab10", "Set3", "Paired", "husl"], 
+                                                index=0)
+                
+                if st.button("Generate Scatter Plot", key="btn_scatter"):
+                    with st.spinner("Generating scatter plot..."):
+                        try:
+                            fig = plotter.scatter_plot(
+                                pixel_data,
+                                x_band=x_band,
+                                y_band=y_band,
+                                alpha=alpha,
+                                figsize=(12, 8),
+                                color_palette=color_palette,
+                                add_legend=True,
+                                add_ellipse=add_ellipse
+                            )
+                            if fig:
+                                #st.pyplot(fig)
+                                st.success("Scatter plot generated successfully!")
+                                st.pyplot(plt.gcf())
+                                plt.close()
+                                # Add interpretation
+                                st.info("""
+                                **Interpretation Tips:**
+                                - Well-separated clusters indicate good class separability
+                                - Overlapping clusters suggest potential classification confusion
+                                - Ellipses show the spread and correlation of class data
+                                """)
+                        except Exception as e:
+                            st.error(f"Error generating scatter plot: {str(e)}")
+            else:
+                st.warning("Need at least 2 bands for scatter plot visualization.")
+        
+        # TAB 4: MULTI-BAND SCATTER COMBINATIONS
+        with viz4:
+            st.markdown("### Multiple Band Combinations")
+            st.markdown("Compare multiple band combinations simultaneously to identify the most separable feature spaces.")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                max_combinations = st.slider("Maximum combinations to plot:", 
+                                            min_value=2, max_value=9, value=6, step=1)
+            with col2:
+                alpha_multi = st.slider("Point transparency:", 
+                                       0.1, 1.0, 0.6, 0.1, key="alpha_multi")
+            
+            # Custom band combinations (optional)
+            use_custom = st.checkbox("Define custom band combinations", value=False)
+            
+            custom_combinations = None
+            if use_custom:
+                st.markdown("**Define custom band pairs:**")
+                available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+                
+                num_pairs = st.number_input("Number of pairs:", min_value=1, max_value=6, value=3)
+                custom_combinations = []
+                
+                for i in range(num_pairs):
+                    col_x, col_y = st.columns(2)
+                    with col_x:
+                        x = st.selectbox(f"Pair {i+1} - X band:", available_bands, key=f"custom_x_{i}")
+                    with col_y:
+                        y = st.selectbox(f"Pair {i+1} - Y band:", available_bands, key=f"custom_y_{i}")
+                    custom_combinations.append((x, y))
+            
+            if st.button("Generate Multi-Band Scatter Plots", key="btn_multi_scatter"):
+                with st.spinner("Generating multiple scatter plots..."):
+                    try:
+                        fig = plotter.plot_band_combo(
+                            pixel_data,
+                            band_combinations=custom_combinations if use_custom else None,
+                            max_combinations=max_combinations,
+                            figsize=(15, 10),
+                            alpha=alpha_multi
+                        )
+                        if fig:
+                            st.pyplot(fig)
+                            st.success("Multi-band scatter plots generated successfully!")
+                            st.pyplot(plt.gcf())
+                            plt.close()
+                            st.info("""
+                            **Analysis Tips:**
+                            - Compare different band combinations to find the best separability
+                            - NIR vs RED is often useful for vegetation analysis
+                            - SWIR bands help distinguish between water and urban areas
+                            - Use these plots to select optimal bands for classification
+                            """)
+                    except Exception as e:
+                        st.error(f"Error generating multi-band plots: {str(e)}")
+        
+        # Download section for plots
+        st.markdown("---")
+        st.markdown("**Right-click on any plot and select 'Save image as...' to download")
+    
+    except Exception as e:
+        st.error(f"Error initializing visualization plotter: {str(e)}")
+        st.info("Please ensure the separability analysis completed successfully.")
+else:
+    st.info("Please complete the separability analysis first to visualize training data.")
+    st.markdown("""
+    **Available visualizations after analysis:**
+    - **Histograms**: Distribution of spectral values by class
+    - **Box Plots**: Statistical summary of spectral values
+    - **Scatter Plots**: 2D feature space visualization
+    - **Multi-Band Scatter**: Compare multiple band combinations
+    """)        
 st.divider()
 st.subheader("Module Navigation")
 
