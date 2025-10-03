@@ -3,6 +3,7 @@ from src.utils_shapefile_validation_conversion import shapefile_validator, EE_co
 from src.src_modul_3 import sample_quality
 from src.src_modul_3_part2 import spectral_plotter
 import matplotlib.pyplot as plt
+import numpy as np
 import geemap.foliumap as geemap
 import geopandas as gpd
 import ee
@@ -315,8 +316,8 @@ if st.session_state.get("analysis_complete", False):
             st.write("No problematic pairs data available")            
 
 st.divider()
-st.subheader("Feature Space Plot")
-st.markdown("You can visualize the ROI distribution between two bands using scatter plot. This allows the user to assess the overlap between classes, which might led to difficulties in separating them")
+st.subheader("Plot the Region of Interest")
+st.markdown("You can visualize the ROI using several plots, namely histogram, box plot, and scatter plot. This allows the user to assess the overlap between classes, which might led to difficulties in separating them")
 if (st.session_state.get("analysis_complete", False) and 
     "pixel_extract" in st.session_state and
     "analyzer" in st.session_state and
@@ -440,8 +441,20 @@ if (st.session_state.get("analysis_complete", False) and
                                             help="Shows 2-sigma confidence ellipses for each class")
                 with col5:
                     color_palette = st.selectbox("Color palette:", 
-                                                ["tab10", "Set3", "Paired", "husl"], 
-                                                index=0)
+                                                ["tab10", "Set3", "Paired", "husl", "Accent"], 
+                                                index=0,  help="Preview will update when you change selection")
+                    colors = plt.cm.get_cmap(color_palette)(np.linspace(0, 1, 10))
+                    color_boxes = ""
+                    for i in range(10):
+                        color_hex = '#{:02x}{:02x}{:02x}'.format(
+                            int(colors[i][0]*255), 
+                            int(colors[i][1]*255), 
+                            int(colors[i][2]*255),
+                            int(colors[i][2]*255)
+                        )
+                        color_boxes += f'<span style="display:inline-block; width:20px; height:20px; background-color:{color_hex}; margin:2px; border:1px solid #ddd; border-radius:2px;"></span>'
+                    
+                    st.markdown(color_boxes, unsafe_allow_html=True)
                 
                 if st.button("Generate Scatter Plot", key="btn_scatter"):
                     with st.spinner("Generating scatter plot..."):
