@@ -146,7 +146,8 @@ if "training_gdf" in st.session_state:
     st.session_state["selected_class_property"] = class_property
     st.session_state["selected_class_name_property"] = class_name_property
 
-        #Separability Parameters
+    
+    #Separability Parameters
     st.subheader("Analysis Parameters")
     method = st.radio("Select separability method:", ["JM", "TD"], horizontal=True, 
                         help="JM = Jeffries-Matusita Distance, TD = Transformed Divergence")
@@ -303,7 +304,6 @@ if st.session_state.get("analysis_complete", False):
             st.dataframe(st.session_state["separability_results"], use_container_width=True)
         else:
             st.write("No detailed separability results available")
-    
     # Most Problematic Class Pairs
     with st.expander("Most Problematic Class Pairs", expanded=True):
         if "lowest_separability" in st.session_state:
@@ -311,6 +311,10 @@ if st.session_state.get("analysis_complete", False):
             st.dataframe(st.session_state["lowest_separability"], use_container_width=True)
         else:
             st.write("No problematic pairs data available")            
+
+st.divider()
+st.subheader("Feature Space Plot")
+st.markdown("You can visualize the ROI distribution between two bands using scatter plot. This allows the user to assess the overlap between classes, which might led to difficulties in separating them")
 
 
 

@@ -249,14 +249,12 @@ class sample_quality:
     def get_sample_pixel_stats_df(self, df):
         """
         Get pixel statistics as a formatted DataFrame
-        
         Parameters:
         -----------
         df : pandas.DataFrame
             The dataframe from extract_spectral_values
         statistic : str
             Which statistic to display ('mean', 'std', 'min', 'max', 'median', 'count')
-            
         Returns:
         --------
         pandas.DataFrame
@@ -520,52 +518,6 @@ class sample_quality:
             return 0.0
     #Plotting data distribution for evaluation
     #Data Histogram
-    def plot_facet_histograms(self, df, bands=None, max_bands=3, bins=30):
-        """
-        Plot faceted histograms by class for selected bands.
-        """
-        if df.empty:
-            print("No data available for histogram plotting.")
-            return
-        
-        if bands is None:
-            bands = [b for b in self.band_names if b in df.columns][:max_bands]
-        
-        for band in bands:
-            g = sns.displot(
-                data=df, x=band, col=self.class_property,
-                bins=bins, facet_kws={'sharey': False, 'sharex': True}, height=3
-            )
-            g.set_titles(col_template="Class {col_name}")
-            plt.suptitle(f"Faceted Histograms for {band}", y=1.05, fontsize=14)
-            plt.show()   
-
-    #Box Plot
-    def plot_boxplots_by_band(self, df, bands=None, max_bands=5):
-        """
-        Plot boxplots for each band across all classes.
-        
-        Parameters
-        ----------
-        df : pandas.DataFrame
-        bands : list, optional
-            Bands to plot. If None, take the first `max_bands`.
-        max_bands : int
-            Maximum number of bands to plot.
-        """
-        if df.empty:
-            print("No data available for boxplot plotting.")
-            return
-        
-        if bands is None:
-            bands = [b for b in self.band_names if b in df.columns][:max_bands]
-        
-        for band in bands:
-            plt.figure(figsize=(12, 6))
-            sns.boxplot(x=self.class_property, y=band, data=df)
-            plt.title(f"Boxplot of {band} by Class")
-            plt.xticks(rotation=90)  # rotate labels for 17 classes
-            plt.show()
 
     def print_analysis_summary(self, df):
         """
