@@ -89,7 +89,7 @@ jupyter lab
 The included Streamlit app is a minimal implementation for testing the backend. To launch it, run the following command from the project's root directory:
 
 ```bash
-streamlit run home.py
+python -m streamlit run home.py
 ```
 
 This will open the application in your default web browser.
