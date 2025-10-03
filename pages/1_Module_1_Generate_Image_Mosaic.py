@@ -1,8 +1,8 @@
 import streamlit as st
 import geemap.foliumap as geemap
 import geopandas as gpd
-from src.src_modul_1 import Reflectance_Data, Reflectance_Stats
-from src.utils_shapefile_validation_conversion import shapefile_validator, EE_converter
+from epistemx.module_1 import Reflectance_Data, Reflectance_Stats
+from epistemx.shapefile_utils import shapefile_validator, EE_converter
 import tempfile
 import zipfile
 import os
@@ -187,17 +187,15 @@ if st.button("Search Landsat Imagery", type="primary", use_container_width=True)
 
     if coll_size == 0:
         st.warning("No images found for the selected criteria, increase cloud cover threshold or change the date range.")
-
+   
     #get valid pixels (number of cloudless pixel in date range)
-    valid_px = collection.reduce(ee.Reducer.count()).clip(aoi)
-    stats = valid_px.reduceRegion(
-    reducer=ee.Reducer.minMax().combine(
-        reducer2=ee.Reducer.mean(), sharedInputs=True
-    ),
-    geometry=aoi,
-    scale=30,
-    maxPixels=1e13
-    ).getInfo()
+    #valid_px = collection.reduce(ee.Reducer.count()).clip(aoi)
+    #stats = valid_px.reduceRegion(
+    #reducer=ee.Reducer.minMax().combine(
+    #    reducer2=ee.Reducer.mean(), sharedInputs=True),
+    #geometry=aoi,
+    #scale=30,
+    #maxPixels=1e13)#.getInfo()
     #Display the search information as report
     summary_md = f"""
     ### Landsat Imagery Search Summary
