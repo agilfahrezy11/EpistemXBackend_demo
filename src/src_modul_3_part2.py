@@ -1,46 +1,100 @@
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 import matplotlib.transforms as transforms
-import seaborn as sns
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
 
 class spectral_plotter:
     """
     Class container to plot region of interest
     """
-
+    #Initialize the class. 
     def __init__(self, sample_quality):
         """Initialize using functions from sample_quality class"""
         self.sq = sample_quality
         self.band_names = self.sq.band_names
         self.class_property = self.sq.class_property
     
-    #-----------------FACET HISTOGRAM--------------------------------
-    def plot_facet_histograms(self, df, bands=None, max_bands=3, bins=30):
+    #-----------------OVERLAID HISTOGRAM--------------------------------
+    def plot_histogram(self, df, bands=None, max_bands = 3, bins=30, opacity = 0.6):
         """
-        Plot faceted histograms by class for selected bands.
-        """
-        if df.empty:
-            print("No data available for histogram plotting.")
-            return
+        Plot overlaid histograms using Plotly for better interactivity.
+        All classes shown on same plot for easy comparison.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+        bands : list, optional. Bands to plot. If None, take the first 'max_bands'.
+        max_bands : int. Maximum number of bands to plot.
+        bins : int. Number of bins for histogram
+        opacity : float. Transparency of bars (0-1)
         
+        Returns
+        -------
+        list of plotly.graph_objects.Figure
+        """
+        #Print error message if dataframe from sample analysis is empty
+        if df.empty:
+            print("No data avaliable for creating histogram")
+            return []
+        #print error message if bands are empty 
         if bands is None:
             bands = [b for b in self.band_names if b in df.columns][:max_bands]
-        
+        #Empty figures list for storing the result
+        figures = []
+        classes = sorted(df[self.class_property].unique())
+        class_mapping = self.sq.class_renaming()
+        #Histogram plotting function
         for band in bands:
-            g = sns.displot(
-                data=df, x=band, col=self.class_property,
-                bins=bins, facet_kws={'sharey': False, 'sharex': True}, height=3
+            figs = go.Figure()
+            for class_id in classes:
+                class_data = df[df[self.class_property] == class_id][band]
+                
+                #Get display name
+                if class_mapping and class_id in class_mapping:
+                    display_name = f"{class_mapping[class_id]} (ID: {class_id})"
+                else:
+                    display_name = f"Class {class_id}"
+                
+                figs.add_trace(go.Histogram(
+                    x=class_data,
+                    name=display_name,
+                    opacity=opacity,
+                    nbinsx=bins,
+                    hovertemplate='<b>%{fullData.name}</b><br>' +
+                                  f'{band}: %{{x:.4f}}<br>' +
+                                  'Count: %{y}<br>' +
+                                  '<extra></extra>'
+                ))
+            #Modified the annotation for the final plot
+            figs.update_layout(
+                title = f'Distribution of {band} Reflectance by Class',
+                xaxis_title = f'{band} Reflectance',
+                yaxis_title = 'Frequency',
+                barmode = 'overlay',
+                hovermode = 'closest',
+                height = 500, 
+                legend = dict(
+                    title = 'Land Cover Class',
+                    orientation = 'v',
+                    yanchor = "top",
+                    y=1,
+                    xanchor = "left",
+                    x=1.02
+                ),
+                template = 'plotly_white'
             )
-            g.set_titles(col_template="Class {col_name}")
-            plt.suptitle(f"Faceted Histograms for {band}", y=1.05, fontsize=14)
-            plt.show()   
-
+            figures.append(figs)
+        #Return plotly object, therefore it is customizeable during the visualization
+        return figures
+    
     #-----------------BOX Plot--------------------------------
-    def plot_boxplots_by_band(self, df, bands=None, max_bands=5):
+    def plot_boxplot(self, df, bands=None, max_bands = 5):
         """
-        Plot boxplots for each band across all classes.
+        Plot boxplot interactively using plotly
+        All classes shown on same plot for easy comparison.
         
         Parameters
         ----------
@@ -49,23 +103,163 @@ class spectral_plotter:
             Bands to plot. If None, take the first `max_bands`.
         max_bands : int
             Maximum number of bands to plot.
+        bins : int
+            Number of bins for histogram
+        opacity : float
+            Transparency of bars (0-1)
+            
+        Returns
+        -------
+        list of plotly.graph_objects.Figure
         """
-        #return error message if no data is availiable
+        #Print error message if dataframe from sample analysis is empty
         if df.empty:
-            print("No data available for boxplot plotting.")
-            return
-        #used max bands if number of band is not specified
+            print("No data avaliable for creating histogram")
+            return []
+        #print error message if bands are empty 
         if bands is None:
             bands = [b for b in self.band_names if b in df.columns][:max_bands]
-        #create the plot
+        #Empty list to store the figures
+        figures = []
+        class_mapping = self.sq.class_renaming()
+        #get the dataframe from sample_quality analysis and display them on box plot
+        df_plot = df.copy()
+        if class_mapping:
+            df_plot ['Class_Display'] = df_plot[self.class_property].map(
+                lambda x: f"{class_mapping.get(x, f'Class {x}')}(ID: {x})"
+            )
+        else:
+            df_plot['Class_Display'] = df_plot[self.class_property].map(lambda x: f"Class {x}")
+        #core function for box plot visualiazation
         for band in bands:
-            plt.figure(figsize=(12, 6))
-            sns.boxplot(x=self.class_property, y=band, data=df)
-            plt.title(f"Boxplot of {band} by Class")
-            plt.xticks(rotation=90)  # rotate labels for 17 classes
-            plt.show()    
-    #-----------------Scatter Plot--------------------------------
-    def scatter_plot(self, df, x_band=None, y_band=None, alpha=0.6, figsize=(10, 8), 
+            fig = px.box(
+                df_plot, 
+                x='Class_Display', 
+                y=band,
+                color='Class_Display',
+                title=f'Boxplot of {band} by Class',
+                labels={'Class_Display': 'Class', band: f'{band} Reflectance'},
+                hover_data={self.class_property: True, band: ':.4f'}
+            )
+            
+            fig.update_layout(
+                height=500,
+                showlegend=False,
+                xaxis_tickangle=-45,
+                template='plotly_white',
+                hovermode='closest'
+            )
+            
+            fig.update_traces(
+                hovertemplate='<b>%{x}</b><br>' +
+                              f'{band}: %{{y:.4f}}<br>' +
+                              '<extra></extra>'
+            )
+            
+            figures.append(fig)
+        
+        return figures
+  
+    #-----------------Interactive Scatter Plot--------------------------------
+
+    def interactive_scatter_plot(self, df, x_band=None, y_band=None, marker_size=6, 
+                    opacity=0.6):
+        """
+        Create interactive scatter plot using Plotly.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+        bands : list, optional
+            Bands to plot. If None, take the first `max_bands`.
+        max_bands : int
+            Maximum number of bands to plot.
+            
+        Returns
+        -------
+        list of plotly.graph_objects.Figure
+        """
+        if df.empty:
+            print("No data available for plotting")
+            return None
+        
+        # Get available spectral bands
+        available_bands = [col for col in df.columns 
+                          if col != self.class_property and col in self.band_names]
+        
+        if len(available_bands) < 2:
+            print("Need at least 2 bands for scatter plot.")
+            return None
+        
+        # Set default bands if not provided
+        if x_band is None:
+            x_band = available_bands[0]
+        if y_band is None:
+            y_band = available_bands[1]
+        
+        # Check if specified bands exist
+        if x_band not in available_bands or y_band not in available_bands:
+            print(f"Specified bands not found. Available: {available_bands}")
+            return None
+        
+        # Prepare data with display names
+        df_plot = df.copy()
+        class_mapping = self.sq.class_renaming()
+        
+        if class_mapping:
+            df_plot['Class_Display'] = df_plot[self.class_property].map(
+                lambda x: f"{class_mapping.get(x, f'Class {x}')} (ID: {x})"
+            )
+        else:
+            df_plot['Class_Display'] = df_plot[self.class_property].map(lambda x: f"Class {x}")
+        
+        # Create scatter plot
+        fig = px.scatter(
+            df_plot,
+            x=x_band,
+            y=y_band,
+            color='Class_Display',
+            title=f'Spectral Scatter Plot: {y_band} vs {x_band}',
+            labels={
+                x_band: f'{x_band} Reflectance',
+                y_band: f'{y_band} Reflectance',
+                'Class_Display': 'Land Cover Class'
+            },
+            hover_data={
+                self.class_property: True,
+                x_band: ':.4f',
+                y_band: ':.4f',
+                'Class_Display': False
+            },
+
+            opacity=opacity
+        )
+        
+        fig.update_traces(
+            marker=dict(size=marker_size, line=dict(width=0.5, color='white')),
+            hovertemplate='<b>%{fullData.name}</b><br>' +
+                         f'{x_band}: %{{x:.4f}}<br>' +
+                         f'{y_band}: %{{y:.4f}}<br>' +
+                         '<extra></extra>'
+        )
+        
+        fig.update_layout(
+            height=600,
+            template='plotly_white',
+            hovermode='closest',
+            legend=dict(
+                title='Land Cover Classes',
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02
+            )
+        )
+        
+        return fig    
+    #-----------------Static Scatter Plot--------------------------------
+    def static_scatter_plot(self, df, x_band=None, y_band=None, alpha=0.6, figsize=(10, 8), 
                          color_palette='tab10', add_legend=True, add_ellipse=False):
         """
         Plot region of interest in a feature space between two bands
@@ -175,29 +369,29 @@ class spectral_plotter:
             print(f"Warning: Could not add confidence ellipse: {e}")
     
     
-    def plot_band_combo(self, df, band_combinations=None, max_combinations=6, 
-                            figsize=(15, 10), alpha=0.6):
+    def plot_scatter_combo(self, df, band_combinations=None, max_combinations=6, 
+                       marker_size=5, opacity=0.6):
         """
-        Plot multiple scatter plots for different band combinations in a subplot grid.
-        Parameters:
-
-        df : pandas.DataFrame. The dataframe from extract_spectral_values (must contain spectral data)
-        band_combinations : list of tuples, optional. List of (x_band, y_band) tuples. If None, creates common combinations
+        Plot multiple scatter plots for different band combinations using Plotly subplots.
+        
+        Parameters
+        ----------
+        df : pandas.DataFrame
+        band_combinations : list of tuples, optional. List of (x_band, y_band) tuples
         max_combinations : int. Maximum number of combinations to plot
-        figsize : tuple. Overall figure size
-        alpha : float. Point transparency
+        marker_size : int. Size of scatter points
+        opacity : float. Point transparency
 
         Returns
         -------
-        matplotlib.figure.Figure
+        plotly.graph_objects.Figure
         """
-        #return error message if the bands is not avaliable
         if df.empty:
             print("No data available for plotting.")
             return None
-        #list of avaliable bands
+        
         available_bands = [col for col in df.columns 
-                        if col != self.class_property and col in self.band_names]
+                          if col != self.class_property and col in self.band_names]
         
         if len(available_bands) < 2:
             print("Need at least 2 bands for scatter plots.")
@@ -206,23 +400,20 @@ class spectral_plotter:
         # Create default band combinations if not provided
         if band_combinations is None:
             band_combinations = []
-            # Common combinations for land cover analysis
             common_pairs = [
                 ('NIR', 'RED'), ('SWIR1', 'NIR'), ('GREEN', 'RED'),
                 ('SWIR2', 'SWIR1'), ('BLUE', 'GREEN'), ('NIR', 'SWIR1')
-            ]      
-            # Find available combinations
-        for x_band, y_band in common_pairs:
-            if x_band in available_bands and y_band in available_bands:
-                band_combinations.append((x_band, y_band))
+            ]
+            
+            for x_band, y_band in common_pairs:
+                if x_band in available_bands and y_band in available_bands:
+                    band_combinations.append((x_band, y_band))
+            
+            if not band_combinations:
+                for i in range(len(available_bands)):
+                    for j in range(i+1, min(len(available_bands), i+4)):
+                        band_combinations.append((available_bands[i], available_bands[j]))
         
-        # If no common pairs found, create combinations from available bands
-        if not band_combinations:
-            for i in range(len(available_bands)):
-                for j in range(i+1, min(len(available_bands), i+4)):
-                    band_combinations.append((available_bands[i], available_bands[j]))
-    
-        # Limit combinations
         band_combinations = band_combinations[:max_combinations]
         
         # Calculate subplot grid
@@ -230,73 +421,89 @@ class spectral_plotter:
         n_cols = min(3, n_plots)
         n_rows = (n_plots + n_cols - 1) // n_cols
         
-        # Create subplots
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
-        if n_plots == 1:
-            axes = [axes]
-        elif n_rows == 1:
-            axes = axes
-        else:
-            axes = axes.flatten()
-        
-        # Get classes and colors
-        classes = sorted(df[self.class_property].unique())
-        colors = plt.cm.get_cmap('tab10')(np.linspace(0, 1, len(classes)))
+        # Prepare data with display names
+        df_plot = df.copy()
         class_mapping = self.sq.class_renaming()
+        classes = sorted(df[self.class_property].unique())
+        
+        if class_mapping:
+            df_plot['Class_Display'] = df_plot[self.class_property].map(
+                lambda x: f"{class_mapping.get(x, f'Class {x}')}"
+            )
+        else:
+            df_plot['Class_Display'] = df_plot[self.class_property].map(lambda x: f"Class {x}")
+        
+        # Create subplots
+        subplot_titles = [f'{y_band} vs {x_band}' for x_band, y_band in band_combinations]
+        fig = make_subplots(
+            rows=n_rows, 
+            cols=n_cols,
+            subplot_titles=subplot_titles,
+            horizontal_spacing=0.1,
+            vertical_spacing=0.12
+        )
+        
+        # Color mapping for classes
+        colors = px.colors.qualitative.Plotly[:len(classes)]
+        if len(classes) > len(colors):
+            colors = px.colors.sample_colorscale("turbo", [n/(len(classes)-1) for n in range(len(classes))])
         
         # Plot each combination
         for idx, (x_band, y_band) in enumerate(band_combinations):
-            ax = axes[idx]
+            row = idx // n_cols + 1
+            col = idx % n_cols + 1
             
-            # Plot each class
             for i, class_id in enumerate(classes):
-                class_data = df[df[self.class_property] == class_id]
+                class_data = df_plot[df_plot[self.class_property] == class_id]
                 
-                # Get display name
                 if class_mapping and class_id in class_mapping:
                     display_name = f"{class_mapping[class_id]}"
                 else:
                     display_name = f"Class {class_id}"
                 
-                ax.scatter(
-                    class_data[x_band], 
-                    class_data[y_band],
-                    c=[colors[i]], 
-                    alpha=alpha,
-                    label=display_name if idx == 0 else "",  # Only show legend on first plot
-                    s=15,
-                    edgecolors='white',
-                    linewidths=0.3
+                fig.add_trace(
+                    go.Scatter(
+                        x=class_data[x_band],
+                        y=class_data[y_band],
+                        mode='markers',
+                        name=display_name,
+                        marker=dict(
+                            size=marker_size,
+                            color=colors[i],
+                            opacity=opacity,
+                            line=dict(width=0.3, color='white')
+                        ),
+                        legendgroup=display_name,
+                        showlegend=(idx == 0),  # Only show legend for first subplot
+                        hovertemplate=f'<b>{display_name}</b><br>' +
+                                     f'{x_band}: %{{x:.4f}}<br>' +
+                                     f'{y_band}: %{{y:.4f}}<br>' +
+                                     '<extra></extra>'
+                    ),
+                    row=row,
+                    col=col
                 )
             
-            # Customize subplot
-            ax.set_xlabel(f'{x_band}', fontsize=10)
-            ax.set_ylabel(f'{y_band}', fontsize=10)
-            ax.set_title(f'{y_band} vs {x_band}', fontsize=11, fontweight='bold')
-            ax.grid(True, alpha=0.3)
+            # Update axes labels
+            fig.update_xaxes(title_text=x_band, row=row, col=col)
+            fig.update_yaxes(title_text=y_band, row=row, col=col)
         
-        # Hide empty subplots
-        for idx in range(n_plots, len(axes)):
-            axes[idx].set_visible(False)
+        fig.update_layout(
+            title_text='Spectral Scatter Plot Combinations',
+            height=300 * n_rows,
+            template='plotly_white',
+            hovermode='closest',
+            legend=dict(
+                title='Land Cover Classes',
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02
+            )
+        )
         
-        # Add overall legend
-        if classes:
-            legend_labels = []
-            legend_colors = []
-            for i, class_id in enumerate(classes):
-                if class_mapping and class_id in class_mapping:
-                    legend_labels.append(f"{class_mapping[class_id]} (ID: {class_id})")
-                else:
-                    legend_labels.append(f"Class {class_id}")
-                legend_colors.append(colors[i])
-            
-            fig.legend(legend_labels, bbox_to_anchor=(1.02, 0.5), loc='center left', 
-                    fontsize=9, title='Land Cover Classes', title_fontsize=10)
-        
-        plt.suptitle('Spectral Scatter Plot Combinations', fontsize=16, fontweight='bold', y=0.98)
-        plt.tight_layout()
-        
-        return fig  
+        return fig
 
         
 
