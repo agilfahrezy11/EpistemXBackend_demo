@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 
+#Class container for plotting Region of Interest 
 class spectral_plotter:
     """
     Class container to plot region of interest
@@ -161,7 +162,7 @@ class spectral_plotter:
         return figures
   
     #-----------------Interactive Scatter Plot--------------------------------
-
+    #More interactive option of plotting using plotly
     def interactive_scatter_plot(self, df, x_band=None, y_band=None, marker_size=6, 
                     opacity=0.6):
         """
@@ -259,6 +260,7 @@ class spectral_plotter:
         
         return fig    
     #-----------------Static Scatter Plot--------------------------------
+    #static plotting using matplotlib, but able to compute confidence elipse
     def static_scatter_plot(self, df, x_band=None, y_band=None, alpha=0.6, figsize=(10, 8), 
                          color_palette='tab10', add_legend=True, add_ellipse=False):
         """
@@ -342,6 +344,7 @@ class spectral_plotter:
         
         return fig
     #-----------------Scatter Plot Elipse--------------------------------
+    #only able to be visualize using matplotlib (maybe plotly, but with more code)
     def add_elipse(self, ax, x, y, color, n_std = 2, alpha=0.2):
         """
         """
@@ -368,143 +371,8 @@ class spectral_plotter:
         except Exception as e:
             print(f"Warning: Could not add confidence ellipse: {e}")
     
-    
-    def plot_scatter_combo(self, df, band_combinations=None, max_combinations=6, 
-                       marker_size=5, opacity=0.6):
-        """
-        Plot multiple scatter plots for different band combinations using Plotly subplots.
-        
-        Parameters
-        ----------
-        df : pandas.DataFrame
-        band_combinations : list of tuples, optional. List of (x_band, y_band) tuples
-        max_combinations : int. Maximum number of combinations to plot
-        marker_size : int. Size of scatter points
-        opacity : float. Point transparency
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-        """
-        if df.empty:
-            print("No data available for plotting.")
-            return None
-        
-        available_bands = [col for col in df.columns 
-                          if col != self.class_property and col in self.band_names]
-        
-        if len(available_bands) < 2:
-            print("Need at least 2 bands for scatter plots.")
-            return None
-        
-        # Create default band combinations if not provided
-        if band_combinations is None:
-            band_combinations = []
-            common_pairs = [
-                ('NIR', 'RED'), ('SWIR1', 'NIR'), ('GREEN', 'RED'),
-                ('SWIR2', 'SWIR1'), ('BLUE', 'GREEN'), ('NIR', 'SWIR1')
-            ]
-            
-            for x_band, y_band in common_pairs:
-                if x_band in available_bands and y_band in available_bands:
-                    band_combinations.append((x_band, y_band))
-            
-            if not band_combinations:
-                for i in range(len(available_bands)):
-                    for j in range(i+1, min(len(available_bands), i+4)):
-                        band_combinations.append((available_bands[i], available_bands[j]))
-        
-        band_combinations = band_combinations[:max_combinations]
-        
-        # Calculate subplot grid
-        n_plots = len(band_combinations)
-        n_cols = min(3, n_plots)
-        n_rows = (n_plots + n_cols - 1) // n_cols
-        
-        # Prepare data with display names
-        df_plot = df.copy()
-        class_mapping = self.sq.class_renaming()
-        classes = sorted(df[self.class_property].unique())
-        
-        if class_mapping:
-            df_plot['Class_Display'] = df_plot[self.class_property].map(
-                lambda x: f"{class_mapping.get(x, f'Class {x}')}"
-            )
-        else:
-            df_plot['Class_Display'] = df_plot[self.class_property].map(lambda x: f"Class {x}")
-        
-        # Create subplots
-        subplot_titles = [f'{y_band} vs {x_band}' for x_band, y_band in band_combinations]
-        fig = make_subplots(
-            rows=n_rows, 
-            cols=n_cols,
-            subplot_titles=subplot_titles,
-            horizontal_spacing=0.1,
-            vertical_spacing=0.12
-        )
-        
-        # Color mapping for classes
-        colors = px.colors.qualitative.Plotly[:len(classes)]
-        if len(classes) > len(colors):
-            colors = px.colors.sample_colorscale("turbo", [n/(len(classes)-1) for n in range(len(classes))])
-        
-        # Plot each combination
-        for idx, (x_band, y_band) in enumerate(band_combinations):
-            row = idx // n_cols + 1
-            col = idx % n_cols + 1
-            
-            for i, class_id in enumerate(classes):
-                class_data = df_plot[df_plot[self.class_property] == class_id]
-                
-                if class_mapping and class_id in class_mapping:
-                    display_name = f"{class_mapping[class_id]}"
-                else:
-                    display_name = f"Class {class_id}"
-                
-                fig.add_trace(
-                    go.Scatter(
-                        x=class_data[x_band],
-                        y=class_data[y_band],
-                        mode='markers',
-                        name=display_name,
-                        marker=dict(
-                            size=marker_size,
-                            color=colors[i],
-                            opacity=opacity,
-                            line=dict(width=0.3, color='white')
-                        ),
-                        legendgroup=display_name,
-                        showlegend=(idx == 0),  # Only show legend for first subplot
-                        hovertemplate=f'<b>{display_name}</b><br>' +
-                                     f'{x_band}: %{{x:.4f}}<br>' +
-                                     f'{y_band}: %{{y:.4f}}<br>' +
-                                     '<extra></extra>'
-                    ),
-                    row=row,
-                    col=col
-                )
-            
-            # Update axes labels
-            fig.update_xaxes(title_text=x_band, row=row, col=col)
-            fig.update_yaxes(title_text=y_band, row=row, col=col)
-        
-        fig.update_layout(
-            title_text='Spectral Scatter Plot Combinations',
-            height=300 * n_rows,
-            template='plotly_white',
-            hovermode='closest',
-            legend=dict(
-                title='Land Cover Classes',
-                orientation="v",
-                yanchor="top",
-                y=1,
-                xanchor="left",
-                x=1.02
-            )
-        )
-        
-        return fig
-
+    #-----------------3D Scatter Plot--------------------------------
+    #This is used for exploratory purposes
     def scatter_plot_3d(self, df, x_band=None, y_band=None, z_band=None, 
                        marker_size=4, opacity=0.7):
         """
