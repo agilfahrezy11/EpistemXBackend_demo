@@ -8,9 +8,19 @@ import zipfile
 import os
 import ee
 import datetime
-ee.Authenticate()
-ee.Initialize()
+# Page configuration
+st.set_page_config(
+    page_title="Search and Generate Landsat Image Mosaic",
+    layout="wide"
+)
 
+# Initialize Earth Engine
+try:
+    ee.Authenticate()
+    ee.Initialize()
+except Exception as e:
+    st.error(f"Earth Engine initialization failed: {e}")
+    st.stop()
 #title of the module
 st.title("Search and Generate Landsat Image Mosaic")
 st.divider()
@@ -218,8 +228,6 @@ if st.button("Search Landsat Imagery", type="primary", width='stretch') and aoi:
             for idx, (path, row) in enumerate(path_row_tiles):
                 col_idx = idx % num_cols
                 cols[col_idx].write(f" Path {path:03d} / Row {row:03d}")
-
-    st.divider()
 
     #Detailed Scene Information with cloud cover information
     with st.expander("Scene ID, acquisition date, and cloud cover"):

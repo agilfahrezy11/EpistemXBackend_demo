@@ -575,7 +575,7 @@ else:
     - **Histograms**: Distribution of spectral values by class
     - **Box Plots**: Statistical summary of spectral values
     - **Scatter Plots**: 2D feature space visualization
-    - **3D Scatter Plot**: Compare multiple band combinations
+    - **3D Scatter Plot**: 3D feature space visualization
     """)        
 st.divider()
 st.subheader("Module Navigation")
