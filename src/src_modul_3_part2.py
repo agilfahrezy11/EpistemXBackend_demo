@@ -505,5 +505,92 @@ class spectral_plotter:
         
         return fig
 
+    def scatter_plot_3d(self, df, x_band=None, y_band=None, z_band=None, 
+                       marker_size=4, opacity=0.7):
+        """
+        Create interactive 3D scatter plot using Plotly.
+        Useful for exploring 3-band feature space.
         
+        Parameters
+        ----------
+        df : pandas.DataFrame
+        x_band, y_band, z_band : str
+            Band names for each axis
+        marker_size : int
+            Size of scatter points
+        opacity : float
+            Transparency of points (0-1)
+            
+        Returns
+        -------
+        plotly.graph_objects.Figure
+        """
+        if df.empty:
+            print("No data available for plotting")
+            return None
+        
+        available_bands = [col for col in df.columns 
+                          if col != self.class_property and col in self.band_names]
+        
+        if len(available_bands) < 3:
+            print("Need at least 3 bands for 3D scatter plot.")
+            return None
+        
+        # Set default bands
+        if x_band is None:
+            x_band = available_bands[0]
+        if y_band is None:
+            y_band = available_bands[1]
+        if z_band is None:
+            z_band = available_bands[2]
+        
+        # Prepare data
+        df_plot = df.copy()
+        class_mapping = self.sq.class_renaming()
+        
+        if class_mapping:
+            df_plot['Class_Display'] = df_plot[self.class_property].map(
+                lambda x: f"{class_mapping.get(x, f'Class {x}')} (ID: {x})"
+            )
+        else:
+            df_plot['Class_Display'] = df_plot[self.class_property].map(lambda x: f"Class {x}")
+        
+        fig = px.scatter_3d(
+            df_plot,
+            x=x_band,
+            y=y_band,
+            z=z_band,
+            color='Class_Display',
+            title=f'3D Spectral Feature Space: {x_band}, {y_band}, {z_band}',
+            labels={
+                x_band: f'{x_band} Reflectance',
+                y_band: f'{y_band} Reflectance',
+                z_band: f'{z_band} Reflectance',
+                'Class_Display': 'Land Cover Class'
+            },
+            opacity=opacity
+        )
+        
+        fig.update_traces(
+            marker=dict(size=marker_size, line=dict(width=0.3, color='white')),
+            hovertemplate='<b>%{fullData.name}</b><br>' +
+                         f'{x_band}: %{{x:.4f}}<br>' +
+                         f'{y_band}: %{{y:.4f}}<br>' +
+                         f'{z_band}: %{{z:.4f}}<br>' +
+                         '<extra></extra>'
+        )
+        
+        fig.update_layout(
+            height=700,
+            legend=dict(
+                title='Land Cover Classes',
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02
+            )
+        )
+        
+        return fig       
 

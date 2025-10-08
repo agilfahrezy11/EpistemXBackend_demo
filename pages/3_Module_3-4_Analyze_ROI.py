@@ -337,17 +337,16 @@ if (st.session_state.get("analysis_complete", False) and
             "Histograms",
             "Box Plots",
             "Scatter Plot",
-            "Multi Band Scatter"
+            "3D Scatter Plot"
         ])
         #Tab 1: Facet Histograms
         with viz1:
             st.markdown("### Distribution of Spectral Values by Class")
-            st.markdown("Histograms show the frequency distribution of reflectance values for each band across different classes.")
+            st.markdown("Interactive histograms showing all classes overlaid for easy comparison. " \
+                       "Click legend items to show/hide specific classes.")
             
-            col1, col2 = st.columns([2, 1])
+            col1, col2, col3 = st.columns([2, 1, 1])
             with col1:
-                # Band selection for histograms
-                available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
                 selected_hist_bands = st.multiselect(
                     "Select bands to plot:",
                     options=available_bands,
@@ -356,20 +355,23 @@ if (st.session_state.get("analysis_complete", False) and
                 )
             with col2:
                 bins = st.slider("Number of bins:", min_value=10, max_value=50, value=30, step=5)
+            with col3:
+                hist_opacity = st.slider("Opacity:", 0.3, 0.9, 0.6, 0.1, key="hist_opacity")
             
-            if st.button("Generate Histograms", key="btn_histogram"):
+            if st.button("Generate Histograms", key="btn_histogram", type="primary"):
                 if selected_hist_bands:
-                    with st.spinner("Generating histograms..."):
+                    with st.spinner("Generating interactive histograms..."):
                         try:
-                            plotter.plot_facet_histograms(
+                            figures = plotter.plot_histogram(
                                 pixel_data, 
                                 bands=selected_hist_bands, 
-                                bins=bins
+                                bins=bins,
+                                opacity=hist_opacity
                             )
-                            st.success("Histograms generated!")
-                            #For adding the plot in streamlit
-                            st.pyplot(plt.gcf())
-                            plt.close()
+                            for fig in figures:
+                                st.plotly_chart(fig, use_container_width=True)
+                            st.success("✅ Histograms generated!")
+                            st.info("💡 **Tip:** Click on legend items to show/hide classes.")
                         except Exception as e:
                             st.error(f"Error generating histograms: {str(e)}")
                 else:
@@ -378,28 +380,28 @@ if (st.session_state.get("analysis_complete", False) and
         #Tab 2: Box Plots
         with viz2:
             st.markdown("### Box Plots - Spectral Value Distribution")
-            st.markdown("Box plots show the median, quartiles, and outliers for each class across selected bands.")
-            #Band selection for box plots
-            available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+            st.markdown("Interactive box plots showing median, quartiles, and outliers for each class. " \
+                       "Hover over boxes to see statistical details.")
+            
             selected_box_bands = st.multiselect(
                 "Select bands to plot:",
                 options=available_bands,
                 default=available_bands[:5] if len(available_bands) >= 5 else available_bands,
                 key="box_bands"
             )
-            #If box plot button is click
-            if st.button("Generate Box Plots", key="btn_boxplot"):
+            
+            if st.button("Generate Box Plots", key="btn_boxplot", type="primary"):
                 if selected_box_bands:
-                    with st.spinner("Generating box plots..."):
+                    with st.spinner("Generating interactive box plots..."):
                         try:
-                            plotter.plot_boxplots_by_band(
+                            figures = plotter.plot_boxplot(
                                 pixel_data, 
                                 bands=selected_box_bands
                             )
-                            st.success("Box plots generated!")
-                             #For adding the plot in streamlit
-                            st.pyplot(plt.gcf())
-                            plt.close()
+                            for fig in figures:
+                                st.plotly_chart(fig, use_container_width=True)
+                            st.success("✅ Box plots generated successfully!")
+                            st.info("💡 **Tip:** Hover over boxes to see min, max, median, and quartile values.")
                         except Exception as e:
                             st.error(f"Error generating box plots: {str(e)}")
                 else:
@@ -459,7 +461,7 @@ if (st.session_state.get("analysis_complete", False) and
                 if st.button("Generate Scatter Plot", key="btn_scatter"):
                     with st.spinner("Generating scatter plot..."):
                         try:
-                            fig = plotter.scatter_plot(
+                            fig = plotter.static_scatter_plot(
                                 pixel_data,
                                 x_band=x_band,
                                 y_band=y_band,
@@ -485,71 +487,87 @@ if (st.session_state.get("analysis_complete", False) and
                             st.error(f"Error generating scatter plot: {str(e)}")
             else:
                 st.warning("Need at least 2 bands for scatter plot visualization.")
-        
+   
         # TAB 4: MULTI-BAND SCATTER COMBINATIONS
         with viz4:
-            st.markdown("### Multiple Band Combinations")
-            st.markdown("Compare multiple band combinations simultaneously to identify the most separable feature spaces.")
+            st.markdown("### 3D Feature Space Exploration")
+            st.markdown("Explore the spectral signatures in 3D space. Rotate, zoom, and pan to understand class relationships in three-band feature space.")
             
-            col1, col2 = st.columns(2)
-            with col1:
-                max_combinations = st.slider("Maximum combinations to plot:", 
-                                            min_value=2, max_value=9, value=6, step=1)
-            with col2:
-                alpha_multi = st.slider("Point transparency:", 
-                                       0.1, 1.0, 0.6, 0.1, key="alpha_multi")
-            
-            # Custom band combinations (optional)
-            use_custom = st.checkbox("Define custom band combinations", value=False)
-            
-            custom_combinations = None
-            if use_custom:
-                st.markdown("**Define custom band pairs:**")
-                available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+            if len(available_bands) >= 3:
+                col1, col2, col3 = st.columns(3)
                 
-                num_pairs = st.number_input("Number of pairs:", min_value=1, max_value=6, value=3)
-                custom_combinations = []
+                with col1:
+                    x_band_3d = st.selectbox(
+                        "X-axis band:",
+                        options=available_bands,
+                        index=available_bands.index("RED") if "RED" in available_bands else 0,
+                        key="scatter_3d_x"
+                    )
                 
-                for i in range(num_pairs):
-                    col_x, col_y = st.columns(2)
-                    with col_x:
-                        x = st.selectbox(f"Pair {i+1} - X band:", available_bands, key=f"custom_x_{i}")
-                    with col_y:
-                        y = st.selectbox(f"Pair {i+1} - Y band:", available_bands, key=f"custom_y_{i}")
-                    custom_combinations.append((x, y))
+                with col2:
+                    y_band_3d = st.selectbox(
+                        "Y-axis band:",
+                        options=available_bands,
+                        index=available_bands.index("GREEN") if "GREEN" in available_bands else (1 if len(available_bands) > 1 else 0),
+                        key="scatter_3d_y"
+                    )
+                
+                with col3:
+                    z_band_3d = st.selectbox(
+                        "Z-axis band:",
+                        options=available_bands,
+                        index=available_bands.index("NIR") if "NIR" in available_bands else (2 if len(available_bands) > 2 else 0),
+                        key="scatter_3d_z"
+                    )
+                
+                col4, col5 = st.columns(2)
+                with col4:
+                    marker_size_3d = st.slider("Point size:", 2, 8, 4, 1, key="marker_3d")
+                with col5:
+                    opacity_3d = st.slider("Point transparency:", 0.2, 1.0, 0.7, 0.1, key="opacity_3d")
+                
+                if st.button("Generate 3D Scatter Plot", key="btn_3d_scatter", type="primary"):
+                    with st.spinner("Generating 3D scatter plot..."):
+                        try:
+                            fig = plotter.scatter_plot_3d(
+                                pixel_data,
+                                x_band=x_band_3d,
+                                y_band=y_band_3d,
+                                z_band=z_band_3d,
+                                marker_size=marker_size_3d,
+                                opacity=opacity_3d
+                            )
+                            if fig:
+                                st.plotly_chart(fig, use_container_width=True)
+                                st.success("✅ 3D scatter plot generated successfully!")
+                                
+                                st.info("""
+                                **💡 Interactive Features:**
+                                - **Rotate**: Click and drag to rotate the 3D view
+                                - **Zoom**: Scroll wheel or pinch to zoom in/out
+                                - **Pan**: Right-click and drag to pan
+                                - **Hover**: See exact values for all three bands
+                                - **Legend**: Click to show/hide classes
+                                - **Reset**: Double-click to reset view
+                                
+                                **Analysis Tips:**
+                                - Look for well-separated clusters in 3D space
+                                - Rotate to find angles that best show class separation
+                                - Classes that overlap in 2D may separate in 3D
+                                - Common combinations: RGB, NIR-RED-GREEN, SWIR-NIR-RED
+                                """)
+                        except Exception as e:
+                            st.error(f"Error generating 3D scatter plot: {str(e)}")
+            else:
+                st.warning("Need at least 3 bands for 3D scatter plot visualization.")
+                st.info("The 3D scatter plot requires at least three spectral bands. " \
+                    "Please ensure your analysis includes sufficient bands.")        
+                st.markdown("---")
+                st.markdown("**Right-click on any plot and select 'Save image as...' to download")
             
-            if st.button("Generate Multi-Band Scatter Plots", key="btn_multi_scatter"):
-                with st.spinner("Generating multiple scatter plots..."):
-                    try:
-                        fig = plotter.plot_band_combo(
-                            pixel_data,
-                            band_combinations=custom_combinations if use_custom else None,
-                            max_combinations=max_combinations,
-                            figsize=(15, 10),
-                            alpha=alpha_multi
-                        )
-                        if fig:
-                            st.pyplot(fig)
-                            st.success("Multi-band scatter plots generated successfully!")
-                            st.pyplot(plt.gcf())
-                            plt.close()
-                            st.info("""
-                            **Analysis Tips:**
-                            - Compare different band combinations to find the best separability
-                            - NIR vs RED is often useful for vegetation analysis
-                            - SWIR bands help distinguish between water and urban areas
-                            - Use these plots to select optimal bands for classification
-                            """)
-                    except Exception as e:
-                        st.error(f"Error generating multi-band plots: {str(e)}")
-        
-        # Download section for plots
-        st.markdown("---")
-        st.markdown("**Right-click on any plot and select 'Save image as...' to download")
-    
     except Exception as e:
-        st.error(f"Error initializing visualization plotter: {str(e)}")
-        st.info("Please ensure the separability analysis completed successfully.")
+                st.error(f"Error initializing visualization plotter: {str(e)}")
+                st.info("Please ensure the separability analysis completed successfully.")
 else:
     st.info("Please complete the separability analysis first to visualize training data.")
     st.markdown("""
@@ -557,7 +575,7 @@ else:
     - **Histograms**: Distribution of spectral values by class
     - **Box Plots**: Statistical summary of spectral values
     - **Scatter Plots**: 2D feature space visualization
-    - **Multi-Band Scatter**: Compare multiple band combinations
+    - **3D Scatter Plot**: Compare multiple band combinations
     """)        
 st.divider()
 st.subheader("Module Navigation")

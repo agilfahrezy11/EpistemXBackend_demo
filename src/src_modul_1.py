@@ -8,6 +8,8 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+
 class Reflectance_Data:
     """
     Class for fetching and analyzing Landsat optical/thermal image collections with logging.
@@ -114,7 +116,7 @@ class Reflectance_Data:
         self.logger.info("ReflectanceData initialized.")
     def mask_landsat_sr(self, image,cloud_conf_thresh=2, shadow_conf_thresh=2, cirrus_conf_thresh=2):
             """
-            Mask clouds, shadows, snow/ice, and cirrus for Landsat SR using QA_PIXEL band.
+            Mask clouds, shadows and cirrus for Landsat Collection 2 SR using QA_PIXEL band.
             Optionally process thermal band to Celsius.
             
             Parameters:

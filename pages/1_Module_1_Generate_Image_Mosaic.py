@@ -156,7 +156,7 @@ else:
 cloud_cover = st.slider("Maximum Cloud Cover (%):", 0, 100, 30)
 
 #Search the landsat imagery
-if st.button("Search Landsat Imagery", type="primary", use_container_width=True) and aoi:
+if st.button("Search Landsat Imagery", type="primary", width='stretch') and aoi:
     reflectance = Reflectance_Data()
     collection, meta = reflectance.get_optical_data(
         aoi=aoi,
@@ -177,16 +177,14 @@ if st.button("Search Landsat Imagery", type="primary", use_container_width=True)
         'end_date': end_date,
         'num_images': detailed_stats['total_images']
         }
-    #Debug: check collection size (safe server-side call)
     try:
         coll_size = int(collection.size().getInfo())
     except Exception as e:
         st.error(f"Failed to query collection size: {e}")
         coll_size = 0
-    st.write(f"Collection size: {coll_size}")
 
     if coll_size == 0:
-        st.warning("No images found for the selected criteria, increase cloud cover threshold or change the date range.")
+        st.warning("No images found for the selected criteria, increase cloud cover threshold,  change the date range, or make sure the acquisition date aligned with Landsat Mission Avaliability.")
 
     #get valid pixels (number of cloudless pixel in date range)
     valid_px = collection.reduce(ee.Reducer.count()).clip(aoi)
@@ -198,22 +196,86 @@ if st.button("Search Landsat Imagery", type="primary", use_container_width=True)
     scale=30,
     maxPixels=1e13
     ).getInfo()
+
+
     #Display the search information as report
     summary_md = f"""
     ### Landsat Imagery Search Summary
 
     - **Total Images Found:** {detailed_stats.get('total_images', 'N/A')}
-    - **Date Range of Images:** {detailed_stats.get('date_range', 'N/A')}
-    - **Unique WRS Tiles:** {detailed_stats.get('unique_tiles', 'N/A')}
-    - **Path Row Tiles:** {detailed_stats.get('path_row_tiles', 'N/A')}
-    - **Scene IDs:** {', '.join(detailed_stats.get('Scene_ids', [])) if detailed_stats.get('Scene_ids') else 'N/A'} 
-    - **Image acquisition dates:** {', '.join(detailed_stats.get('individual_dates', [])) if detailed_stats.get('individual_dates') else 'N/A'}
-    - **Average Scene Cloud Cover:** {detailed_stats.get('cloud_cover', {}).get('mean', 'N/A')}%
-    - **Date Range:** {detailed_stats.get('date_range', 'N/A')}
-    - **Cloud Cover Range:** {detailed_stats.get('cloud_cover', {}).get('min', 'N/A')}% - {detailed_stats.get('cloud_cover', {}).get('max', 'N/A')}%
+    - **Available Date Range:** {detailed_stats.get('date_range', 'N/A')}
     """
+
     st.markdown(summary_md)
-    # Optionally, display the full stats as a table
+    # Path/Row information in expandable section
+    path_row_tiles = detailed_stats.get('path_row_tiles', [])
+    if path_row_tiles:
+        with st.expander(f"WRS Path/Row Coverage ({len(path_row_tiles)} tiles)"):
+            # Create columns for better display
+            num_cols = 3
+            cols = st.columns(num_cols)
+            
+            for idx, (path, row) in enumerate(path_row_tiles):
+                col_idx = idx % num_cols
+                cols[col_idx].write(f" Path {path:03d} / Row {row:03d}")
+
+    st.divider()
+
+    #Detailed Scene Information with cloud cover information
+    with st.expander("Scene ID, acquisition date, and cloud cover"):
+        scene_ids = detailed_stats.get('Scene_ids', [])
+        acquisition_dates = detailed_stats.get('individual_dates', [])
+        cloud_covers = detailed_stats.get('cloud_cover', {}).get('values', [])
+        
+        if scene_ids and acquisition_dates:
+            import pandas as pd
+            
+            # Create a dataframe with all information
+            scene_df = pd.DataFrame({
+                '#': range(1, len(scene_ids) + 1),
+                'Scene ID': scene_ids,
+                'Acquisition Date': acquisition_dates,
+                'Cloud Cover (%)': [round(cc, 2) for cc in cloud_covers] if cloud_covers else ['N/A'] * len(scene_ids)
+            })
+            
+            # Display the table with formatting
+            st.dataframe(
+                scene_df,
+                width='stretch',
+                hide_index=True,
+                column_config={
+                    '#': st.column_config.NumberColumn('#', width='small'),
+                    'Scene ID': st.column_config.TextColumn('Scene ID', width='large'),
+                    'Acquisition Date': st.column_config.TextColumn('Acquisition Date', width='medium'),
+                    'Cloud Cover (%)': st.column_config.NumberColumn(
+                        'Cloud Cover (%)',
+                        width='medium',
+                        format="%.2f"
+                    )
+                }
+            )
+            
+            # Show cloud cover statistics
+            if cloud_covers:
+                st.markdown("#### ☁️ Cloud Cover Statistics")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Minimum", f"{min(cloud_covers):.2f}%")
+                with col2:
+                    st.metric("Average", f"{sum(cloud_covers)/len(cloud_covers):.2f}%")
+                with col3:
+                    st.metric("Maximum", f"{max(cloud_covers):.2f}%")
+            
+            # Download button
+            csv = scene_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Scene List as CSV",
+                data=csv,
+                file_name=f"landsat_scenes_{start_date}_{end_date}.csv",
+                mime="text/csv"
+            )
+        else:
+            st.info("No scene data available to display")
     #st.subheader("Detailed Statistics") {'bands': ['RED', 'GREEN', 'BLUE'], 'min': 0, 'max': 0.3}
     #st.write(detailed_stats)
     if detailed_stats['total_images'] > 0:
