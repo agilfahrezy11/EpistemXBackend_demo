@@ -28,8 +28,10 @@ if 'collection' not in st.session_state:
     st.session_state.collection = None
 if 'composite' not in st.session_state:
     st.session_state.composite = None
-if 'aoi' not in st.session_state:
-    st.session_state.AOI = None
+if 'aoi' not in st.session_state: #FIXED, STORE AOI IN SESSION STATE BOTH GDF AND EE
+    st.session_state.aoi = None
+if 'gdf' not in st.session_state:
+    st.session_state.gdf = None
 if 'export_tasks' not in st.session_state:
     st.session_state.export_tasks = []
 #Based on early experiments, shapefile with complex geometry often cause issues in GEE
@@ -78,8 +80,10 @@ if uploaded_file:
                     
                     if aoi is not None:
                         st.success("AOI conversion completed!")
-                        
-                        # Show a small preview map centered on AOI
+                        #FIXED-MAKING SURE THE AOI IS STORED PROPERLY FOR EXPORT
+                        st.session_state.aoi = aoi 
+                        st.session_state.gdf = gdf_cleaned
+                        #Show a small preview map centered on AOI
                         st.text("Area of interest preview:")
                         centroid = gdf_cleaned.geometry.centroid.iloc[0]
                         preview_map = geemap.Map(center=[centroid.y, centroid.x], zoom=7)
@@ -157,36 +161,37 @@ cloud_cover = st.slider("Maximum Cloud Cover (%):", 0, 100, 30)
 
 #Search the landsat imagery
 if st.button("Search Landsat Imagery", type="primary", use_container_width=True) and aoi:
-    reflectance = Reflectance_Data()
-    collection, meta = reflectance.get_optical_data(
-        aoi=aoi,
-        start_date=start_date,
-        end_date=end_date,
-        optical_data=optical_data,
-        cloud_cover=cloud_cover,
-        verbose=False,
-        compute_detailed_stats=False
-    )
-    stats = Reflectance_Stats()
-    detailed_stats = stats.get_collection_statistics(collection, compute_stats=True, print_report=True)
-    st.success(f"Found {detailed_stats['total_images']} images.")
-    #Store the metadata for export
-    st.session_state.search_metadata = {
-        'sensor': optical_data,
-        'start_date': start_date,
-        'end_date': end_date,
-        'num_images': detailed_stats['total_images']
-        }
-    #Debug: check collection size (safe server-side call)
-    try:
-        coll_size = int(collection.size().getInfo())
-    except Exception as e:
-        st.error(f"Failed to query collection size: {e}")
-        coll_size = 0
-    st.write(f"Collection size: {coll_size}")
+    with st.spinner("Searching for Landsat imagery..."):
+        reflectance = Reflectance_Data()
+        collection, meta = reflectance.get_optical_data(
+            aoi=aoi,
+            start_date=start_date,
+            end_date=end_date,
+            optical_data=optical_data,
+            cloud_cover=cloud_cover,
+            verbose=False,
+            compute_detailed_stats=False
+        )
+        stats = Reflectance_Stats()
+        detailed_stats = stats.get_collection_statistics(collection, compute_stats=True, print_report=True)
+        st.success(f"Found {detailed_stats['total_images']} images.")
+        #Store the metadata for export
+        st.session_state.search_metadata = {
+            'sensor': optical_data,
+            'start_date': start_date,
+            'end_date': end_date,
+            'num_images': detailed_stats['total_images']
+            }
+        #Debug: check collection size (safe server-side call)
+        try:
+            coll_size = int(collection.size().getInfo())
+        except Exception as e:
+            st.error(f"Failed to query collection size: {e}")
+            coll_size = 0
+        st.write(f"Collection size: {coll_size}")
 
-    if coll_size == 0:
-        st.warning("No images found for the selected criteria, increase cloud cover threshold or change the date range.")
+        if coll_size == 0:
+            st.warning("No images found for the selected criteria, increase cloud cover threshold or change the date range.")
    
     #get valid pixels (number of cloudless pixel in date range)
     #valid_px = collection.reduce(ee.Reducer.count()).clip(aoi)
@@ -241,7 +246,7 @@ else:
     st.info("Upload an AOI and specify search criteria to begin.")
 
 #export the data
-if st.session_state.composite is not None:
+if st.session_state.composite is not None and st.session_state.aoi is not None:
     st.subheader("Export Mosaic to Google Drive")
     with st.expander("Export Setting", expanded=True):
         col1, col2 = st.columns(2)
@@ -314,13 +319,24 @@ if st.session_state.composite is not None:
                         "region": ensure_geometry(st.session_state.AOI)
                     }
 
+                    # Start the export task
                     task = ee.batch.Export.image.toDrive(**export_params)
                     task.start()
-
-                    st.success(f"✅ Export task '{export_name}' submitted!")
-                    st.info(f"Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks)")
+                    st.success(f"✅ Export task '{export_name}' submitted successfully!")
+                    st.info(f"Task ID: {task.id}")
+                    st.markdown(f"""
+                    **Export Details:**
+                    - File location: Google Drive/{drive_folder}/{export_name}.tif
+                    - CRS: {export_crs}
+                    - Resolution: {scale}m
+                    
+                    Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks)
+                    """)
             except Exception as e:
                 st.error(f"Export failed: {str(e)}")
+                st.info("Debugging info:")
+                st.write(f"AOI type: {type(st.session_state.aoi)}")
+                st.write(f"Composite exists: {st.session_state.composite is not None}")
 #Link the next page
 st.divider()
 st.subheader("Module Navigation")
