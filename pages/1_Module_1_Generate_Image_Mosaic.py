@@ -35,7 +35,9 @@ if 'collection' not in st.session_state:
 if 'composite' not in st.session_state:
     st.session_state.composite = None
 if 'aoi' not in st.session_state:
-    st.session_state.AOI = None
+    st.session_state.aoi = None
+if 'gdf' not in st.session_state:
+    st.session_state.gdf = None
 if 'export_tasks' not in st.session_state:
     st.session_state.export_tasks = []
 #Based on early experiments, shapefile with complex geometry often cause issues in GEE
@@ -84,6 +86,8 @@ if uploaded_file:
                     
                     if aoi is not None:
                         st.success("AOI conversion completed!")
+                        st.session_state.aoi = aoi
+                        st.session_state.gdf = gdf_cleaned
                         
                         # Show a small preview map centered on AOI
                         st.text("Area of interest preview:")
@@ -162,35 +166,36 @@ else:
 cloud_cover = st.slider("Maximum Cloud Cover (%):", 0, 100, 30)
 
 #Search the landsat imagery
-if st.button("Search Landsat Imagery", type="primary", width='stretch') and aoi:
-    reflectance = Reflectance_Data()
-    collection, meta = reflectance.get_optical_data(
-        aoi=aoi,
-        start_date=start_date,
-        end_date=end_date,
-        optical_data=optical_data,
-        cloud_cover=cloud_cover,
-        verbose=False,
-        compute_detailed_stats=False
-    )
-    stats = Reflectance_Stats()
-    detailed_stats = stats.get_collection_statistics(collection, compute_stats=True, print_report=True)
-    st.success(f"Found {detailed_stats['total_images']} images.")
-    #Store the metadata for export
-    st.session_state.search_metadata = {
-        'sensor': optical_data,
-        'start_date': start_date,
-        'end_date': end_date,
-        'num_images': detailed_stats['total_images']
-        }
-    try:
-        coll_size = int(collection.size().getInfo())
-    except Exception as e:
-        st.error(f"Failed to query collection size: {e}")
-        coll_size = 0
+if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi is not None:
+    with st.spinner("Searching for Landsat imagery..."):
+        reflectance = Reflectance_Data()
+        collection, meta = reflectance.get_optical_data(
+            aoi=aoi,
+            start_date=start_date,
+            end_date=end_date,
+            optical_data=optical_data,
+            cloud_cover=cloud_cover,
+            verbose=False,
+            compute_detailed_stats=False
+        )
+        stats = Reflectance_Stats()
+        detailed_stats = stats.get_collection_statistics(collection, compute_stats=True, print_report=True)
+        st.success(f"Found {detailed_stats['total_images']} images.")
+        #Store the metadata for export
+        st.session_state.search_metadata = {
+            'sensor': optical_data,
+            'start_date': start_date,
+            'end_date': end_date,
+            'num_images': detailed_stats['total_images']
+            }
+        try:
+            coll_size = int(collection.size().getInfo())
+        except Exception as e:
+            st.error(f"Failed to query collection size: {e}")
+            coll_size = 0
 
-    if coll_size == 0:
-        st.warning("No images found for the selected criteria, increase cloud cover threshold,  change the date range, or make sure the acquisition date aligned with Landsat Mission Avaliability.")
+        if coll_size == 0:
+            st.warning("No images found for the selected criteria, increase cloud cover threshold,  change the date range, or make sure the acquisition date aligned with Landsat Mission Avaliability.")
 
     #get valid pixels (number of cloudless pixel in date range)
     valid_px = collection.reduce(ee.Reducer.count()).clip(aoi)
@@ -309,92 +314,126 @@ else:
     st.info("Upload an AOI and specify search criteria to begin.")
 
 #export the data
-if st.session_state.composite is not None:
+if st.session_state.composite is not None and st.session_state.aoi is not None:
     st.subheader("Export Mosaic to Google Drive")
-    with st.expander("Export Setting", expanded=True):
+    
+    with st.expander("Export Settings", expanded=True):
         col1, col2 = st.columns(2)
+        
         with col1:
-            #FileNaming
-            default_name = f"Landsat_{st.session_state.search_metadata['sensor']}_{st.session_state.search_metadata['start_date']}_{st.session_state.search_metadata['end_date']}_mosaic"
+            # File naming
+            default_name = f"Landsat_{st.session_state.search_metadata.get('sensor', 'unknown')}_{st.session_state.search_metadata.get('start_date', '')}_{st.session_state.search_metadata.get('end_date', '')}_mosaic"
             export_name = st.text_input(
                 "Export Filename:",
                 value=default_name,
-                help = "The output will be saved as GeoTIFF (.tif)"
+                help="The output will be saved as GeoTIFF (.tif)"
             )
+            
             drive_folder = st.text_input(
                 "Google Drive Folder:",
-                value="Earth Engine Export",
-                help = "Google Drive Folder to stored the result"
+                value="EarthEngine_Exports",
+                help="Google Drive folder to store the result"
             )
+            
         with col2:
-            crs = {
+            crs_options = {
                 "WGS 84 (EPSG:4326)": "EPSG:4326",
                 "Custom EPSG": "CUSTOM"
             }
+            
             crs_choice = st.selectbox(
                 "Coordinate Reference System:",
-                options = list(crs.keys()),
-                index = 0
+                options=list(crs_options.keys()),
+                index=0
             )
+            
             if crs_choice == 'Custom EPSG':
                 custom_epsg = st.text_input(
                     "Enter EPSG Code:",
                     value="4326",
-                    help = "Example: 3278 (UTM Zone 48S)"
+                    help="Example: 32648 (UTM Zone 48N)"
                 )
+                export_crs = f"EPSG:{custom_epsg}"
             else:
-                export_crs = crs[crs_choice]
+                export_crs = crs_options[crs_choice]
+            
             scale = st.number_input(
-                    "Pixel Size (meters):",
-                    min_value=10,
-                    max_value=1000,
-                    value = 30,
-                    step=10)
+                "Pixel Size (meters):",
+                min_value=10,
+                max_value=1000,
+                value=30,
+                step=10
+            )
+        
         if st.button("Start Export to Google Drive", type="primary"):
             try:
                 with st.spinner("Preparing export task..."):
-                    # Use the composite that is already computed and clipped
+                    # Use the composite from session state
                     export_image = st.session_state.composite
-                    # Export all bands
-                    export_image = export_image.select(export_image.bandNames())
-                    def ensure_geometry(aoi):
-                        """Convert AOI to ee.Geometry if needed."""
-                        if isinstance(aoi, ee.FeatureCollection):
-                            return aoi.geometry()
-                        elif isinstance(aoi, ee.Feature):
-                            return aoi.geometry()
-                        elif isinstance(aoi, ee.Geometry):
-                            return aoi
-                        else:
-                            raise ValueError("AOI is not a valid ee object")
-                    region = ensure_geometry(st.session_state.AOI)
+                    
+                    # Ensure we have valid band names
+                    band_names = export_image.bandNames()
+                    export_image = export_image.select(band_names)
+                    
+                    # Get the geometry from AOI - FIXED
+                    aoi_obj = st.session_state.aoi
+                    
+                    # Convert to geometry based on type
+                    if isinstance(aoi_obj, ee.FeatureCollection):
+                        export_region = aoi_obj.geometry()
+                    elif isinstance(aoi_obj, ee.Feature):
+                        export_region = aoi_obj.geometry()
+                    elif isinstance(aoi_obj, ee.Geometry):
+                        export_region = aoi_obj
+                    else:
+                        # If all else fails, try to get bounds
+                        try:
+                            export_region = aoi_obj.geometry()
+                        except:
+                            raise ValueError(f"Cannot extract geometry from AOI object of type: {type(aoi_obj)}")
+                    
                     # Set export parameters
                     export_params = {
                         "image": export_image,
-                        "description": export_name,
+                        "description": export_name.replace(" ", "_"),  # Remove spaces from description
                         "folder": drive_folder,
                         "fileNamePrefix": export_name,
                         "scale": scale,
-                        "crs": "EPSG:4326",   # or detect from AOI if you prefer
+                        "crs": export_crs,
                         "maxPixels": 1e13,
                         "fileFormat": "GeoTIFF",
                         "formatOptions": {"cloudOptimized": True},
-                        "region": region
+                        "region": export_region
                     }
-
+                    
+                    # Start the export task
                     task = ee.batch.Export.image.toDrive(**export_params)
                     task.start()
-
-                    st.success(f"✅ Export task '{export_name}' submitted!")
-                    st.info(f"Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks)")
+                    
+                    st.success(f"✅ Export task '{export_name}' submitted successfully!")
+                    st.info(f"Task ID: {task.id}")
+                    st.markdown(f"""
+                    **Export Details:**
+                    - File location: Google Drive/{drive_folder}/{export_name}.tif
+                    - CRS: {export_crs}
+                    - Resolution: {scale}m
+                    
+                    Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks)
+                    """)
+                    
             except Exception as e:
                 st.error(f"Export failed: {str(e)}")
-#Link the next page
+                st.info("Debugging info:")
+                st.write(f"AOI type: {type(st.session_state.aoi)}")
+                st.write(f"Composite exists: {st.session_state.composite is not None}")
+
+# Navigation
 st.divider()
 st.subheader("Module Navigation")
-if 'composite' in st.session_state:
+
+if st.session_state.composite is not None:
     if st.button("Go to Module 2: Classification Scheme"):
         st.switch_page("pages/2_Module_2_Classification_scheme.py")
 else:
     st.button("🔒 Complete Module 1 First", disabled=True)
-    st.info("Please Generate an imagery mosaic before proceeding")
+    st.info("Please generate an imagery mosaic before proceeding")
