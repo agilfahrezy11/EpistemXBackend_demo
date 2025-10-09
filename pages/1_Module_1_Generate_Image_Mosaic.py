@@ -8,19 +8,15 @@ import zipfile
 import os
 import ee
 import datetime
+from src.src_utils_initializer import EarthEngineAuth
+
+if not EarthEngineAuth.initialize():
+    st.stop()
 # Page configuration
 st.set_page_config(
     page_title="Search and Generate Landsat Image Mosaic",
     layout="wide"
 )
-
-# Initialize Earth Engine
-try:
-    ee.Authenticate()
-    ee.Initialize()
-except Exception as e:
-    st.error(f"Earth Engine initialization failed: {e}")
-    st.stop()
 #title of the module
 st.title("Search and Generate Landsat Image Mosaic")
 st.divider()
@@ -277,7 +273,7 @@ if st.button("Search Landsat Imagery", type="primary", width='stretch') and aoi:
             # Download button
             csv = scene_df.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Download Scene List as CSV",
+                label="Download Scene List as CSV",
                 data=csv,
                 file_name=f"landsat_scenes_{start_date}_{end_date}.csv",
                 mime="text/csv"
@@ -371,7 +367,7 @@ if st.session_state.composite is not None:
                             return aoi
                         else:
                             raise ValueError("AOI is not a valid ee object")
-                    #region = ensure_geometry(st.session_state.AOI)
+                    region = ensure_geometry(st.session_state.AOI)
                     # Set export parameters
                     export_params = {
                         "image": export_image,
@@ -383,7 +379,7 @@ if st.session_state.composite is not None:
                         "maxPixels": 1e13,
                         "fileFormat": "GeoTIFF",
                         "formatOptions": {"cloudOptimized": True},
-                        "region": ensure_geometry(st.session_state.AOI)
+                        "region": region
                     }
 
                     task = ee.batch.Export.image.toDrive(**export_params)

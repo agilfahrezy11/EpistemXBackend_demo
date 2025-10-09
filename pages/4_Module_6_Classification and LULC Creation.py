@@ -70,10 +70,12 @@ with col2:
                 # Show class distribution if class property is known
                 if 'selected_class_property' in st.session_state:
                     class_prop = st.session_state['selected_class_property']
+                    class_name = st.session_state['selected_class_name_property']
                     if class_prop in gdf.columns:
                         class_counts = gdf[class_prop].value_counts()
+                        class_name = gdf[class_name].unique()
                         st.write("**Class Distribution:**")
-                        st.dataframe(class_counts, use_container_width=True)
+                        st.dataframe(class_counts, width='stretch')
     else:
         st.error("❌ Training Data Not Found")
         st.warning("Please complete Module 3 to and analyze the training data")
@@ -144,7 +146,7 @@ with tab1:
     
     st.markdown("---")
     # Extract Features button
-if st.button("Extract Features", type="primary", use_container_width=True):
+    if st.button("Extract Features", type="primary", width='content'):
         with st.spinner("Extracting features from imagery..."):
             try:
                 # Simply extract pixel values from all ROI data
@@ -158,11 +160,10 @@ if st.button("Extract Features", type="primary", use_container_width=True):
                 st.session_state.extracted_training_data = training_data
                 st.session_state.extracted_testing_data = None  # No testing data
                 st.session_state.class_property = class_property
-                
-                st.success("✅ Feature extraction completed!")
                 st.metric("Total Training Samples", training_data.size().getInfo())
+                st.success("✅ Feature extraction completed!")
                 
-                st.info("ℹ️ All ROI data has been extracted. Make sure you .")
+                st.info("ℹ️ All ROI data has been extracted. Make sure you prepared the validation data for accuracy assessment.")
                 
             except Exception as e:
                 st.error(f"Error during feature extraction: {e}")
@@ -190,10 +191,9 @@ with tab2:
                 help="Hard: Standard multiclass classification\nSoft: Probability-based with confidence layers"
             )
             
-            st.markdown("---")
-            st.subheader("Model Parameters")
-            
-            # Number of trees
+        with col2:
+            st.subheader("Random Forest Hyperparameter")
+            #Number of trees
             ntrees = st.number_input(
                 "Number of Trees",
                 min_value=10,
@@ -202,8 +202,8 @@ with tab2:
                 step=10,
                 help="More trees = better accuracy but slower computation"
             )
-            
-            # Variables per split
+           #Variables per split
+
             use_auto_vsplit = st.checkbox(
                 "Auto-calculate Variables Per Split",
                 value=True,
@@ -220,10 +220,6 @@ with tab2:
                 )
             else:
                 v_split = None
-        
-        with col2:
-            st.subheader("Advanced Parameters")
-            
             # Minimum leaf population
             min_leaf = st.number_input(
                 "Minimum Leaf Population",
@@ -231,15 +227,6 @@ with tab2:
                 max_value=100,
                 value=1,
                 help="Minimum number of samples required in a leaf node"
-            )
-            
-            # Random seed
-            clf_seed = st.number_input(
-                "Random Seed",
-                min_value=0,
-                max_value=9999,
-                value=0,
-                help="For reproducibility"
             )
             
             # Soft classification specific parameters
@@ -253,18 +240,11 @@ with tab2:
                     help="Generate final map using argmax on probability layers"
                 )
                 
-                probability_scale = st.slider(
-                    "Probability Scale Factor",
-                    min_value=1,
-                    max_value=255,
-                    value=100,
-                    help="Scale factor for probability layers (for storage efficiency)"
-                )
         
         st.markdown("---")
         
         # Classify button
-        if st.button("Run Classification", type="primary", width='stretch'):
+        if st.button("Run Classification", type="primary", width='content'):
             with st.spinner("Running classification... This may take a few minutes."):
                 try:
                     lulc = Generate_LULC()
@@ -280,7 +260,6 @@ with tab2:
                             ntrees=ntrees,
                             v_split=v_split,
                             min_leaf=min_leaf,
-                            seed=clf_seed
                         )
                         st.session_state.classification_mode = "Hard Classification"
                     else:  # Soft Classification
@@ -292,8 +271,6 @@ with tab2:
                             ntrees=ntrees,
                             v_split=v_split,
                             min_leaf=min_leaf,
-                            seed=clf_seed,
-                            probability_scale=probability_scale
                         )
                         st.session_state.classification_mode = "Soft Classification"
                         st.session_state.include_final_map = include_final_map
@@ -304,7 +281,6 @@ with tab2:
                         'ntrees': ntrees,
                         'v_split': v_split,
                         'min_leaf': min_leaf,
-                        'seed': clf_seed
                     }
                     
                     st.success("✅ Classification completed successfully!")
@@ -315,7 +291,7 @@ with tab2:
                     import traceback
                     st.code(traceback.format_exc())
 
-# ==================== TAB 3: RESULTS & EXPORT ====================
+# ==================== TAB 3: RESULTS====================
 with tab3:
     st.header("Classification Results")
     
@@ -429,7 +405,7 @@ with col1:
 
 with col2:
     if st.session_state.classification_result is not None:
-        if st.button("➡️ Go to Module 5: Accuracy Assessment", type="primary", width='stretch'):
+        if st.button("➡️ Go to Module 5: Accuracy Assessment", width='stretch'):
             st.info("Accuracy assessment module coming soon!")
     else:
         st.button("🔒 Complete Classification First", disabled=True, width='stretch')
