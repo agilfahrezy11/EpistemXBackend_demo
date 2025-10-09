@@ -35,27 +35,33 @@ _Prepared on Windows 11 x64; follow this path on Windows 11 x64 machines for the
 
 1. Download the prepackaged `epistemx` conda-pack archive from [SharePoint](https://icrafcifor.sharepoint.com/:u:/r/sites/EPISTEM/Shared%20Documents/EPISTEM%20Consortium/1%20Monitoring%20Technology/Prototyping/python_environment/epistemx.tar.gz?csf=1&web=1&e=eGbscP). You will need access to the EPISTEM SharePoint workspace.
 
-2. Unpack the archive and make it usable on your machine by following [these instructions](https://gist.github.com/pmbaumgartner/2626ce24adb7f4030c0075d2b35dda32) for restoring a conda-pack environment. In short, place the archive in the directory where you keep your Conda environments, extract it, and run `conda-unpack` inside the environment. Example commands (adapt paths to your platform):
+2. Unpack the archive and make it usable on your machine by following [these instructions](https://gist.github.com/pmbaumgartner/2626ce24adb7f4030c0075d2b35dda32) for restoring a conda-pack environment. In short, place the archive in the directory where you keep your Conda environments and extract it. Example commands (adapt paths to your platform):
 
    ```bash
-   mkdir -p ~/miniconda3/envs/epistemx
-   tar -xzf epistemx.tar.gz -C ~/miniconda3/envs/epistemx
-   conda activate ~/miniconda3/envs/epistemx
-   conda-unpack
+   mkdir -p ~/epistemx
+   tar -xzf epistemx.tar.gz -C ~/epistemx
    ```
 
-3. After running `conda-unpack`, reactivate the environment. The `epistemx` environment now includes all Earth Engine dependencies JupyterLab, and Streamlit.
+3. Then, activate the environment and unpack it:
 
-**Alternative (build from `environment.yml`)**  
+   ```
+   cd \path\to\epistemx
+   .\Scripts\activate.bat
+   .\Scripts\conda-unpack.exe
+   ```
 
-_Recommended for macOS and Linux systems._
+   The epistemx environment now includes all dependencies for Earth Engine, JupyterLab, and Streamlit.
 
-If you prefer to build the environment locally, use the provided `environment.yml` with [Miniforge](https://github.com/conda-forge/miniforge):
+   **Alternative (build from `environment.yml`)**  
 
-```bash
-conda create -f environment.yml -n epistemx
-conda activate epistemx
-```
+   _Recommended for macOS and Linux systems._
+
+   If you prefer to build the environment locally, use the provided `environment.yml` with [Miniforge](https://github.com/conda-forge/miniforge):
+
+   ```bash
+   conda create -f environment.yml -n epistemx
+   conda activate epistemx
+   ```
 
 ### 3. Clone the Repository
 
@@ -63,7 +69,7 @@ With the environment ready, clone the project and move into the repository:
 
 ```bash
 git clone https://github.com/epistem-io/EpistemXBackend.git
-cd EpistemXBackend
+cd \path\to\EpistemXBackend
 ```
 
 ### 4. Usage
