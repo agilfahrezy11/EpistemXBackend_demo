@@ -1,4 +1,6 @@
 import streamlit as st
+import pandas as pd
+import plotly.express as px
 import geemap.foliumap as geemap
 from src.src_modul_6 import FeatureExtraction, Generate_LULC
 import ee
@@ -31,7 +33,7 @@ st.subheader("Prerequisites Check")
 
 col1, col2 = st.columns(2)
 
-# Check for image composite from Module 1
+#Check for image composite from Module 1
 with col1:
     if 'composite' in st.session_state and st.session_state.composite is not None:
         st.success("✅ Image Composite Available (Module 1)")
@@ -50,7 +52,7 @@ with col1:
         st.warning("Please complete Module 1 first to generate an image composite")
         image = None
 
-# Check for training data from Module 3/4
+#Check for training data from Module 3/4
 with col2:
     if 'training_data' in st.session_state and st.session_state.training_data is not None:
         st.success("✅ Training Data Available (Module 3)")
@@ -103,7 +105,7 @@ if 'classification_result' not in st.session_state:
 st.divider()
 
 #Main content tabs
-tab1, tab2, tab3 = st.tabs(["Feature Extraction", "Classification", "Visualization"])
+tab1, tab2, tab3, tab4 = st.tabs(["Feature Extraction", "Classification", "Classification Report", "Visualization"])
 
 # ==================== Tab 1: Feature Extraction ====================
 #Option to either use all of the training data for classification, or split them into train and test data
@@ -330,7 +332,7 @@ with tab2:
 
 # ==================== TAB 3 Summary Result ====================
 with tab3:
-    st.header("Classification Results")
+    st.header("Classification Report")
     
     if st.session_state.classification_result is None:
         st.info("ℹ️ No classification results yet. Please run classification first.")
@@ -467,6 +469,122 @@ with tab3:
         
         st.markdown("---")
 
+#Main concern. user still able to get summary report without the model accuaracy
+with tab3:
+    st.header("Classification Summary and Report")
+    st.info("This section shows the model performance on the test dataset. Using this appproach, we can evaluate how well the Random Forest model" \
+    "learned from the training data")
+    #Check the avaliability of testing data and classification model
+    #Check the model
+    if st.session_state.classification_result is None:
+        st.warning("Complete the classification to evaluates the performance")
+        st.stop()
+    if 'trained_model' not in st.session_state:
+        st.error("Trained model is not found. Please re-run classification.")
+        st.stop()
+    #check the testing data
+    have_test_data = st.session_state.extracted_testing_data is not None
+    if not have_test_data:
+        st.warning(" No testing data available. Model ")
+        st.info("""
+        **To perform Model evaluy:**
+        1. Go to the 'Feature Extraction' tab
+        2. Enable 'Split data into Training and Testing sets'
+        3. Re-run feature extraction and classification
+        4. Return here to evaluate the model
+        """)
+        #show model information without its accuracy
+        show_model_only = True
+    else:
+        st.success("Testing data avaliable for model accuracy")
+    # ==== Model Information =====
+    st.subheader("Model configuration")
+    params = st.session_state.get('classification_params', {})
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Number of Decision Tree", params.get('ntrees', 'N/A'))
+    with col2:
+        v_split = params.get('v_split', 'Auto')
+        st.metric("Variable selected at split", v_split if v_split else 'Auto')
+    with col3:
+        st.metric("minimum leaf population", params.get('min_leaf', 'N/A'))
+    # ==== Feature Importance ====
+    st.subheader("Feature Importance")
+    #This trained model is problematic, the source code did not stored the model 
+    #source code need modification or bring out the classification procedure in streamlit
+    try:
+        #get model explanation
+        model_exp = st.session_state.trained_model.explain().getInfo()
+        st.session_state.model_exp = model_exp
+        #Create dataframe to stored the feature importance
+        if 'importance' in model_exp:
+            importance_dict = model_exp['importance']
+            importance_df = pd.DataFrame([
+                {'Band': band, 'Importance': importance}
+                for band, importance in importance_dict.items()
+            ]).sort_values('Importance', ascending=False)
+            # Normalize to percentage
+            total_importance = importance_df['Importance'].sum()
+            importance_df['Importance (%)'] = (importance_df['Importance'] / total_importance * 100).round(2)
+            
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                fig = px.bar(
+                    importance_df,
+                    x = 'Importance',
+                    y='Band',
+                    orientation='h',
+                    title='Variable Importance Ranking',
+                    color = 'Importance',
+                    color_continuous_scale='Viridis',
+                    text='Importance(%)'
+                )
+                fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                fig.update_layout(
+                    yaxis = {'categoryorder': 'total ascending'},
+                    height=max(400, len(importance_df) * 30),
+                    showlegend=False
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                st.markdown("**Top 5 Most Important Features:**")
+                for i, row in importance_df.head(5).iterrows():
+                    st.metric(
+                        f"{i+1}. {row['Band']}", 
+                        f"{row['Importance (%)']:.1f}%"
+                    )
+                
+                # Show full table
+                with st.expander("View Complete Importance Table"):
+                    st.dataframe(
+                        importance_df.style.background_gradient(
+                            subset=['Importance (%)'],
+                            cmap='YlGn'
+                        ),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+        else:
+            st.info("Feature importance not available in model explanation.")
+    
+    except Exception as e:
+        st.error(f"Error retrieving feature importance: {e}")
+    
+    # ==== Model Accuracy ====
+    if not show_model_only:
+        st.subheader("Model Accuracy")
+        if st.button("Evaluate Classification Model", type="primary", use_container_width=True)
+            with st.spinner("Evaluating classification model..."):
+                try:
+                    trained_model = st.session_state.trained_model
+                    clf_class_property = st.session_state.get('classification_params', {}).get('class_property')
+    
+# ==================== TAB 4 Visualization ====================
+with tab4:
+    """"""
+
+
 # Footer with navigation
 st.divider()
 st.subheader("Module Navigation")
@@ -479,7 +597,7 @@ with col1:
 
 with col2:
     if st.session_state.classification_result is not None:
-        if st.button("➡️ Go to Module 5: Accuracy Assessment", width='stretch'):
+        if st.button("➡️ Go to Module 7: Thematic Accuracy Assessment", width='stretch'):
             st.info("Accuracy assessment module coming soon!")
     else:
         st.button("🔒 Complete Classification First", disabled=True, width='stretch')

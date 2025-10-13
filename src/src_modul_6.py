@@ -1,3 +1,4 @@
+import pandas as pd
 import ee
 ee.Initialize()
 
@@ -100,7 +101,7 @@ class Generate_LULC:
 
     ############################# 1. Multiclass Classification ###########################
     def hard_classification(self, training_data, class_property, image, ntrees = 100, 
-                                  v_split = None, min_leaf = 1, seed=0):
+                                  v_split = None, min_leaf = 1, return_model = False,  seed=0):
         """
         Perform multiclass hard classification to generate land cover land use map
             Parameters:
@@ -121,7 +122,7 @@ class Generate_LULC:
         #if for some reason var split is not specified, used square root of total bands used in the classification
         if v_split is None:
             v_split = ee.Number(image.bandNames().size()).sqrt().ceil()
-        #Random Forest model
+        #Random Forest initialization
         clf = ee.Classifier.smileRandomForest(
                 numberOfTrees=ntrees, 
                 variablesPerSplit=v_split,
@@ -134,8 +135,13 @@ class Generate_LULC:
         )
         #Implement the trained model to classify the whole imagery
         multiclass = image.classify(model)
-        return multiclass
-     ############################# 1. One-vs-rest (OVR) binary Classification ###########################
+        #Return model and classification, used for classification summary
+        if return_model:
+            return multiclass, model
+        #if not needed, only return classification result
+        else:
+            return multiclass   
+    ############################# 1. One-vs-rest (OVR) binary Classification ###########################
     def soft_classification(self, training_data, class_property, image, include_final_map=True,
                                 ntrees = 100, v_split = None, min_leaf=1, seed=0, probability_scale = 100):
         """
@@ -147,7 +153,6 @@ class Generate_LULC:
             training_data (ee.FeatureCollection): The data which already have a pixel value from input covariates
             class_property (str): Column name contain land cover class id
             image (ee.Image): Image data
-            covariates (list): covariates names
             ntrees (int): Number of trees (user should input the best parammeter from parameter optimization)
             v_split (int): Variables per split (default = sqrt(#covariates)). (user should input the best parammeter from parameter optimization)
             min_leaf (int): Minimum leaf population. (user should input the best parammeter from parameter optimization)
@@ -226,3 +231,79 @@ class Generate_LULC:
         #stack the final map and confidence
         stacked = prob_stack.addBands([final_lc, max_confidence])
         return stacked
+        ############################# Feature importance ###########################
+        #feature importance that can be used by hard or soft classification
+    def get_feature_importance(self, trained_model):
+        """
+        Extract feature importance from a trained Random Forest model
+        Parameters:
+            trained_model: ee.Classifier - Trained Random Forest model (classification model must be enable)
+        Returns:
+            pandas.DataFrame containing model's feature importance
+        """
+        #Get model explanation from the trained model
+        model_explanation = trained_model.explain().getInfo()
+        #Extract feature importance
+        if 'importance' not in model_explanation:
+            raise ValueError("Feature importance not available in model explanation")
+        importance_dict = model_explanation['importance']
+        # Create DataFrame containing the importance
+        importance_df = pd.DataFrame([
+                {'Band': band, 'Importance': importance}
+                for band, importance in importance_dict.items()
+            ]).sort_values('Importance', ascending=False)
+            # Normalize the value to percentage
+        total_importance = importance_df['Importance'].sum()
+        importance_df['Importance (%)'] = (importance_df['Importance'] / total_importance * 100).round(2)    
+        # Reset index
+        importance_df = importance_df.reset_index(drop=True)
+        return importance_df 
+    def evaluate_model(self, trained_model, test_data, class_property):
+        """
+        Perform model evaluation based on confusion matrix. This approach is similar to standard Remote Sensing accuracy assessment, but applied for trained model (ee.classifier)
+        instead on classification result or map.
+        Parameters:
+            trained_model: ee.Classifier - Trained Random Forest model
+            test_data: ee.FeatureCollection - Testing samples with pixel values
+            class_property (str): Column name containing class labels
+        
+        Returns:
+            dict: Dictionary containing accuracy metrics
+        """
+        #Classify the testing data
+        test_classified = test_data.classify(trained_model)
+        
+        #Get confusion matrix
+        confusion_matrix = test_classified.errorMatrix(
+            actual=class_property,
+            predicted='classification'
+        )
+        #Get accuracy metrics
+        #Producer accuracy / Recall (sensitivity)
+        #User accuracy / Precision 
+        confusion_matrix_array = confusion_matrix.getInfo()
+        overall_accuracy = confusion_matrix_array['accuracy']
+        kappa = confusion_matrix_array['kappa']
+        producers_accuracy = confusion_matrix_array['producersAccuracy']
+        consumers_accuracy = consumers_accuracy['consumersAccuracy']
+        
+        # Calculate F1 scores
+        f1_scores = []
+        for i in range(len(producers_accuracy)):
+            if producers_accuracy[i] + consumers_accuracy[i] > 0:
+                f1 = 2 * (producers_accuracy[i] * consumers_accuracy[i]) / (producers_accuracy[i] + consumers_accuracy[i])
+            else:
+                f1 = 0
+            f1_scores.append(f1)
+        
+        # Compile results
+        accuracy_metrics = {
+            'overall_accuracy': overall_accuracy,
+            'kappa': kappa,
+            'precision': producers_accuracy,
+            'recall': consumers_accuracy,
+            'confusion_matrix': confusion_matrix_array,
+            'f1_scores': f1_scores
+        }
+        
+        return accuracy_metrics
