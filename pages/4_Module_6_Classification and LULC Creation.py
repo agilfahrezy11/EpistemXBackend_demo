@@ -7,6 +7,7 @@ ee.Initialize()
 #Page configuration
 st.set_page_config(
     page_title="Land Cover Land Use Classification",
+    page_icon="logos\logo_epistem_crop.png",
     layout="wide"
 )
 #Set the page title (for the canvas)
@@ -101,76 +102,118 @@ if 'classification_result' not in st.session_state:
 
 st.divider()
 
-# Main content area with tabs
+#Main content tabs
 tab1, tab2, tab3 = st.tabs(["Feature Extraction", "Classification", "Visualization"])
 
-# ==================== TAB 1: FEATURE EXTRACTION ====================
+# ==================== Tab 1: Feature Extraction ====================
+#Option to either use all of the training data for classification, or split them into train and test data
 with tab1:
     st.header("Feature Extraction Configuration")
-    st.subheader("Extraction Parameters")
-    st.markdown("Prior to classification, feature extraction is required to get the pixel value from the imagery for each class in the Region of Interest.")
+    
+    col1, col2 = st.columns([1, 1])
+    #first column, provide option to split or not split
+    with col1:
+        st.subheader("Data Split Options")
+        # Option to split data
+        split_data = st.checkbox(
+            "Split data into Training and Testing sets",
+            value=True,
+            help="If unchecked, all ROI data will be used for training the classifier"
+        )
+        
+        if split_data:
+            st.info("The ROI is split into training and testing data using stratified random split approach")
+            
+            # Split ratio
+            split_ratio = st.slider(
+                "Training Data Ratio",
+                min_value=0.5,
+                max_value=0.9,
+                value=0.7,
+                step=0.05,
+                help="Proportion of data to use for training"
+            )
+            
+            st.metric("Training", f"{split_ratio*100:.0f}%", delta=None)
+            st.metric("Testing", f"{(1-split_ratio)*100:.0f}%", delta=None)
+            
+        else:
+            st.warning(" All ROI data will be used for training. Please prepared an independent testing dataset.")
+    
+    with col2:
+        st.subheader("Extraction Parameters")
         
         # Get class property from previous module if available
-    default_class_prop = st.session_state.get('selected_class_property', 'class')
+        default_class_prop = st.session_state.get('selected_class_property', 'class')
         
         # Class property name
-    class_property = st.text_input(
+        class_property = st.text_input(
             "Class Property Name",
             value=default_class_prop,
             help="Column name in your ROI containing the class labels"
         )
         
         # Pixel size
-    pixel_size = st.number_input(
+        pixel_size = st.number_input(
             "Pixel Size (meters)",
             min_value=1,
             max_value=1000,
             value=30,
             help="Spatial resolution for sampling"
         )
-        
-        # Tile scale
-    tile_scale = st.number_input(
-            "Tile Scale",
-            min_value=1,
-            max_value=32,
-            value=16,
-            help="Factor for aggregating tiles (higher = more memory efficient)"
-        )
-        
-    
     st.markdown("---")
+    
     # Extract Features button
-    if st.button("Extract Features", type="primary", width='content'):
+    if st.button("Extract Features", type="primary", use_container_width=True):
         with st.spinner("Extracting features from imagery..."):
             try:
-                # Simply extract pixel values from all ROI data
-                training_data = image.sampleRegions(
-                    collection=roi,
-                    properties=[class_property],
-                    scale=pixel_size,
-                    tileScale=tile_scale
-                )
-                
-                st.session_state.extracted_training_data = training_data
-                st.session_state.extracted_testing_data = None  # No testing data
-                st.session_state.class_property = class_property
-                st.metric("Total Training Samples", training_data.size().getInfo())
-                st.success("✅ Feature extraction completed!")
-                
-                st.info("ℹ️ All ROI data has been extracted. Make sure you prepared the validation data for accuracy assessment.")
+                fe = FeatureExtraction()
+                #define the spliting function from the source code
+                if split_data:
+                    # Use Stratified Random Split
+                    training_data, testing_data = fe.stratified_split(
+                        roi=roi,
+                        image=image,
+                        class_prop=class_property,
+                        pixel_size=pixel_size,
+                        train_ratio=split_ratio,
+                    )
+                    #stored the result in session state so that it can be used in classification
+                    st.session_state.extracted_training_data = training_data
+                    st.session_state.extracted_testing_data = testing_data
+                    st.session_state.class_property = class_property
+                    
+                    st.success("✅ Feature extraction completed using Stratified Random Split!")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Training Samples", training_data.size().getInfo())
+                    with col2:
+                        st.metric("Testing Samples", testing_data.size().getInfo())
+                else:
+                    # Extract all features without splitting
+                    training_data = image.sampleRegions(
+                        collection=roi,
+                        properties=[class_property],
+                        scale=pixel_size,
+                    )
+                    st.session_state.extracted_training_data = training_data
+                    st.session_state.extracted_testing_data = None
+                    st.session_state.class_property = class_property
+                    
+                    st.success("✅ Feature extraction completed!")
+                    st.info("ℹ️ All ROI data has been used for training. No test set created.")
                 
             except Exception as e:
                 st.error(f"Error during feature extraction: {e}")
                 import traceback
                 st.code(traceback.format_exc())
 
-
-# ==================== TAB 2: CLASSIFICATION ====================
+# ==================== Tab 2: Classification ====================
 with tab2:
     st.header("Classification Configuration")
     
-    # Check if training data is available
+    #Check if training data is available
     if st.session_state.extracted_training_data is None:
         st.warning("Please extract features first in the 'Feature Extraction' tab")
     else:
@@ -185,7 +228,7 @@ with tab2:
                 ["Hard Classification (Multiclass)", "Soft Classification (One-vs-Rest)"],
                 help="Hard: Standard multiclass classification\nSoft: Probability-based with confidence layers"
             )
-            
+        #column for hyperparameter space definition    
         with col2:
             st.subheader("Random Forest Hyperparameter")
             #Number of trees
@@ -198,13 +241,13 @@ with tab2:
                 help="More trees = better accuracy but slower computation"
             )
            #Variables per split
-
+           #default value of variable per split, the sqrt of number of bands 
             use_auto_vsplit = st.checkbox(
-                "Auto-calculate Variables Per Split",
+                "Auto-calculate number of Variables Per Split",
                 value=True,
                 help="Automatically set to sqrt(number of bands)"
             )
-            
+            #User can define their own variable per split value
             if not use_auto_vsplit:
                 v_split = st.number_input(
                     "Variables Per Split",
@@ -240,7 +283,7 @@ with tab2:
         
         # Classify button
         if st.button("Run Classification", type="primary", width='content'):
-            with st.spinner("Running classification... This may take a few minutes."):
+            with st.spinner("Running classification...."):
                 try:
                     lulc = Generate_LULC()
                     
@@ -279,14 +322,13 @@ with tab2:
                     }
                     
                     st.success("✅ Classification completed successfully!")
-                    st.balloons()
                     
                 except Exception as e:
                     st.error(f"Error during classification: {e}")
                     import traceback
                     st.code(traceback.format_exc())
 
-# ==================== TAB 3: RESULTS====================
+# ==================== TAB 3 Summary Result ====================
 with tab3:
     st.header("Classification Results")
     

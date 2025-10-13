@@ -15,6 +15,12 @@ ee.Authenticate()
 ee.Initialize()
 
 
+#Page configuration
+st.set_page_config(
+    page_title="Module 4", #visible in the browser
+    page_icon="logos\logo_epistem_crop.png",
+    layout="wide"
+)
 #title of the module
 st.title("Analzye the Separability of Region of Interest (ROI)")
 st.divider()

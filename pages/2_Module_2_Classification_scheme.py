@@ -1,6 +1,13 @@
 import streamlit as st
 import pandas as pd
 
+#Page configuration
+st.set_page_config(
+    page_title="Module 2", #visible in the browser
+    page_icon="logos\logo_epistem_crop.png",
+    layout="wide"
+)
+
 st.title("Define Land Cover Land Use Classification Scheme")
 st.divider()
 #module name

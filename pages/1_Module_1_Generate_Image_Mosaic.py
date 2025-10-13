@@ -14,7 +14,8 @@ if not EarthEngineAuth.initialize():
     st.stop()
 # Page configuration
 st.set_page_config(
-    page_title="Search and Generate Landsat Image Mosaic",
+    page_title="Module 1",
+    page_icon="logos\logo_epistem_crop.png",
     layout="wide"
 )
 #title of the module
