@@ -6,12 +6,12 @@ ee.Initialize()
 
 #Page configuration
 st.set_page_config(
-    page_title="Land Cover Land Use Classification",
+    page_title="Supervised Classification",
     page_icon="logos\logo_epistem_crop.png",
     layout="wide"
 )
 #Set the page title (for the canvas)
-st.title("Land Cover Land Use Classification")
+st.title("Generate Land Cover Map using Supervised Classification")
 st.divider()
 st.markdown("""
 This module performs land cover land use classification using Random Forest classifier. Random Forest is a non-parametric machine learning classifiers widely used in remote sensing community.
@@ -369,18 +369,18 @@ with tab3:
         if st.checkbox("Show Classification Map", value=True):
             try:
                 # Prepare visualization
-                classification_to_show = st.session_state.classification_result
+                classiifcation_map = st.session_state.classification_result
                 
                 # If soft classification, show the final classification band
                 if st.session_state.get('classification_mode') == "Soft Classification":
                     if st.session_state.get('include_final_map', False):
                         # Select the classification band
-                        band_names = classification_to_show.bandNames().getInfo()
+                        band_names = classiifcation_map.bandNames().getInfo()
                         if 'classification' in band_names:
-                            classification_to_show = classification_to_show.select('classification')
+                            classiifcation_map = classiifcation_map.select('classification')
                         else:
                             st.warning("No final classification map found. Showing first probability band.")
-                            classification_to_show = classification_to_show.select(0)
+                            classiifcation_map = classiifcation_map.select(0)
                 
                 # Create color palette based on number of classes
                 # Create custom color palette with user input
@@ -391,7 +391,7 @@ with tab3:
                     unique_classes = sorted(gdf[class_prop].unique())
                     
                     # Allow user to customize colors
-                    st.subheader("🎨 Customize Map Colors")
+                    st.subheader("Customize Map Colors")
                     
                     with st.expander("Define Class Colors", expanded=False):
                         st.markdown("Assign colors to each land cover class:")
@@ -452,14 +452,13 @@ with tab3:
                     Map = geemap.Map()
                 
                 # Add layers
-                Map.addLayer(classification_to_show, vis_params, 'Classification Result', True)
+                Map.addLayer(classiifcation_map, vis_params, 'Random Forest Classification', True)
                 Map.addLayer(image, st.session_state.get('visualization', {}), 'Image Composite', False)
                 
-                if 'training_gdf' in st.session_state:
-                    Map.add_geojson(st.session_state['training_gdf'].__geo_interface__, 
-                                   layer_name="Training Data", shown=False)
-                
-                Map.add_legend(title="Land Cover Classes", builtin_legend='NLCD')
+                #if 'training_gdf' in st.session_state:
+                #    Map.add_geojson(st.session_state['training_gdf'].__geo_interface__, 
+                #                   layer_name="Training Data", shown=False)
+    
                 Map.to_streamlit(height=600)
                 
             except Exception as e:

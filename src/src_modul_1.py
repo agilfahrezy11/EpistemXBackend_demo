@@ -76,6 +76,13 @@ class Reflectance_Data:
 #Define the thermal datasets. The thermal bands used is from Collection 2 Top-of-atmosphere data 
 #The TOA data provide consistent result and contain minimum mising pixel data
     THERMAL_DATASETS = {
+        'L4_TOA': {
+            'collection':'LANDSAT/LT04/C02/T1_TOA"',
+            'cloud_property': 'CLOUD_COVER_LAND',
+            'type': 'landsat_toa',
+            'sensor': 'L4',
+            'description': 'Landsat 4 Top-of-atmosphere reflectance',            
+        },
         'L5_TOA': {
             'collection': 'LANDSAT/LT05/C02/T1_TOA',
             'cloud_property': 'CLOUD_COVER_LAND',

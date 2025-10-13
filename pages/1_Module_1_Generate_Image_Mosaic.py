@@ -108,8 +108,9 @@ if uploaded_file:
 st.divider()
 #User input, search criteria
 st.subheader("Specify Imagery Search Criteria")
+#Dump some information for supported imagery in the platform
 st.text("Enter the acquisition date range, cloud cover percentage, and Landsat mission type. " \
-"Current platform support Landsat 1-4 at sensor radiance and Landsat 5-9 Collection 2 Surface Reflectance Analysis Ready Data (ARD), excluding the thermal bands. Landsat mission avaliability is as follows:")
+"Current platform support Landsat 1-3 at sensor radiance and Landsat 4-9 Collection 2 Surface Reflectance Analysis Ready Data (ARD), excluding the thermal bands. Landsat mission avaliability is as follows:")
 st.markdown("1. Landsat 1 Multispectral Scanner/MSS (1972 - 1978)")
 st.markdown("2. Landsat 2 Multispectral Scanner/MSS (1978 - 1982)")
 st.markdown("3. Landsat 3 Multispectral Scanner/MSS (1978 - 1983)")
@@ -118,12 +119,14 @@ st.markdown("4. Landsat 5 Thematic Mapper/TM (1984 - 2012)")
 st.markdown("5. Landsat 7 Enhanced Thematic Mapper Plus/ETM+ (1999 - 2021)")
 st.markdown("6. Landsat 8 Operational Land Imager/OLI (2013 - present)")
 st.markdown("7. Landsat 9 Operational Land Imager-2/OLI-2 (2021 - present)")
+st.markdown("Spatial resolution for Landsat 1-3 is 60 m, while the rest of them have the spatial resolution of 30 m")
 #specified the avaliable sensor type
-sensor_type = ['L5_SR', 'L7_SR', 'L8_SR', 'L9_SR']
+#sensor_type = ['L5_SR', 'L7_SR', 'L8_SR', 'L9_SR']
 #create a selection box for sensor type
 sensor_dict = {
     "Landsat 1 MSS": "L1_RAW",
     "Landsat 2 MSS": "L2_RAW",
+    "Landsat 3 MSS": "L3_RAW",
     "Landsat 4 TM": "L4_SR",
     "Landsat 5 TM": "L5_SR",
     "Landsat 7 ETM+": "L7_SR",
