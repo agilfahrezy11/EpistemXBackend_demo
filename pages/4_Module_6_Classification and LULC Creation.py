@@ -2,19 +2,13 @@ import streamlit as st
 import geemap.foliumap as geemap
 from src.src_modul_6 import FeatureExtraction, Generate_LULC
 import ee
+ee.Initialize()
 
 #Page configuration
 st.set_page_config(
     page_title="Land Cover Land Use Classification",
     layout="wide"
 )
-
-#Initialize Earth Engine
-try:
-    ee.Initialize()
-except Exception as e:
-    st.error(f"Earth Engine initialization failed: {e}")
-    st.stop()
 #Set the page title (for the canvas)
 st.title("Land Cover Land Use Classification")
 st.divider()
@@ -25,9 +19,9 @@ This module performs land cover land use classification using Random Forest clas
             Module 4 allows you to analyze the quality of the training data using separability analysis and various plots
 """)
 
-#Sidebar
+#Sidebar info
 st.sidebar.title("About")
-st.sidebar.info("Perform land cover classification using Google Earth Engine Random Forest classifier")
+st.sidebar.info("Module for generating a classification map based on Statistical Machine Intellegence and Learning (SMILE) Random Forest classifier")
 logo = "logos\logo_epistem.png"
 st.sidebar.image(logo)
 
@@ -50,6 +44,7 @@ with col1:
                 st.write(f"**Date Range:** {metadata.get('date_range', 'N/A')}")
                 st.write(f"**Total Images:** {metadata.get('total_images', 'N/A')}")
     else:
+        #Display error message if composite is not found
         st.error("❌ Image Composite Not Found")
         st.warning("Please complete Module 1 first to generate an image composite")
         image = None
@@ -346,26 +341,64 @@ with tab3:
                             classification_to_show = classification_to_show.select(0)
                 
                 # Create color palette based on number of classes
+                # Create custom color palette with user input
                 if 'training_gdf' in st.session_state and 'selected_class_property' in st.session_state:
                     class_prop = st.session_state['selected_class_property']
+                    class_name_prop = st.session_state.get('selected_class_name_property', None)
                     gdf = st.session_state['training_gdf']
                     unique_classes = sorted(gdf[class_prop].unique())
                     
-                    # Generate color palette
-                    colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', 
-                             '#00FFFF', '#800000', '#008000', '#000080', '#808000']
-                    palette = colors[:len(unique_classes)]
+                    # Allow user to customize colors
+                    st.subheader("🎨 Customize Map Colors")
+                    
+                    with st.expander("Define Class Colors", expanded=False):
+                        st.markdown("Assign colors to each land cover class:")
+                        
+                        # Create color mapping dictionary
+                        if 'class_colors' not in st.session_state:
+                            # Initialize with default colors
+                            default_colors = ['#228B22', '#0000FF', '#FF0000', '#FFFF00', '#8B4513', 
+                                            '#808080', '#FFA500', '#00FFFF', '#FF00FF', '#90EE90']
+                            st.session_state.class_colors = {
+                                cls: default_colors[i % len(default_colors)] 
+                                for i, cls in enumerate(unique_classes)
+                            }
+                        
+                        # Create color pickers for each class
+                        cols = st.columns(3)
+                        for idx, class_id in enumerate(unique_classes):
+                            with cols[idx % 3]:
+                                # Get class name if available
+                                if class_name_prop and class_name_prop in gdf.columns:
+                                    class_name = gdf[gdf[class_prop] == class_id][class_name_prop].iloc[0]
+                                    label = f"Class {class_id}: {class_name}"
+                                else:
+                                    label = f"Class {class_id}"
+                                
+                                # Color picker
+                                st.session_state.class_colors[class_id] = st.color_picker(
+                                    label,
+                                    value=st.session_state.class_colors.get(class_id, '#228B22'),
+                                    key=f"color_{class_id}"
+                                )
+                        
+                        # Reset to default colors button
+                        if st.button("🔄 Reset to Default Colors"):
+                            default_colors = ['#228B22', '#0000FF', '#FF0000', '#FFFF00', '#8B4513', 
+                                            '#808080', '#FFA500', '#00FFFF', '#FF00FF', '#90EE90']
+                            st.session_state.class_colors = {
+                                cls: default_colors[i % len(default_colors)] 
+                                for i, cls in enumerate(unique_classes)
+                            }
+                            st.rerun()
+                    
+                    # Build palette from user selections
+                    palette = [st.session_state.class_colors[cls] for cls in unique_classes]
                     
                     vis_params = {
                         'min': min(unique_classes),
                         'max': max(unique_classes),
                         'palette': palette
-                    }
-                else:
-                    vis_params = {
-                        'min': 1,
-                        'max': 10,
-                        'palette': ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF']
                     }
                 
                 # Create map

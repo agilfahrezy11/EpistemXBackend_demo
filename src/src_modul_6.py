@@ -13,7 +13,7 @@ class FeatureExtraction:
 ############################# 1. Single Random Split ###########################
 #extract pixel value for the labeled region of interest and partitioned them into training and testing data
 #This can be used if the training/reference data is balanced across class and required more fast result
-    def random_split(self, image, roi, class_property, split_ratio = 0.6, pixel_size = 10, tile_scale=16):
+    def random_split(self, image, roi, class_property, split_ratio = 0.6, pixel_size = 30, tile_scale=16):
         """
         Perform single random split and extract pixel value from the imagery
             Parameters:
@@ -46,7 +46,7 @@ class FeatureExtraction:
         return training_pixels, testing_pixels
     ############################## 2. Strafied Random Split ###########################
     # Conduct stratified train and test split, ideal for proportional split of the data
-    def stratified_split (self, roi, image, class_prop, pixel_size= 10, train_ratio = 0.7, seed=0):
+    def stratified_split (self, roi, image, class_prop, pixel_size= 30, train_ratio = 0.7, seed=0):
         """
         Used stratified random split to partitioned the original sample data into training and testing data used for model development
         Args:
@@ -137,7 +137,7 @@ class Generate_LULC:
         return multiclass
      ############################# 1. One-vs-rest (OVR) binary Classification ###########################
     def soft_classification(self, training_data, class_property, image, include_final_map=True,
-                                ntrees = 100, v_split = None, min_leaf =1, seed=0, probability_scale = 100):
+                                ntrees = 100, v_split = None, min_leaf=1, seed=0, probability_scale = 100):
         """
         Implementation of one-vs-rest binary classification approach for multi-class land cover classification, similar to the work of
         Saah et al 2020. This function create probability layer stack for each land cover class. The final land cover map is created using
