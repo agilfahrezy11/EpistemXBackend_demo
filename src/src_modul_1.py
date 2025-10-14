@@ -8,8 +8,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-
-
 class Reflectance_Data:
     """
     Class for fetching and analyzing Landsat optical/thermal image collections with logging.
@@ -190,8 +188,8 @@ class Reflectance_Data:
         elif sensor_type in ['L8', 'L9']:
             # Landsat 8/9 SR bands
             return image.select(
-                ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'], 
-                ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
+                ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'], 
+                ['AEROSOL', 'BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
             )
         else:
             raise ValueError(f"Unsupported sensor type for SR data: {sensor_type}")

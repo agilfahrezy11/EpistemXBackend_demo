@@ -30,7 +30,7 @@ st.header("Instructions")
 markdown = """
 1. Define the area of interest by drawing a rectangle on the map or upload a shapefile (zip).
 2. Specified the acqusition year of date. If you just type the year, the map will automatically filtered image from January 1 all the way to December 31.
-3. Specified the cloud cover percentage and sensor type (currently support Landsat 5 TM - Landsat 9 OLI2).
+3. Specified the cloud cover percentage and sensor type (currently support Landsat 1 MSS - Landsat 9 OLI-2).
 4. click run to generate the mosaic image.
 """
 

@@ -105,7 +105,7 @@ if 'classification_result' not in st.session_state:
 st.divider()
 
 #Main content tabs
-tab1, tab2, tab3, tab4 = st.tabs(["Feature Extraction", "Classification", "Classification Report", "Visualization"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Feature Extraction", "Model Training", "Model Report", "Model Evaluation", "Visualization"])
 
 # ==================== Tab 1: Feature Extraction ====================
 #Option to either use all of the training data for classification, or split them into train and test data
@@ -211,9 +211,10 @@ with tab1:
                 import traceback
                 st.code(traceback.format_exc())
 
-# ==================== Tab 2: Classification ====================
+# ==================== Tab 2: Model Learning ====================
 with tab2:
     st.header("Classification Configuration")
+    st.markdown("In this section, ")
     
     #Check if training data is available
     if st.session_state.extracted_training_data is None:
@@ -293,16 +294,21 @@ with tab2:
                     clf_class_property = st.session_state.get('class_property', class_property)
                     
                     if classification_mode == "Hard Classification (Multiclass)":
-                        classification_result = lulc.hard_classification(
+                        classification_result, trained_model = lulc.hard_classification(
                             training_data=st.session_state.extracted_training_data,
                             class_property=clf_class_property,
                             image=image,
                             ntrees=ntrees,
                             v_split=v_split,
                             min_leaf=min_leaf,
+                            return_model=True
                         )
                         st.session_state.classification_mode = "Hard Classification"
-                    else:  # Soft Classification
+                        st.session_state.trained_model = trained_model
+                        st.session_state.classification_result = classification_result
+                    #Soft Classification
+                    #At this point, the soft classification is not modified, since in order to evaluate them, it required cross entropy loss metric
+                    else:  
                         classification_result = lulc.soft_classification(
                             training_data=st.session_state.extracted_training_data,
                             class_property=clf_class_property,
@@ -331,43 +337,183 @@ with tab2:
                     st.code(traceback.format_exc())
 
 # ==================== TAB 3 Summary Result ====================
+#Main concern. user still able to get summary report without the model accuaracy
 with tab3:
+    st.header("Classification Summary and Report")
+    st.markdown("This section shows the model performance on the test dataset. Using this appproach, we can evaluate how well the Random Forest model" \
+    "learned from the training data")
+    #Check the avaliability classification model
+    #Check the model
+    if st.session_state.classification_result is None:
+        st.warning("Complete the classification to evaluates the performance")
+        st.stop()
+    if 'trained_model' not in st.session_state:
+        st.error("Trained model is not found. Please re-run classification.")
+        st.stop()
+
+    else:
+        st.success("Testing data avaliable for model accuracy")
+    # ==== Model Information =====
+    st.subheader("Model configuration")
+    params = st.session_state.get('classification_params', {})
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Number of Decision Tree", params.get('ntrees', 'N/A'))
+    with col2:
+        v_split = params.get('v_split', 'Auto')
+        st.metric("Variable selected at split", v_split if v_split else 'Auto')
+    with col3:
+        st.metric("minimum leaf population", params.get('min_leaf', 'N/A'))
+    # ==== Feature Importance ====
+    st.subheader("Feature Importance Analysis")
+
+    try:
+        lulc = Generate_LULC()
+        #Get the feature importance using the source code
+        importance_df = lulc.get_feature_importance(
+            st.session_state.trained_model
+        )
+        #Store for later use
+        st.session_state.importance_df = importance_df
+        #visualize the feature importance
+        col1, col2 = st.columns([2, 1])
+        #first collumn, display as bar chart
+        with col1:
+            #Use the plotly for interactive visualization
+            fig = px.bar(
+                importance_df,
+                x='Importance',
+                y='Band',
+                orientation='h',
+                title='Variable Importance Ranking',
+                color='Importance',
+                color_continuous_scale='Viridis',
+                text='Importance (%)'
+            )
+            
+            fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+            fig.update_layout(
+                yaxis={'categoryorder': 'total ascending'},
+                height=max(400, len(importance_df) * 30),
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        #Display the most importance features
+        with col2:
+            st.markdown("**Top 5 Most Important Features:**")
+            for i, row in importance_df.head(5).iterrows():
+                st.metric(
+                    f"{i+1}. {row['Band']}", 
+                    f"{row['Importance (%)']:.1f}%"
+                )
+            
+            # Show full table
+            with st.expander("Complete Importance Table"):
+                st.dataframe(
+                    importance_df.style.background_gradient(
+                        subset=['Importance (%)'],
+                        cmap='YlGn'
+                    ),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+    except Exception as e:
+        st.error(f"Error retrieving feature importance: {e}")
+    
+# ==================== TAB 4 Model Evaluation ====================
+with tab4:
+    st.header("Model Evaluation")
+        #check the testing data
+    have_test_data = st.session_state.extracted_testing_data is not None
+    if not have_test_data:
+        st.warning(" No testing data available. Cannot evaluate the model, use the freature extraction tab to split the ROI into training and testing data ")
+        st.info("""
+        **To perform Model evaluation:**
+        1. Go to the 'Feature Extraction' tab
+        2. Enable 'Split data into Training and Testing sets'
+        3. Re-run feature extraction and classification
+        4. Return here to evaluate the model
+        """)
+        #show model information without its accuracy
+    else:
+        # Button to compute accuracy
+        if st.button("Evaluate model accuracy", type="primary", use_container_width=True):
+            with st.spinner("Evaluating the model..."):
+                try:
+                    lulc = Generate_LULC()
+                    clf_class_property = st.session_state.get('classification_params', {}).get('class_property')
+                    
+                    #Use the functions in the source code to perform model evaluation
+                    model_quality = lulc.evaluate_model(
+                        trained_model=st.session_state.trained_model,
+                        test_data=st.session_state.extracted_testing_data,
+                        class_property=clf_class_property
+                    )
+                    #Store in session state
+                    st.session_state.model_quality = model_quality
+                    
+                    st.success("✅ Accuracy assessment completed!")
+                except Exception as e:
+                    st.error(f"Error during model evaluation: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+            #Shows the result if complete
+        if "accuracy_metrics" in st.session_state:
+            st.subheader("Accuracy Report")
+
+            acc = st.session_state.model_quality
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Overall Accuracy", f"{acc['overall_accuracy']*100:.2f}%")
+            col2.metric("Kappa Coefficient", f"{acc['kappa']:.3f}")
+            mean_f1 = sum(acc['f1_scores']) / len(acc['f1_scores'])
+            col3.metric("Mean F1-score", f"{mean_f1:.3f}")
+
+            st.markdown("---")
+            st.subheader("Class-level Metrics")
+
+            # Convert Producer (Recall) and Consumer (Precision) Accuracies into a DataFrame
+            df_metrics = pd.DataFrame({
+                "Class ID": range(len(acc["producers_accuracy"])),
+                "Producer's Accuracy (Recall)": acc["producers_accuracy"],
+                "User's Accuracy (Precision)": acc["consumers_accuracy"],
+                "F1-score": acc["f1_scores"]
+            })
+            df_metrics["Producer's Accuracy (Recall)"] = (df_metrics["Producer's Accuracy (Recall)"] * 100).round(2)
+            df_metrics["User's Accuracy (Precision)"] = (df_metrics["User's Accuracy (Precision)"] * 100).round(2)
+            df_metrics["F1-score"] = df_metrics["F1-score"].round(3)
+
+            st.dataframe(df_metrics, use_container_width=True)
+
+            # Plot Confusion Matrix as heatmap
+            st.subheader("Confusion Matrix")
+            cm = pd.DataFrame(
+                acc["confusion_matrix"],
+                columns=[f"Pred_{i}" for i in range(len(acc["confusion_matrix"]))],
+                index=[f"Actual_{i}" for i in range(len(acc["confusion_matrix"]))]
+            )
+
+            fig = px.imshow(
+                cm,
+                text_auto=True,
+                aspect="auto",
+                color_continuous_scale="Blues",
+                title="Confusion Matrix"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+# ==================== TAB 5 Visualization ====================
+with tab5:
     st.header("Classification Report")
     
     if st.session_state.classification_result is None:
         st.info("ℹ️ No classification results yet. Please run classification first.")
     else:
         st.success("✅ Classification completed!")
-        
-        # Summary section
-        st.subheader("Classification Summary")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            mode = st.session_state.get('classification_mode', 'N/A')
-            st.metric("Classification Mode", mode)
-        
-        with col2:
-            params = st.session_state.get('classification_params', {})
-            st.metric("Number of Trees", params.get('ntrees', 'N/A'))
-        
-        with col3:
-            if st.session_state.extracted_training_data:
-                train_size = st.session_state.extracted_training_data.size().getInfo()
-                st.metric("Training Samples", train_size)
-        
-        with col4:
-            if st.session_state.extracted_testing_data:
-                test_size = st.session_state.extracted_testing_data.size().getInfo()
-                st.metric("Testing Samples", test_size)
-            else:
-                st.metric("Testing Samples", "N/A")
-        
-        st.markdown("---")
-        
         # Visualization section
         st.subheader("Classification Map Preview")
-        
         if st.checkbox("Show Classification Map", value=True):
             try:
                 # Prepare visualization
@@ -468,122 +614,6 @@ with tab3:
                 st.code(traceback.format_exc())
         
         st.markdown("---")
-
-#Main concern. user still able to get summary report without the model accuaracy
-with tab3:
-    st.header("Classification Summary and Report")
-    st.info("This section shows the model performance on the test dataset. Using this appproach, we can evaluate how well the Random Forest model" \
-    "learned from the training data")
-    #Check the avaliability of testing data and classification model
-    #Check the model
-    if st.session_state.classification_result is None:
-        st.warning("Complete the classification to evaluates the performance")
-        st.stop()
-    if 'trained_model' not in st.session_state:
-        st.error("Trained model is not found. Please re-run classification.")
-        st.stop()
-    #check the testing data
-    have_test_data = st.session_state.extracted_testing_data is not None
-    if not have_test_data:
-        st.warning(" No testing data available. Model ")
-        st.info("""
-        **To perform Model evaluy:**
-        1. Go to the 'Feature Extraction' tab
-        2. Enable 'Split data into Training and Testing sets'
-        3. Re-run feature extraction and classification
-        4. Return here to evaluate the model
-        """)
-        #show model information without its accuracy
-        show_model_only = True
-    else:
-        st.success("Testing data avaliable for model accuracy")
-    # ==== Model Information =====
-    st.subheader("Model configuration")
-    params = st.session_state.get('classification_params', {})
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("Number of Decision Tree", params.get('ntrees', 'N/A'))
-    with col2:
-        v_split = params.get('v_split', 'Auto')
-        st.metric("Variable selected at split", v_split if v_split else 'Auto')
-    with col3:
-        st.metric("minimum leaf population", params.get('min_leaf', 'N/A'))
-    # ==== Feature Importance ====
-    st.subheader("Feature Importance")
-    #This trained model is problematic, the source code did not stored the model 
-    #source code need modification or bring out the classification procedure in streamlit
-    try:
-        #get model explanation
-        model_exp = st.session_state.trained_model.explain().getInfo()
-        st.session_state.model_exp = model_exp
-        #Create dataframe to stored the feature importance
-        if 'importance' in model_exp:
-            importance_dict = model_exp['importance']
-            importance_df = pd.DataFrame([
-                {'Band': band, 'Importance': importance}
-                for band, importance in importance_dict.items()
-            ]).sort_values('Importance', ascending=False)
-            # Normalize to percentage
-            total_importance = importance_df['Importance'].sum()
-            importance_df['Importance (%)'] = (importance_df['Importance'] / total_importance * 100).round(2)
-            
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                fig = px.bar(
-                    importance_df,
-                    x = 'Importance',
-                    y='Band',
-                    orientation='h',
-                    title='Variable Importance Ranking',
-                    color = 'Importance',
-                    color_continuous_scale='Viridis',
-                    text='Importance(%)'
-                )
-                fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-                fig.update_layout(
-                    yaxis = {'categoryorder': 'total ascending'},
-                    height=max(400, len(importance_df) * 30),
-                    showlegend=False
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            with col2:
-                st.markdown("**Top 5 Most Important Features:**")
-                for i, row in importance_df.head(5).iterrows():
-                    st.metric(
-                        f"{i+1}. {row['Band']}", 
-                        f"{row['Importance (%)']:.1f}%"
-                    )
-                
-                # Show full table
-                with st.expander("View Complete Importance Table"):
-                    st.dataframe(
-                        importance_df.style.background_gradient(
-                            subset=['Importance (%)'],
-                            cmap='YlGn'
-                        ),
-                        use_container_width=True,
-                        hide_index=True
-                    )
-        else:
-            st.info("Feature importance not available in model explanation.")
-    
-    except Exception as e:
-        st.error(f"Error retrieving feature importance: {e}")
-    
-    # ==== Model Accuracy ====
-    if not show_model_only:
-        st.subheader("Model Accuracy")
-        if st.button("Evaluate Classification Model", type="primary", use_container_width=True)
-            with st.spinner("Evaluating classification model..."):
-                try:
-                    trained_model = st.session_state.trained_model
-                    clf_class_property = st.session_state.get('classification_params', {}).get('class_property')
-    
-# ==================== TAB 4 Visualization ====================
-with tab4:
-    """"""
-
 
 # Footer with navigation
 st.divider()

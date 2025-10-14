@@ -254,6 +254,7 @@ class Generate_LULC:
             ]).sort_values('Importance', ascending=False)
             # Normalize the value to percentage
         total_importance = importance_df['Importance'].sum()
+        #get feature importance in the form of dataframe
         importance_df['Importance (%)'] = (importance_df['Importance'] / total_importance * 100).round(2)    
         # Reset index
         importance_df = importance_df.reset_index(drop=True)
