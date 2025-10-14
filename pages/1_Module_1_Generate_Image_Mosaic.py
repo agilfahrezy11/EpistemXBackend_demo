@@ -136,8 +136,8 @@ sensor_dict = {
 sensor_names = list(sensor_dict.keys())
 #user define parameters for the search
 #select sensor type
-selected_sensor_name = st.selectbox("Select Landsat Sensor:", sensor_names, index=2)
-optical_data = sensor_dict[selected_sensor_name]  # This is what you pass to your backend
+selected_sensor_name = st.selectbox("Select Landsat Sensor:", sensor_names, index=7)
+optical_data = sensor_dict[selected_sensor_name]  #passing to backend process
 #Date selection
 #Year only
 st.subheader("Select Time Period")
@@ -185,6 +185,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
         stats = Reflectance_Stats()
         detailed_stats = stats.get_collection_statistics(collection, compute_stats=True, print_report=True)
         st.success(f"Found {detailed_stats['total_images']} images.")
+        
         #Store the metadata for export
         st.session_state.search_metadata = {
             'sensor': optical_data,

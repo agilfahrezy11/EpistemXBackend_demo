@@ -111,6 +111,12 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Feature Extraction", "Model Training", 
 #Option to either use all of the training data for classification, or split them into train and test data
 with tab1:
     st.header("Feature Extraction Configuration")
+    markdown = """ 
+    The first step in the classification is extracting the pixel values of the imagery data for each class ROI. Prior to extracting the pixel, you must specified if you are going to split the ROI into training and testing data.
+    If you decide to split the data, you will be able to evaluate the model of the classification, prior to generating the land cover classification.
+    If you decide not to split the data, you cannot evaluate the model quality, and thus only able to compute thematic accuracy in module 7. 
+    """
+    st.markdown(markdown)
     
     col1, col2 = st.columns([1, 1])
     #first column, provide option to split or not split
@@ -166,7 +172,7 @@ with tab1:
     st.markdown("---")
     
     # Extract Features button
-    if st.button("Extract Features", type="primary", use_container_width=True):
+    if st.button("Extract Features", type="primary", width='stretch'):
         with st.spinner("Extracting features from imagery..."):
             try:
                 fe = FeatureExtraction()
@@ -214,7 +220,10 @@ with tab1:
 # ==================== Tab 2: Model Learning ====================
 with tab2:
     st.header("Classification Configuration")
-    st.markdown("In this section, ")
+    st.markdown("The algoritm use for conducting the classification is Random Forest. You need to specified the value of three main Random Forest parameters. This parameters are:")
+    st.markdown("1. Number of Trees: Control the number of decision tree in the model. Ideal value vary, but most remote sensing application utilize >300 tree")
+    st.markdown("2. Variables Per Split: Number of variable selected for conducting a split. You can also used the default value, which is the square root of the number of variables used")
+    st.markdown("3. Minimum Leaf Population: Number of minimum sample selected for splitting a leaf node")
     
     #Check if training data is available
     if st.session_state.extracted_training_data is None:
@@ -223,7 +232,7 @@ with tab2:
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            st.subheader("Classification Method")
+            st.subheader("Classification Approach")
             
             # Classification mode selection
             classification_mode = st.radio(
@@ -246,7 +255,7 @@ with tab2:
            #Variables per split
            #default value of variable per split, the sqrt of number of bands 
             use_auto_vsplit = st.checkbox(
-                "Auto-calculate number of Variables Per Split",
+                "Use default value of Variables Per Split",
                 value=True,
                 help="Automatically set to sqrt(number of bands)"
             )
@@ -280,8 +289,6 @@ with tab2:
                     value=True,
                     help="Generate final map using argmax on probability layers"
                 )
-                
-        
         st.markdown("---")
         
         # Classify button
@@ -327,6 +334,8 @@ with tab2:
                         'ntrees': ntrees,
                         'v_split': v_split,
                         'min_leaf': min_leaf,
+                        'class_property': clf_class_property
+
                     }
                     
                     st.success("✅ Classification completed successfully!")
@@ -361,8 +370,8 @@ with tab3:
     with col1:
         st.metric("Number of Decision Tree", params.get('ntrees', 'N/A'))
     with col2:
-        v_split = params.get('v_split', 'Auto')
-        st.metric("Variable selected at split", v_split if v_split else 'Auto')
+        v_split = params.get('v_split', 'Default')
+        st.metric("Variable selected at split", v_split if v_split else 'Default')
     with col3:
         st.metric("minimum leaf population", params.get('min_leaf', 'N/A'))
     # ==== Feature Importance ====
@@ -440,17 +449,19 @@ with tab4:
         #show model information without its accuracy
     else:
         # Button to compute accuracy
-        if st.button("Evaluate model accuracy", type="primary", use_container_width=True):
+        if st.button("Evaluate model accuracy", type="primary", width='content'):
             with st.spinner("Evaluating the model..."):
                 try:
                     lulc = Generate_LULC()
-                    clf_class_property = st.session_state.get('classification_params', {}).get('class_property')
-                    
-                    #Use the functions in the source code to perform model evaluation
+                    class_prop = st.session_state.get('classification_params', {}).get('class_property')
+                    #st.session_state['selected_class_property']
+
+
+                                        #Use the functions in the source code to perform model evaluation
                     model_quality = lulc.evaluate_model(
                         trained_model=st.session_state.trained_model,
                         test_data=st.session_state.extracted_testing_data,
-                        class_property=clf_class_property
+                        class_property=class_prop
                     )
                     #Store in session state
                     st.session_state.model_quality = model_quality
@@ -461,7 +472,7 @@ with tab4:
                     import traceback
                     st.code(traceback.format_exc())
             #Shows the result if complete
-        if "accuracy_metrics" in st.session_state:
+        if "model_quality" in st.session_state:
             st.subheader("Accuracy Report")
 
             acc = st.session_state.model_quality
@@ -474,18 +485,18 @@ with tab4:
             st.markdown("---")
             st.subheader("Class-level Metrics")
 
-            # Convert Producer (Recall) and Consumer (Precision) Accuracies into a DataFrame
+            #Convert Producer (Recall) and Consumer (Precision) Accuracies into a DataFrame
             df_metrics = pd.DataFrame({
-                "Class ID": range(len(acc["producers_accuracy"])),
-                "Producer's Accuracy (Recall)": acc["producers_accuracy"],
-                "User's Accuracy (Precision)": acc["consumers_accuracy"],
+                "Class ID": range(len(acc["precision"])),
+                "Producer's Accuracy (Recall)": acc["precision"],
+                "User's Accuracy (Precision)": acc["recall"],
                 "F1-score": acc["f1_scores"]
             })
             df_metrics["Producer's Accuracy (Recall)"] = (df_metrics["Producer's Accuracy (Recall)"] * 100).round(2)
             df_metrics["User's Accuracy (Precision)"] = (df_metrics["User's Accuracy (Precision)"] * 100).round(2)
             df_metrics["F1-score"] = df_metrics["F1-score"].round(3)
 
-            st.dataframe(df_metrics, use_container_width=True)
+            st.dataframe(df_metrics, width='stretch')
 
             # Plot Confusion Matrix as heatmap
             st.subheader("Confusion Matrix")
@@ -502,7 +513,7 @@ with tab4:
                 color_continuous_scale="Blues",
                 title="Confusion Matrix"
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 # ==================== TAB 5 Visualization ====================
 with tab5:
@@ -634,6 +645,6 @@ with col2:
 
 # Show completion status
 if st.session_state.classification_result is not None:
-    st.success(f"✅ Classification completed using {st.session_state.get('classification_mode', 'N/A')}")
+    st.success(f"Classification completed using {st.session_state.get('classification_mode', 'N/A')}")
 else:
     st.info("💡 Complete feature extraction and classification to proceed")

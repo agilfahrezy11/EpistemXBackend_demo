@@ -119,6 +119,7 @@ class Reflectance_Data:
         self.logger.setLevel(log_level)
 
         self.logger.info("ReflectanceData initialized.")
+    #Function to mask clouds, shadow, and cirrus. Using QA Bands
     def mask_landsat_sr(self, image,cloud_conf_thresh=2, shadow_conf_thresh=2, cirrus_conf_thresh=2):
             """
             Mask clouds, shadows and cirrus for Landsat Collection 2 SR using QA_PIXEL band.
@@ -135,20 +136,17 @@ class Reflectance_Data:
             ee.Image : Masked image
             """
             qa = image.select('QA_PIXEL')
-            
-            # --- Deterministic bits ---
+            #Deterministic bits ---
             cloud_bit = 1 << 3
             shadow_bit = 1 << 4
             cloud_mask = qa.bitwiseAnd(cloud_bit).eq(0)
             shadow_mask = qa.bitwiseAnd(shadow_bit).eq(0)
-            
-            # --- Confidence bits ---
+            #Confidence bits ---
             cloud_conf = qa.rightShift(8).bitwiseAnd(3)     # Bits 8–9
             shadow_conf = qa.rightShift(10).bitwiseAnd(3)   # Bits 10–11
             #snow_conf = qa.rightShift(12).bitwiseAnd(3)     # Bits 12–13
             cirrus_conf = qa.rightShift(14).bitwiseAnd(3)   # Bits 14–15
-            
-            # Keep pixels below thresholds
+            #Keep pixels below thresholds
             conf_mask = (cloud_conf.lt(cloud_conf_thresh)
                         .And(shadow_conf.lt(shadow_conf_thresh))
                         #.And(snow_conf.lt(snow_conf_thresh))
@@ -156,10 +154,9 @@ class Reflectance_Data:
             # Final mask
             final_mask = cloud_mask.And(shadow_mask).And(conf_mask)
             # --- Apply scaling to optical bands ---
-            optical_bands = image.select('SR_B.*').multiply(0.0000275).add(-0.2)
-            
-            return optical_bands.updateMask(final_mask).copyProperties(image, image.propertyNames())
-    
+            #optical_bands = image.select('SR_B.*').multiply(0.0000275).add(-0.2)
+            return image.updateMask(final_mask).copyProperties(image, image.propertyNames())
+    #Functions to rename Landsat bands 
     def rename_landsat_bands(self, image, sensor_type):
         """
         Standardize Landsat Surface Reflectance (SR) band names 
@@ -177,8 +174,8 @@ class Reflectance_Data:
         if sensor_type in ['L4','L5', 'L7']:
             # Landsat 5/7 SR bands
             return image.select(
-                ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'], 
-                ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
+                ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7', 'ST_B6'], 
+                ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2', 'THERMAL']
             )
         elif sensor_type in ['L1', 'L2', 'L3']:
             return image.select(
@@ -188,17 +185,31 @@ class Reflectance_Data:
         elif sensor_type in ['L8', 'L9']:
             # Landsat 8/9 SR bands
             return image.select(
-                ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'], 
-                ['AEROSOL', 'BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
+                ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10'], 
+                ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2', 'THERMAL']
             )
         else:
             raise ValueError(f"Unsupported sensor type for SR data: {sensor_type}")
     
+    #def apply_scale_factors(self, image):
+        # Scale optical SR bands
+    #    optical_bands = image.select('SR_B.*').multiply(0.0000275).add(-0.2)
+        # Keep other bands (QA, metadata)
+    #    return image.addBands(optical_bands, None, True)
+    # Applies scaling factors.
+    def apply_scale_factors(self, image):
+        optical_bands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
+        thermal_bands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
+        return image.addBands(optical_bands, None, True).addBands(
+            thermal_bands, None, True
+        )
+    #Function to retrive Landsat multispectral bands
     def get_optical_data(self, aoi, start_date, end_date, optical_data='L8_SR',
                         cloud_cover=30,
                         verbose=True, compute_detailed_stats=True):
         """
         Get optical image collection for Landsat 5-9 SR data with detailed information logging.
+
         Parameters
         ----------
         aoi :  ee.FeatureCollection. Area of interest.
@@ -210,6 +221,7 @@ class Reflectance_Data:
         compute_detailed_stats : bool
             If True, compute detailed statistics 
             If False, return only basic information (default: True).
+
         Returns
         -------
         tuple : (ee.ImageCollection, dict)
@@ -306,12 +318,94 @@ class Reflectance_Data:
         #Apply masking and band renaming to image collection after filtering
         collection = (collection
                     .map(lambda img: self.mask_landsat_sr(img))
+                    .map(lambda img: self.apply_scale_factors(img))
                     .map(lambda img: self.rename_landsat_bands(img, config['sensor'])))
 
         #Return results
         return collection, {
             'dataset': config['description'],
             'sensor': config['sensor'],
+            'date_range_requested': f"{start_date} to {end_date}",
+            'cloud_cover_threshold': cloud_cover,
+            'initial_collection': initial_stats,
+            'filtered_collection': filtered_stats,
+            'detailed_stats_computed': compute_detailed_stats
+        }
+    #TOA-based Thermal Bands
+    def get_thermal_bands(self, aoi, start_date, end_date, thermal_data = 'L8_TOA', cloud_cover=30,
+                        verbose=True, compute_detailed_stats=True):
+        """
+        Get the thermal bands from landsat TOA data
+    
+        Parameters
+        ----------
+        aoi :  ee.FeatureCollection. Area of interest.
+        start_date : str. Start date in format 'YYYY-MM-DD' or year.
+        end_date : str. End date in format 'YYYY-MM-DD' or year.
+        optical_data : str. Dataset type: 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
+        cloud_cover : int. Maximum cloud cover percentage on land (default: 30).
+        verbose : bool. Print detailed information about the collection (default: True).
+        compute_detailed_stats : bool
+            If True, compute detailed statistics 
+            If False, return only basic information (default: True).
+            
+        Returns
+        -------
+        tuple : (ee.ImageCollection, dict)
+            Filtered and preprocessed image collection with statistics.
+        """
+        if thermal_data not in self.THERMAL_DATASETS:
+            raise ValueError(f"thermal_data must be one of: {list(self.THERMAL_DATASETS.keys())}")
+
+        config = self.THERMAL_DATASETS[thermal_data]
+
+        #Decide which thermal band to select
+        sensor = config['sensor']
+        if sensor == 'L5':
+            thermal_band = 'B6'
+        elif sensor == 'L7':
+            thermal_band = 'B6_VCID_2'
+        elif sensor in ['L8', 'L9']:
+            thermal_band = 'B10'
+        else:
+            raise ValueError(f"Unsupported sensor type: {sensor}")
+        #Logging
+        if verbose:
+            self.logger.info(f"Starting thermal data fetch for {config['description']}")
+            self.logger.info(f"Date range: {start_date} to {end_date}")
+            self.logger.info(f"Cloud cover threshold: {cloud_cover}%")
+            if not compute_detailed_stats:
+                self.logger.info("Fast mode enabled - detailed statistics will not be computed")
+        #Initial collection
+        initial_collection = (ee.ImageCollection(config['collection'])
+                            .filterBounds(aoi)
+                            .filterDate(start_date, end_date))
+        initial_stats = self.get_collection_statistics(initial_collection, compute_detailed_stats)
+
+        if verbose and compute_detailed_stats and initial_stats.get('total_images', 0) > 0:
+            self.logger.info(f"Initial collection (before cloud filtering): {initial_stats['total_images']} images")
+            self.logger.info(f"Date range of available images: {initial_stats['date_range']}")
+        #Apply cloud cover filter
+        collection = initial_collection.filter(ee.Filter.lt(config['cloud_property'], cloud_cover))
+        filtered_stats = self.get_collection_statistics(collection, compute_detailed_stats)
+        if verbose and compute_detailed_stats:
+            if filtered_stats.get('total_images', 0) > 0:
+                self.logger.info(f"After cloud filtering (<{cloud_cover}%): {filtered_stats['total_images']} images")
+                self.logger.info(f"Cloud cover range: {filtered_stats['cloud_cover']['min']:.1f}% - {filtered_stats['cloud_cover']['max']:.1f}%")
+                self.logger.info(f"Average cloud cover: {filtered_stats['cloud_cover']['mean']:.1f}%")
+            else:
+                self.logger.warning(f"No images found matching criteria (cloud cover < {cloud_cover}%)")
+        elif verbose:
+            self.logger.info("Filtered collection created (use compute_detailed_stats=True for detailed info)")
+        #Apply masking (QA-based)
+        collection = collection.map(lambda img: self.mask_landsat_sr(img))
+        collection = collection.select(thermal_band)
+
+        #Return collection and stats
+        return collection, {
+            'dataset': config['description'],
+            'sensor': sensor,
+            'thermal_band': thermal_band,
             'date_range_requested': f"{start_date} to {end_date}",
             'cloud_cover_threshold': cloud_cover,
             'initial_collection': initial_stats,

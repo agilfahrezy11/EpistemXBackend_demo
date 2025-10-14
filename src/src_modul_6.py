@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import ee
 ee.Initialize()
 
@@ -282,11 +283,16 @@ class Generate_LULC:
         #Get accuracy metrics
         #Producer accuracy / Recall (sensitivity)
         #User accuracy / Precision 
+        # Get accuracy metrics from confusion matrix object
+        overall_accuracy = confusion_matrix.accuracy().getInfo()
+        kappa = confusion_matrix.kappa().getInfo()
+        producers_accuracy_ls = confusion_matrix.producersAccuracy().getInfo()
+        consumers_accuracy_ls = confusion_matrix.consumersAccuracy().getInfo()
         confusion_matrix_array = confusion_matrix.getInfo()
-        overall_accuracy = confusion_matrix_array['accuracy']
-        kappa = confusion_matrix_array['kappa']
-        producers_accuracy = confusion_matrix_array['producersAccuracy']
-        consumers_accuracy = consumers_accuracy['consumersAccuracy']
+
+        #Flatten using numpy
+        producers_accuracy = np.array(producers_accuracy_ls).flatten().tolist()
+        consumers_accuracy = np.array(consumers_accuracy_ls).flatten().tolist()
         
         # Calculate F1 scores
         f1_scores = []
