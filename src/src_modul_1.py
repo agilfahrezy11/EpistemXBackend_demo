@@ -174,8 +174,8 @@ class Reflectance_Data:
         if sensor_type in ['L4','L5', 'L7']:
             # Landsat 5/7 SR bands
             return image.select(
-                ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7', 'ST_B6'], 
-                ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2', 'THERMAL']
+                ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'], 
+                ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
             )
         elif sensor_type in ['L1', 'L2', 'L3']:
             return image.select(
@@ -185,24 +185,18 @@ class Reflectance_Data:
         elif sensor_type in ['L8', 'L9']:
             # Landsat 8/9 SR bands
             return image.select(
-                ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10'], 
-                ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2', 'THERMAL']
+                ['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'], 
+                ['AEROSOL','BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
             )
         else:
             raise ValueError(f"Unsupported sensor type for SR data: {sensor_type}")
     
-    #def apply_scale_factors(self, image):
-        # Scale optical SR bands
-    #    optical_bands = image.select('SR_B.*').multiply(0.0000275).add(-0.2)
-        # Keep other bands (QA, metadata)
-    #    return image.addBands(optical_bands, None, True)
-    # Applies scaling factors.
+
+
     def apply_scale_factors(self, image):
         optical_bands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
-        thermal_bands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
-        return image.addBands(optical_bands, None, True).addBands(
-            thermal_bands, None, True
-        )
+        #thermal_bands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
+        return image.addBands(optical_bands, None, True)
     #Function to retrive Landsat multispectral bands
     def get_optical_data(self, aoi, start_date, end_date, optical_data='L8_SR',
                         cloud_cover=30,
@@ -238,7 +232,6 @@ class Reflectance_Data:
                     return date_input  # Already full date
             else:
                 raise ValueError("Date must be either YYYY or YYYY-MM-DD format")
-
         # Parse inputs (handles both year and full date)
         start_date = parse_year_or_date(start_date, is_start=True)
         end_date   = parse_year_or_date(end_date, is_start=False)
@@ -354,8 +347,38 @@ class Reflectance_Data:
         tuple : (ee.ImageCollection, dict)
             Filtered and preprocessed image collection with statistics.
         """
+        #Helper function to parse the date so that the user can only input the year
+        def parse_year_or_date(date_input, is_start=True):
+            if isinstance(date_input, int):  # User gave integer year like 2024
+                return f"{date_input}-01-01" if is_start else f"{date_input}-12-31"
+            elif isinstance(date_input, str):
+                if len(date_input) == 4 and date_input.isdigit():
+                    return f"{date_input}-01-01" if is_start else f"{date_input}-12-31"
+                else:
+                    return date_input  # Already full date
+            else:
+                raise ValueError("Date must be either YYYY or YYYY-MM-DD format")
+        # Parse inputs (handles both year and full date)
+        start_date = parse_year_or_date(start_date, is_start=True)
+        end_date   = parse_year_or_date(end_date, is_start=False)
+        #Helper function to rename the bands
+        def rename_thermal_band(img):
+            sensor = config['sensor']
+            thermal_band_map = {
+                'L4': ['B6'],
+                'L5': ['B6'],
+                'L7': ['B6'],
+                'L8': ['B10'],
+                'L9': ['B10']
+            }
+            band_names = thermal_band_map.get(sensor, [])
+            if len(band_names) == 1:
+                return img.select(band_names).rename(['THERMAL'])
+            else:
+                return img
+        #The core function for thermal bnd
         if thermal_data not in self.THERMAL_DATASETS:
-            raise ValueError(f"thermal_data must be one of: {list(self.THERMAL_DATASETS.keys())}")
+                raise ValueError(f"thermal_data must be one of: {list(self.THERMAL_DATASETS.keys())}")
 
         config = self.THERMAL_DATASETS[thermal_data]
 
@@ -369,6 +392,7 @@ class Reflectance_Data:
             thermal_band = 'B10'
         else:
             raise ValueError(f"Unsupported sensor type: {sensor}")
+        stats = Reflectance_Stats()
         #Logging
         if verbose:
             self.logger.info(f"Starting thermal data fetch for {config['description']}")
@@ -380,14 +404,14 @@ class Reflectance_Data:
         initial_collection = (ee.ImageCollection(config['collection'])
                             .filterBounds(aoi)
                             .filterDate(start_date, end_date))
-        initial_stats = self.get_collection_statistics(initial_collection, compute_detailed_stats)
+        initial_stats = stats.get_collection_statistics(initial_collection, compute_detailed_stats)
 
         if verbose and compute_detailed_stats and initial_stats.get('total_images', 0) > 0:
             self.logger.info(f"Initial collection (before cloud filtering): {initial_stats['total_images']} images")
             self.logger.info(f"Date range of available images: {initial_stats['date_range']}")
         #Apply cloud cover filter
         collection = initial_collection.filter(ee.Filter.lt(config['cloud_property'], cloud_cover))
-        filtered_stats = self.get_collection_statistics(collection, compute_detailed_stats)
+        filtered_stats = stats.get_collection_statistics(collection, compute_detailed_stats)
         if verbose and compute_detailed_stats:
             if filtered_stats.get('total_images', 0) > 0:
                 self.logger.info(f"After cloud filtering (<{cloud_cover}%): {filtered_stats['total_images']} images")
@@ -397,9 +421,11 @@ class Reflectance_Data:
                 self.logger.warning(f"No images found matching criteria (cloud cover < {cloud_cover}%)")
         elif verbose:
             self.logger.info("Filtered collection created (use compute_detailed_stats=True for detailed info)")
+        
         #Apply masking (QA-based)
         collection = collection.map(lambda img: self.mask_landsat_sr(img))
         collection = collection.select(thermal_band)
+        collection = collection.map(rename_thermal_band)
 
         #Return collection and stats
         return collection, {

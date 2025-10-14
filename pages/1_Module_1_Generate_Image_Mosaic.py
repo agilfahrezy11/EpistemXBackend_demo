@@ -135,8 +135,7 @@ sensor_dict = {
 }
 sensor_names = list(sensor_dict.keys())
 #user define parameters for the search
-#select sensor type
-selected_sensor_name = st.selectbox("Select Landsat Sensor:", sensor_names, index=7)
+selected_sensor_name = st.selectbox("Select Landsat Sensor:", sensor_names, index=6)
 optical_data = sensor_dict[selected_sensor_name]  #passing to backend process
 #Date selection
 #Year only
@@ -182,10 +181,21 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             verbose=False,
             compute_detailed_stats=False
         )
+            # === Retrieve thermal (TOA) data ===
+        thermal_data = optical_data.replace('_SR', '_TOA')  # match Landsat pair automatically
+        thermal_collection, meta = reflectance.get_thermal_bands(
+            aoi=aoi,
+            start_date=start_date,
+            end_date=end_date,
+            thermal_data=thermal_data,
+            cloud_cover=cloud_cover,
+            verbose=False,
+            compute_detailed_stats=False
+        )
         stats = Reflectance_Stats()
         detailed_stats = stats.get_collection_statistics(collection, compute_stats=True, print_report=True)
         st.success(f"Found {detailed_stats['total_images']} images.")
-        
+
         #Store the metadata for export
         st.session_state.search_metadata = {
             'sensor': optical_data,
@@ -203,15 +213,14 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             st.warning("No images found for the selected criteria, increase cloud cover threshold,  change the date range, or make sure the acquisition date aligned with Landsat Mission Avaliability.")
 
     #get valid pixels (number of cloudless pixel in date range)
-    valid_px = collection.reduce(ee.Reducer.count()).clip(aoi)
-    stats = valid_px.reduceRegion(
-    reducer=ee.Reducer.minMax().combine(
-        reducer2=ee.Reducer.mean(), sharedInputs=True
-    ),
-    geometry=aoi,
-    scale=30,
-    maxPixels=1e13
-    ).getInfo()
+    #valid_px = collection.reduce(ee.Reducer.count()).clip(aoi)
+    #stats = valid_px.reduceRegion(
+    #reducer=ee.Reducer.minMax().combine(
+    #    reducer2=ee.Reducer.mean(), sharedInputs=True),
+    #geometry=aoi,
+    #scale=30,
+    #maxPixels=1e13
+    #).getInfo()
 
 
     #Display the search information as report
@@ -268,7 +277,6 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
                     )
                 }
             )
-            
             # Show cloud cover statistics
             if cloud_covers:
                 st.markdown("#### ☁️ Cloud Cover Statistics")
@@ -294,15 +302,21 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
     #st.write(detailed_stats)
     if detailed_stats['total_images'] > 0:
         #visualization parameters
-        vis_params = {
-        'min': 0,
-        'max': 0.4,
-        'gamma': [0.95, 1.1, 1],
-        'bands':['NIR', 'RED', 'GREEN']
+        thermal_vis = {
+            'min': 286,
+            'max': 300,
+            'gamma': 0.4
         }
-
-        #Create and image composite/mosaic
-        composite = collection.median().clip(aoi)
+        vis_params = {
+            'min': 0,
+            'max': 0.4,
+            'gamma': [0.5, 0.9, 1],
+            'bands':['NIR', 'RED', 'GREEN']
+        }
+        #Create and image composite/mosaic for thermal bands
+        thermal_median = thermal_collection.median().clip(aoi)
+        #composite for multispectral data
+        composite = collection.median().clip(aoi).addBands(thermal_median)
         # Store in session state for use in other modules
         st.session_state['composite'] = composite
         st.session_state['Image_metadata'] = detailed_stats
@@ -311,8 +325,9 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
         # Display the image using geemap
         centroid = gdf.geometry.centroid.iloc[0]
         m = geemap.Map(center=[centroid.y, centroid.x], zoom=6)
-        m.addLayer(composite, vis_params, 'Landsat Mosaic', shown= True)
+        m.addLayer(thermal_median, thermal_vis, "Landsat Thermal Band" )
         m.addLayer(collection, vis_params, 'Landsat Collection', shown=True)
+        m.addLayer(composite, vis_params, 'Landsat Composite', shown= True)
         m.add_geojson(gdf.__geo_interface__, layer_name="AOI", shown = False)
         m.to_streamlit(height=600)
 else:
