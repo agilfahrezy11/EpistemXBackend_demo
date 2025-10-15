@@ -4,6 +4,7 @@ import plotly.express as px
 import geemap.foliumap as geemap
 from src.src_modul_6 import FeatureExtraction, Generate_LULC
 import ee
+import traceback
 ee.Initialize()
 
 #Page configuration
@@ -55,7 +56,7 @@ with col1:
 #Check for training data from Module 3/4
 with col2:
     if 'training_data' in st.session_state and st.session_state.training_data is not None:
-        st.success("✅ Training Data Available (Module 3)")
+        st.success("✅ Training Data Available")
         roi = st.session_state['training_data']
         
         # Display training data info if available
@@ -76,7 +77,7 @@ with col2:
                         st.dataframe(class_counts, width='stretch')
     else:
         st.error("❌ Training Data Not Found")
-        st.warning("Please complete Module 3 to and analyze the training data")
+        st.warning("Please complete Module 3 and 4 to create and analyze the Region of Interest (ROI)")
         roi = None
 
 # Stop if prerequisites are not met
@@ -91,10 +92,11 @@ if image is None or roi is None:
     """)
     st.stop()
 
-# Get AOI for clipping
+#Get AOI for clipping the result
 aoi = st.session_state.get('AOI', None)
 
-# Initialize session state for storing results
+
+#Initialize session state for storing results
 if 'extracted_training_data' not in st.session_state:
     st.session_state.extracted_training_data = None
 if 'extracted_testing_data' not in st.session_state:
@@ -106,6 +108,7 @@ st.divider()
 
 #Main content tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["Feature Extraction", "Model Training", "Model Report", "Model Evaluation", "Visualization"])
+#write each the content for each tab
 
 # ==================== Tab 1: Feature Extraction ====================
 #Option to either use all of the training data for classification, or split them into train and test data
@@ -124,15 +127,15 @@ with tab1:
         st.subheader("Data Split Options")
         # Option to split data
         split_data = st.checkbox(
-            "Split data into Training and Testing sets",
+            "Split data into training and testing subsets",
             value=True,
             help="If unchecked, all ROI data will be used for training the classifier"
         )
-        
+        #What happened if the user choose to split the data
         if split_data:
             st.info("The ROI is split into training and testing data using stratified random split approach")
             
-            # Split ratio
+            #Split ratio
             split_ratio = st.slider(
                 "Training Data Ratio",
                 min_value=0.5,
@@ -141,26 +144,23 @@ with tab1:
                 step=0.05,
                 help="Proportion of data to use for training"
             )
-            
+            #information about the proportion
             st.metric("Training", f"{split_ratio*100:.0f}%", delta=None)
             st.metric("Testing", f"{(1-split_ratio)*100:.0f}%", delta=None)
-            
+        #What happened if the user choose not to split the data    
         else:
-            st.warning(" All ROI data will be used for training. Please prepared an independent testing dataset.")
-    
+            st.warning("All ROI data will be used for training. Please prepared an independent testing dataset.")
+    #Second column, prepared the extraction parameters 
     with col2:
         st.subheader("Extraction Parameters")
-        
-        # Get class property from previous module if available
+        # Get class property from previous module if available. What the user choose for separability analysis, will be used here
         default_class_prop = st.session_state.get('selected_class_property', 'class')
-        
         # Class property name
         class_property = st.text_input(
-            "Class Property Name",
+            "Class ID",
             value=default_class_prop,
-            help="Column name in your ROI containing the class labels"
+            help="Column name in your ROI containing the class ID"
         )
-        
         # Pixel size
         pixel_size = st.number_input(
             "Pixel Size (meters)",
@@ -171,10 +171,12 @@ with tab1:
         )
     st.markdown("---")
     
-    # Extract Features button
+    #Extract Features button
     if st.button("Extract Features", type="primary", width='stretch'):
+        #Spinner to show progress
         with st.spinner("Extracting features from imagery..."):
             try:
+                #Use module 6 feature extraction class 
                 fe = FeatureExtraction()
                 #define the spliting function from the source code
                 if split_data:
@@ -199,19 +201,20 @@ with tab1:
                     with col2:
                         st.metric("Testing Samples", testing_data.size().getInfo())
                 else:
-                    # Extract all features without splitting
+                    #Extract all features without splitting
                     training_data = image.sampleRegions(
                         collection=roi,
                         properties=[class_property],
                         scale=pixel_size,
                     )
+                    #store the data for the classification
                     st.session_state.extracted_training_data = training_data
                     st.session_state.extracted_testing_data = None
                     st.session_state.class_property = class_property
                     
                     st.success("✅ Feature extraction completed!")
                     st.info("ℹ️ All ROI data has been used for training. No test set created.")
-                
+            #error log if something fail    
             except Exception as e:
                 st.error(f"Error during feature extraction: {e}")
                 import traceback
@@ -230,7 +233,7 @@ with tab2:
         st.warning("Please extract features first in the 'Feature Extraction' tab")
     else:
         col1, col2 = st.columns([1, 1])
-        
+        #First column, choosing hard or soft classification (could be remove later)
         with col1:
             st.subheader("Classification Approach")
             
@@ -240,7 +243,7 @@ with tab2:
                 ["Hard Classification (Multiclass)", "Soft Classification (One-vs-Rest)"],
                 help="Hard: Standard multiclass classification\nSoft: Probability-based with confidence layers"
             )
-        #column for hyperparameter space definition    
+        #column for hyperparameter value
         with col2:
             st.subheader("Random Forest Hyperparameter")
             #Number of trees
@@ -295,11 +298,11 @@ with tab2:
         if st.button("Run Classification", type="primary", width='content'):
             with st.spinner("Running classification...."):
                 try:
+                    #Initialze the generate lulc class from module 6
                     lulc = Generate_LULC()
-                    
-                    # Get the class property used during extraction
+                    #Get the class property used during extraction. Its define as parameters since it will be used again for visualization
                     clf_class_property = st.session_state.get('class_property', class_property)
-                    
+                    #Run the module 6 LULC hard classification
                     if classification_mode == "Hard Classification (Multiclass)":
                         classification_result, trained_model = lulc.hard_classification(
                             training_data=st.session_state.extracted_training_data,
@@ -310,6 +313,7 @@ with tab2:
                             min_leaf=min_leaf,
                             return_model=True
                         )
+                        #Store the result for visualization
                         st.session_state.classification_mode = "Hard Classification"
                         st.session_state.trained_model = trained_model
                         st.session_state.classification_result = classification_result
@@ -325,6 +329,7 @@ with tab2:
                             v_split=v_split,
                             min_leaf=min_leaf,
                         )
+                        #Store the result for visualization
                         st.session_state.classification_mode = "Soft Classification"
                         st.session_state.include_final_map = include_final_map
                     
@@ -352,31 +357,34 @@ with tab3:
     st.markdown("This section shows the model performance on the test dataset. Using this appproach, we can evaluate how well the Random Forest model" \
     "learned from the training data")
     #Check the avaliability classification model
-    #Check the model
     if st.session_state.classification_result is None:
         st.warning("Complete the classification to evaluates the performance")
         st.stop()
+    #Check the trained model, if not avaliable do not run
     if 'trained_model' not in st.session_state:
         st.error("Trained model is not found. Please re-run classification.")
         st.stop()
-
+    #If avaliable 
     else:
         st.success("Testing data avaliable for model accuracy")
     # ==== Model Information =====
     st.subheader("Model configuration")
+    #Get the classification parameter
     params = st.session_state.get('classification_params', {})
     col1, col2, col3 = st.columns(3)
-
+    #column 1 for decision tree
     with col1:
         st.metric("Number of Decision Tree", params.get('ntrees', 'N/A'))
+    #column 2 for variable split
     with col2:
         v_split = params.get('v_split', 'Default')
         st.metric("Variable selected at split", v_split if v_split else 'Default')
+    #column 3 for minimum leaf population
     with col3:
         st.metric("minimum leaf population", params.get('min_leaf', 'N/A'))
     # ==== Feature Importance ====
     st.subheader("Feature Importance Analysis")
-
+    #Feature importance analysis located source code of module 6
     try:
         lulc = Generate_LULC()
         #Get the feature importance using the source code
@@ -408,7 +416,7 @@ with tab3:
                 showlegend=False
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width = 'stretch')
         #Display the most importance features
         with col2:
             st.markdown("**Top 5 Most Important Features:**")
@@ -425,7 +433,7 @@ with tab3:
                         subset=['Importance (%)'],
                         cmap='YlGn'
                     ),
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True
                 )
 
@@ -455,9 +463,7 @@ with tab4:
                     lulc = Generate_LULC()
                     class_prop = st.session_state.get('classification_params', {}).get('class_property')
                     #st.session_state['selected_class_property']
-
-
-                                        #Use the functions in the source code to perform model evaluation
+                    #Use the functions in the source code to perform model evaluation
                     model_quality = lulc.evaluate_model(
                         trained_model=st.session_state.trained_model,
                         test_data=st.session_state.extracted_testing_data,
@@ -466,15 +472,13 @@ with tab4:
                     #Store in session state
                     st.session_state.model_quality = model_quality
                     
-                    st.success("✅ Accuracy assessment completed!")
+                    st.success("✅ Model Evaluation Complete!")
                 except Exception as e:
                     st.error(f"Error during model evaluation: {e}")
-                    import traceback
                     st.code(traceback.format_exc())
             #Shows the result if complete
         if "model_quality" in st.session_state:
-            st.subheader("Accuracy Report")
-
+            st.subheader("Model Accuracy Report")
             acc = st.session_state.model_quality
             col1, col2, col3 = st.columns(3)
             col1.metric("Overall Accuracy", f"{acc['overall_accuracy']*100:.2f}%")

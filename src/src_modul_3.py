@@ -1,8 +1,6 @@
 import ee
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 ee.Initialize()
 
 class sample_quality:
@@ -193,7 +191,7 @@ class sample_quality:
             # Single getInfo() call to get all data
             sample_data = training_sample.getInfo()
             if 'features' not in sample_data or len(sample_data['features']) == 0:
-                print("Warning: No spectral data extracted. Check your training data and image overlap.")
+                print("Warning: No spectral data extracted. Check your training data quantity. Increase pixel size to reduce the size of sample")
                 return pd.DataFrame()
             # Convert to panda
             df = pd.DataFrame([feat['properties'] for feat in sample_data['features']])

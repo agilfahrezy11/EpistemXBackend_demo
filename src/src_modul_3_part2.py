@@ -4,7 +4,6 @@ from matplotlib.patches import Ellipse
 import matplotlib.transforms as transforms
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 
 #Class container for plotting Region of Interest 
 class spectral_plotter:
