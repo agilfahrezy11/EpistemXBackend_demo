@@ -6,12 +6,9 @@ from src.utils_shapefile_validation_conversion import shapefile_validator, EE_co
 import tempfile
 import zipfile
 import os
-import ee
 import datetime
-from src.src_utils_initializer import EarthEngineAuth
+import ee
 
-if not EarthEngineAuth.initialize():
-    st.stop()
 # Page configuration
 st.set_page_config(
     page_title="Module 1",

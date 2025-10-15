@@ -11,10 +11,6 @@ import traceback
 import tempfile
 import zipfile
 import os
-ee.Authenticate()
-ee.Initialize()
-
-
 #Page configuration
 st.set_page_config(
     page_title="Module 4", #visible in the browser

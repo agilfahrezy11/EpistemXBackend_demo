@@ -5,7 +5,6 @@ import geemap.foliumap as geemap
 from src.src_modul_6 import FeatureExtraction, Generate_LULC
 import ee
 import traceback
-ee.Initialize()
 
 #Page configuration
 st.set_page_config(
