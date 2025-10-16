@@ -3,7 +3,7 @@ import leafmap.foliumap as leafmap
 
 st.set_page_config(page_title="EPISTEM Platform Demo",
                    layout="wide", 
-                   page_icon="logos\logo_epistem_crop.png",)
+                   page_icon="logos\logo_epistem_crop.png")
 
 # Customize the sidebar
 markdown = """

@@ -1,7 +1,8 @@
 import ee
-ee.Initialize()
 from datetime import datetime
 import logging
+from src.module_helpers import init_gee
+init_gee()
 
 #Configure root for global functions
 logging.basicConfig(

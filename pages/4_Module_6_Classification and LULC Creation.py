@@ -5,7 +5,8 @@ import geemap.foliumap as geemap
 from src.src_modul_6 import FeatureExtraction, Generate_LULC
 import ee
 import traceback
-
+from src.module_helpers import init_gee
+init_gee()
 #Page configuration
 st.set_page_config(
     page_title="Supervised Classification",
@@ -106,7 +107,7 @@ if 'classification_result' not in st.session_state:
 st.divider()
 
 #Main content tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Feature Extraction", "Model Training", "Model Report", "Model Evaluation", "Visualization"])
+tab1, tab2, tab3, tab4 = st.tabs(["Feature Extraction", "Model Training", "Model Summary and Evaluation", "Visualization"])
 #write each the content for each tab
 
 # ==================== Tab 1: Feature Extraction ====================
@@ -222,7 +223,7 @@ with tab1:
 # ==================== Tab 2: Model Learning ====================
 with tab2:
     st.header("Classification Configuration")
-    st.markdown("The algoritm use for conducting the classification is Random Forest. You need to specified the value of three main Random Forest parameters. This parameters are:")
+    st.markdown("The algoritm use for conducting the classification is Random Forest. You need to specified the value of three main Random Forest parameters:")
     st.markdown("1. Number of Trees: Control the number of decision tree in the model. Ideal value vary, but most remote sensing application utilize >300 tree")
     st.markdown("2. Variables Per Split: Number of variable selected for conducting a split. You can also used the default value, which is the square root of the number of variables used")
     st.markdown("3. Minimum Leaf Population: Number of minimum sample selected for splitting a leaf node")
@@ -352,12 +353,16 @@ with tab2:
 # ==================== TAB 3 Summary Result ====================
 #Main concern. user still able to get summary report without the model accuaracy
 with tab3:
-    st.header("Classification Summary and Report")
-    st.markdown("This section shows the model performance on the test dataset. Using this appproach, we can evaluate how well the Random Forest model" \
-    "learned from the training data")
+    st.header("Model Summary and Evaluation")
+    st.markdown("This section shows model parameters, feature importance analysis, and accuracy of the model (if test data avaliable). This is one of the advantage of non-parametric machine learning classifier." \
+    "It allows the analysis of the classification/model performance prior to generating a categorical data. The subsection of this tabs is as follows:")
+    st.markdown("1. Model Parameters: Recap on the parameters used for the classification")
+    st.markdown("2. Feature Importance Analysis: How each covariates benefits the model")
+    st.markdown("3. Model Evaluation: Evaluate the accuracy of the model based on a seperate hold up test. This option is only avaliable if you decide to split the data in feature extraction tab")
+    
     #Check the avaliability classification model
     if st.session_state.classification_result is None:
-        st.warning("Complete the classification to evaluates the performance")
+        st.warning("Complete the model learning tab to show the summary")
         st.stop()
     #Check the trained model, if not avaliable do not run
     if 'trained_model' not in st.session_state:
@@ -366,8 +371,9 @@ with tab3:
     #If avaliable 
     else:
         st.success("Testing data avaliable for model accuracy")
+    st.divider()
     # ==== Model Information =====
-    st.subheader("Model configuration")
+    st.subheader("Model Parameters")
     #Get the classification parameter
     params = st.session_state.get('classification_params', {})
     col1, col2, col3 = st.columns(3)
@@ -381,8 +387,11 @@ with tab3:
     #column 3 for minimum leaf population
     with col3:
         st.metric("minimum leaf population", params.get('min_leaf', 'N/A'))
+    st.divider()
     # ==== Feature Importance ====
     st.subheader("Feature Importance Analysis")
+    st.markdown("Feature importance analysis indicate how each covariates benefits the classification." \
+    "The higher value indicate higher importance which shows that model benefits from that covairates, and vice versa.")
     #Feature importance analysis located source code of module 6
     try:
         lulc = Generate_LULC()
@@ -438,11 +447,17 @@ with tab3:
 
     except Exception as e:
         st.error(f"Error retrieving feature importance: {e}")
-    
-# ==================== TAB 4 Model Evaluation ====================
-with tab4:
-    st.header("Model Evaluation")
-        #check the testing data
+    st.divider()
+    # ==== Model Evaluation ====
+    st.subheader("Model Evaluation")
+    st.markdown("This section allows you to evaluate the quality of the model based on the test data not used during the model learning. Therefore, quality of the model is tested on a subset of data that have not seen by the model itself." \
+    " However, You can only do this if you split the data on feature extraction tab. If you decide not to split the data, you can only evaluate the thematic accuracy in module 7")
+    st.markdown("Model evaluation procedure follows the same way as thematic accuracy assessment, using a confusion or matrix. Several accuracy metrics are used to evaluate the model. " \
+    "Additionally, you can also evaluate the accuracy for each class, as well as inspect the resulting cofusion matrix")
+    st.markdown("1. Overall Accuracy")
+    st.markdown("2. Kappa Coefficient")
+    st.markdown("3. Mean F1-score")
+    #check the testing data
     have_test_data = st.session_state.extracted_testing_data is not None
     if not have_test_data:
         st.warning(" No testing data available. Cannot evaluate the model, use the freature extraction tab to split the ROI into training and testing data ")
@@ -501,26 +516,35 @@ with tab4:
 
             st.dataframe(df_metrics, width='stretch')
 
-            # Plot Confusion Matrix as heatmap
+            #Plot Confusion Matrix as heatmap
             st.subheader("Confusion Matrix")
             cm = pd.DataFrame(
                 acc["confusion_matrix"],
                 columns=[f"Pred_{i}" for i in range(len(acc["confusion_matrix"]))],
                 index=[f"Actual_{i}" for i in range(len(acc["confusion_matrix"]))]
             )
-
+            #Show the heatmap and customized it if needed
             fig = px.imshow(
                 cm,
                 text_auto=True,
                 aspect="auto",
                 color_continuous_scale="Blues",
-                title="Confusion Matrix"
+                #title="Confusion Matrix"
             )
-            st.plotly_chart(fig, width='stretch')
+            fig.update_layout(
+                autosize=True,
+                height=600
+            )
+            st.plotly_chart(fig,     
+                use_container_width=True, #got warning to upgrade to use 'use_container_width'
+                config={
+                    "displayModeBar": True,
+                    "responsive": True
+                 })
 
-# ==================== TAB 5 Visualization ====================
-with tab5:
-    st.header("Classification Report")
+# ==================== TAB 4 Visualization ====================
+with tab4:
+    st.header("Visualization")
     
     if st.session_state.classification_result is None:
         st.info("ℹ️ No classification results yet. Please run classification first.")

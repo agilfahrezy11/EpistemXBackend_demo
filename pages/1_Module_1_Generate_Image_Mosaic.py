@@ -1,14 +1,15 @@
+from src.module_helpers import init_gee
+init_gee()
 import streamlit as st
 import geemap.foliumap as geemap
 import geopandas as gpd
 from src.src_modul_1 import Reflectance_Data, Reflectance_Stats
-from src.utils_shapefile_validation_conversion import shapefile_validator, EE_converter
+from src.module_helpers import shapefile_validator, EE_converter
 import tempfile
 import zipfile
 import os
 import datetime
 import ee
-
 # Page configuration
 st.set_page_config(
     page_title="Module 1",

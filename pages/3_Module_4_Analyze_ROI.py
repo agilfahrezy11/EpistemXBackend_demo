@@ -1,5 +1,5 @@
 import streamlit as st
-from src.utils_shapefile_validation_conversion import shapefile_validator, EE_converter
+from src.module_helpers import shapefile_validator, EE_converter
 from src.src_modul_3 import sample_quality
 from src.src_modul_3_part2 import spectral_plotter
 import matplotlib.pyplot as plt
@@ -11,6 +11,8 @@ import traceback
 import tempfile
 import zipfile
 import os
+from src.module_helpers import init_gee
+init_gee()
 #Page configuration
 st.set_page_config(
     page_title="Module 4", #visible in the browser
