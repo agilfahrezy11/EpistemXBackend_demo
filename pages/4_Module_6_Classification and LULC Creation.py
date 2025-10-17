@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import geemap.foliumap as geemap
 from src.src_modul_6 import FeatureExtraction, Generate_LULC
-import ee
+import numpy as np
 import traceback
 from src.module_helpers import init_gee
 init_gee()
@@ -424,7 +424,7 @@ with tab3:
                 showlegend=False
             )
             
-            st.plotly_chart(fig, width = 'stretch')
+            st.plotly_chart(fig,  use_container_width=True)
         #Display the most importance features
         with col2:
             st.markdown("**Top 5 Most Important Features:**")
@@ -444,7 +444,6 @@ with tab3:
                     width='stretch',
                     hide_index=True
                 )
-
     except Exception as e:
         st.error(f"Error retrieving feature importance: {e}")
     st.divider()
@@ -493,28 +492,30 @@ with tab3:
             #Shows the result if complete
         if "model_quality" in st.session_state:
             st.subheader("Model Accuracy Report")
+            #the metrics for overall model quality
             acc = st.session_state.model_quality
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             col1.metric("Overall Accuracy", f"{acc['overall_accuracy']*100:.2f}%")
             col2.metric("Kappa Coefficient", f"{acc['kappa']:.3f}")
             mean_f1 = sum(acc['f1_scores']) / len(acc['f1_scores'])
             col3.metric("Mean F1-score", f"{mean_f1:.3f}")
+            overall_gmean = acc.get('overall_gmean', 0)
+            col4.metric("Overall G-Mean", f"{overall_gmean:.3f}")
 
             st.markdown("---")
             st.subheader("Class-level Metrics")
 
             #Convert Producer (Recall) and Consumer (Precision) Accuracies into a DataFrame
+            # Build class-level metrics table in percentage form
             df_metrics = pd.DataFrame({
                 "Class ID": range(len(acc["precision"])),
-                "Producer's Accuracy (Recall)": acc["precision"],
-                "User's Accuracy (Precision)": acc["recall"],
-                "F1-score": acc["f1_scores"]
+                "Producer's Accuracy (Recall) (%)": np.round(np.array(acc["recall"]) * 100, 2),
+                "User's Accuracy (Precision) (%)": np.round(np.array(acc["precision"]) * 100, 2),
+                "F1-score (%)": np.round(np.array(acc["f1_scores"]) * 100, 2),
+                "Geometric Mean Score (%)": np.round(np.array(acc["gmean_per_class"]) * 100, 2)
             })
-            df_metrics["Producer's Accuracy (Recall)"] = (df_metrics["Producer's Accuracy (Recall)"] * 100).round(2)
-            df_metrics["User's Accuracy (Precision)"] = (df_metrics["User's Accuracy (Precision)"] * 100).round(2)
-            df_metrics["F1-score"] = df_metrics["F1-score"].round(3)
 
-            st.dataframe(df_metrics, width='stretch')
+            st.dataframe(df_metrics, use_container_width=True)
 
             #Plot Confusion Matrix as heatmap
             st.subheader("Confusion Matrix")

@@ -287,7 +287,9 @@ class Generate_LULC:
         # Get accuracy metrics from confusion matrix object
         overall_accuracy = confusion_matrix.accuracy().getInfo()
         kappa = confusion_matrix.kappa().getInfo()
+        #here still used earth engine terminology
         producers_accuracy_ls = confusion_matrix.producersAccuracy().getInfo()
+        #here still used earth engine terminology
         consumers_accuracy_ls = confusion_matrix.consumersAccuracy().getInfo()
         confusion_matrix_array = confusion_matrix.getInfo()
 
@@ -295,23 +297,50 @@ class Generate_LULC:
         producers_accuracy = np.array(producers_accuracy_ls).flatten().tolist()
         consumers_accuracy = np.array(consumers_accuracy_ls).flatten().tolist()
         
-        # Calculate F1 scores
+        # Calculate F1 scores and geometric mean score
+        #create and empty dict for storing the result
+        #change the terminology from earth engine to machine learning
         f1_scores = []
+        gmean_per_class = []
         for i in range(len(producers_accuracy)):
-            if producers_accuracy[i] + consumers_accuracy[i] > 0:
-                f1 = 2 * (producers_accuracy[i] * consumers_accuracy[i]) / (producers_accuracy[i] + consumers_accuracy[i])
+            recall_acc = producers_accuracy[i] #recall (machine learning terms)
+            precision_acc = consumers_accuracy[i] #precision (machine learning terms)
+            #calculate each class f1 score first
+            if recall_acc + precision_acc > 0:
+                f1 = 2 * (recall_acc * precision_acc) / (recall_acc + precision_acc)
+            
             else:
                 f1 = 0
             f1_scores.append(f1)
+            
+            #geometric mearn per class
+            #equation: sqrt(recall * precision)
+            if recall_acc > 0 and precision_acc > 0:
+                gmean = np.sqrt(recall_acc * precision_acc)
+            else:
+                gmean = 0
+            gmean_per_class.append(gmean)
         
-        # Compile results
+        #Overall gmean
+        #calculate the overall value of gmean from each class gmean
+        #log transform are used for numerical stability (exp(mean(log(r1), log(r2), .... log(rn))))
+        valid_gmeans = [g for g in gmean_per_class if g > 0]
+        if valid_gmeans:
+            overall_gmean = np.exp(np.mean(np.log(valid_gmeans)))
+        else:
+            overall_gmean = 0
+
+        
+        #Compile the accuracy metrics results
         accuracy_metrics = {
             'overall_accuracy': overall_accuracy,
             'kappa': kappa,
-            'precision': producers_accuracy,
-            'recall': consumers_accuracy,
+            'precision': consumers_accuracy,
+            'recall': producers_accuracy,
             'confusion_matrix': confusion_matrix_array,
-            'f1_scores': f1_scores
+            'f1_scores': f1_scores,
+            'gmean_per_class': gmean_per_class,
+            'overall_gmean': overall_gmean
         }
         
         return accuracy_metrics
