@@ -13,7 +13,7 @@ import datetime
 import ee
 # Page configuration
 st.set_page_config(
-    page_title="Module 1",
+    page_title="Search Imagery Composite",
     page_icon="logos\logo_epistem_crop.png",
     layout="wide"
 )

@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import geemap.foliumap as geemap
 import geopandas as gpd
-import ee
 import traceback
 import tempfile
 import zipfile
@@ -15,7 +14,7 @@ from src.module_helpers import init_gee
 init_gee()
 #Page configuration
 st.set_page_config(
-    page_title="Module 4", #visible in the browser
+    page_title="Perform ROI Analysis", #visible in the browser
     page_icon="logos\logo_epistem_crop.png",
     layout="wide"
 )

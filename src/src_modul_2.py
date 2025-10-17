@@ -196,10 +196,7 @@ class LULCSchemeClass:
         return True
     #new function  to load the user interface in streamlit envinronment 
     def render_ui(self):
-        """Render the Streamlit UI"""
-        st.markdown("### 🗺️ Define Land Cover/Use Classes")
-        st.markdown("---")
-        
+        """Render the Streamlit UI"""        
         # Tab layout for different input methods
         tab1, tab2, tab3 = st.tabs(["➕ Manual Input", "📤 Upload CSV", "📋 Default Scheme"])
         
@@ -326,7 +323,7 @@ class LULCSchemeClass:
         st.markdown("#### Defined Classes")
         
         if not self.classes:
-            st.warning("⚠️ No classes defined yet. Add your first class above!")
+            st.warning("No classes defined yet. Add your first class above!")
         else:
             # Display as DataFrame with color preview
             df_display = pd.DataFrame(self.classes)

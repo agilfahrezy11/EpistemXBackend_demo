@@ -16,9 +16,11 @@ def get_lulc_manager():
 manager = get_lulc_manager()
 
 # Page title
-st.title("🌍 Land Cover Mapping Application")
-st.subheader("Module 2: Classification Scheme Definition")
-
+st.title("Classification Scheme Definition")
+st.divider()
+st.markdown("In this module, you need to define the classification scheme that you will be using to generate the land cover map." \
+" You have three options to define the classification scheme: Manual input, upload a CSV file, or using a default classfication scheme. The default classification scheme used in this platform are adapted from the RESTORE + project")
+st.markdown("---")
 # Render the UI
 manager.render_ui()
 
