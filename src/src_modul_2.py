@@ -1,5 +1,4 @@
 import pandas as pd
-import io
 import streamlit as st
 # ----- System response 2.1.b -----
 class LULCSchemeClass:
@@ -279,7 +278,7 @@ class LULCSchemeClass:
         # Tab 2: Upload CSV
         with tab2:
             st.markdown("#### Upload Classification Scheme")
-            st.info("📝 CSV should contain columns: `ID`, `Class Name`, `Color Code` (or `Color Palette`)")
+            st.info("CSV should contain columns: `ID`, `Class Name`, `Color Code` (or `Color Palette`)")
             
             uploaded_file = st.file_uploader(
                 "Choose a CSV file",
@@ -294,29 +293,25 @@ class LULCSchemeClass:
         
         # Tab 3: Default Scheme
         with tab3:
-            st.markdown("#### Load Default Scheme")
-            st.info("📋 Quick start with pre-defined land cover classes")
+            st.markdown("#### Load Default Classification Scheme")
+            st.info("Quick start with RESTORE+ project land cover classes")
             
-            # Example default schemes
+            #Define the default classifiction scheme
+            #adding more class is possible
             default_schemes = {
-                "Basic Land Cover (5 classes)": [
-                    {'ID': 1, 'Class Name': 'Forest', 'Color Code': '#228B22'},
-                    {'ID': 2, 'Class Name': 'Water', 'Color Code': '#1E90FF'},
-                    {'ID': 3, 'Class Name': 'Urban', 'Color Code': '#FF0000'},
-                    {'ID': 4, 'Class Name': 'Agriculture', 'Color Code': '#FFD700'},
-                    {'ID': 5, 'Class Name': 'Barren', 'Color Code': '#A0522D'},
-                ],
-                "Indonesian Land Cover (7 classes)": [
-                    {'ID': 1, 'Class Name': 'Hutan', 'Color Code': '#228B22'},
-                    {'ID': 2, 'Class Name': 'Permukiman', 'Color Code': '#FF0000'},
-                    {'ID': 3, 'Class Name': 'Sawah', 'Color Code': '#90EE90'},
-                    {'ID': 4, 'Class Name': 'Kebun', 'Color Code': '#32CD32'},
-                    {'ID': 5, 'Class Name': 'Tubuh Air', 'Color Code': '#1E90FF'},
-                    {'ID': 6, 'Class Name': 'Lahan Terbuka', 'Color Code': '#D2691E'},
-                    {'ID': 7, 'Class Name': 'Tambak', 'Color Code': '#00CED1'},
+                "RESTORE+ Project": [
+                    {'ID': 1, 'Class Name': 'Natural Forest', 'Color Code': "#0E6D0E"},
+                    {'ID': 2, 'Class Name': 'Agroforestry', 'Color Code': "#F08306"},
+                    {'ID': 3, 'Class Name': 'Monoculture Plantation', 'Color Code': "#38E638"},
+                    {'ID': 4, 'Class Name': 'Grassland or Savanna', 'Color Code': "#80DD80"},
+                    {'ID': 5, 'Class Name': 'Shrub', 'Color Code': "#5F972A"},
+                    {'ID': 6, 'Class Name': 'Paddy Field', 'Color Code': "#777907"},
+                    {'ID': 7, 'Class Name': 'Cropland (Palawija, Horticulture)', 'Color Code': "#E8F800"},
+                    {'ID': 8, 'Class Name': 'Settlement', 'Color Code':  "#F81D00"},
+                    {'ID': 9, 'Class Name': 'Cleared Land', 'Color Code':  "#E9B970"},
+                    {'ID': 10, 'Class Name': 'Waterbody', 'Color Code':  "#1512F3"},
                 ]
             }
-            
             selected_scheme = st.selectbox(
                 "Select a default scheme:",
                 options=list(default_schemes.keys())
@@ -328,7 +323,7 @@ class LULCSchemeClass:
         
         # Display current classification scheme
         st.markdown("---")
-        st.markdown("#### 📊 Defined Classes")
+        st.markdown("#### Defined Classes")
         
         if not self.classes:
             st.warning("⚠️ No classes defined yet. Add your first class above!")
@@ -371,7 +366,7 @@ class LULCSchemeClass:
             csv_data = self.download_csv()
             if csv_data:
                 st.download_button(
-                    label="📥 Download as CSV",
+                    label="Download as CSV",
                     data=csv_data,
                     file_name="classification_scheme.csv",
                     mime="text/csv",

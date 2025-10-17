@@ -4,11 +4,11 @@ from src.src_modul_2 import LULCSchemeClass
 # Page configuration
 st.set_page_config(
     page_title="Land Cover Classification Scheme",
-    page_icon="🗺️",
+    page_icon="logos\logo_epistem_crop.png",
     layout="wide"
 )
 
-# Initialize the manager
+#Initialize the manager
 @st.cache_resource
 def get_lulc_manager():
     return LULCSchemeClass()
@@ -34,3 +34,29 @@ if st.checkbox("Show classification data for Module 3"):
         
         # Example: Store in session state for use in other pages
         st.session_state['classification_df'] = df
+st.divider()
+st.subheader("Module Navigation")
+# Check if Module 2 is completed (has at least one class)
+module_2_completed = len(st.session_state.get("classes", [])) > 0
+# Create two columns for navigation buttons
+col1, col2 = st.columns(2)
+
+with col1:
+    # Back to Module 1 button (always available)
+    if st.button("⬅️ Back to Module 2: Classification Scheme", use_container_width=True):
+        st.switch_page("pages/2_Module_2_Classification_scheme.py")
+
+with col2:
+    # Forward to Module 3 button (conditional)
+    if module_2_completed:
+        if st.button("➡️ Go to Module 4: Classification", type="primary", use_container_width=True):
+            st.switch_page("pages/3_Module_3_Training_data.py")
+    else:
+        st.button("🔒 Complete Module 2 First", disabled=True, use_container_width=True, 
+                 help="Please add at least one class to the classification scheme")
+
+# Optional: Show completion status
+if module_2_completed:
+    st.success(f"✅ Classification scheme completed with {len(st.session_state['classes'])} classes")
+else:
+    st.info("Add classification scheme to complete this module")
