@@ -297,95 +297,36 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             st.info("No scene data available to display")
     #st.subheader("Detailed Statistics") {'bands': ['RED', 'GREEN', 'BLUE'], 'min': 0, 'max': 0.3}
     #st.write(detailed_stats)
-    # ✅ Store in session state for persistence
-    st.session_state['collection'] = collection
-    st.session_state['thermal_collection'] = thermal_collection
-    st.session_state['detailed_stats'] = detailed_stats
-    st.session_state['aoi'] = aoi
-    st.session_state['gdf'] = gdf
-    # Use stored data if available (prevents full rerun when changing composite)
-    if 'collection' in st.session_state and 'aoi' in st.session_state:
-        collection = st.session_state['collection']
-        thermal_collection = st.session_state['thermal_collection']
-        detailed_stats = st.session_state['detailed_stats']
-        aoi = st.session_state['aoi']
-        gdf = st.session_state['gdf']
     if detailed_stats['total_images'] > 0:
-        st.divider()
-        st.subheader("Visualization")
-        
         #visualization parameters
         thermal_vis = {
             'min': 286,
             'max': 300,
             'gamma': 0.4
         }
-        
-        #Allows the user to select between color composite
-        color_composite = {
-            "Natural Color (RGB)": ["RED", "GREEN", "BLUE"],
-            "False Color (Color Infrared)": ["NIR", "RED", "GREEN"],
-            "False Color (Urban)": ["SWIR2", "SWIR1", "RED"],
-            "False Color (Vegetative Analysis)": ["SWIR1", "NIR", "RED"],
-            "Shortwave Infrared (S2-N-R)": ["SWIR2", "NIR", "RED"],
-        }
-        
-        # Create columns for RGB selector and refresh button
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            selected_rgb = st.radio(
-                "Select Color Composite",
-                list(color_composite.keys()),
-                horizontal=True
-            )
-        
-        with col2:
-            st.write("")  # Spacer
-            refresh_map = st.button("🔄 Update Map", type="secondary")
-
         vis_params = {
             'min': 0,
             'max': 0.4,
             'gamma': [0.5, 0.9, 1],
-            'bands': color_composite[selected_rgb]
-        }        
-        
-        # Create composite and thermal median - ensure both exist
-        try:
-            if 'composite' not in st.session_state or 'thermal_median' not in st.session_state:
-                with st.spinner("Creating image composite..."):
-                    thermal_median = thermal_collection.median().clip(aoi)
-                    composite = collection.median().clip(aoi).addBands(thermal_median)
-                    st.session_state['composite'] = composite
-                    st.session_state['thermal_median'] = thermal_median
-            else:
-                composite = st.session_state['composite']
-                thermal_median = st.session_state['thermal_median']
-            
-            # Verify thermal_median is not None before adding to map
-            if thermal_median is None:
-                st.error("Thermal data could not be loaded. Displaying without thermal layer.")
-                show_thermal = False
-            else:
-                show_thermal = True
-            
-            # Always regenerate map with current selection
-            centroid = gdf.geometry.centroid.iloc[0]
-            m = geemap.Map(center=[centroid.y, centroid.x], zoom=6)
-            
-            # Add thermal layer only if available
-            if show_thermal:
-                m.addLayer(thermal_median, thermal_vis, "Landsat Thermal Band")
-            
-            m.addLayer(collection, vis_params, f"Landsat Collection ({selected_rgb})", shown=True)
-            m.addLayer(composite, vis_params, f"Landsat Composite ({selected_rgb})", shown=True)
-            m.add_geojson(gdf.__geo_interface__, layer_name="AOI", shown=False)
-            m.to_streamlit(height=600)
-            
-        except Exception as e:
-            st.error(f"Error creating visualization: {str(e)}")
-            st.info("This might be due to data availability. Try adjusting your search criteria.")
+            'bands':['NIR', 'RED', 'GREEN']
+        }
+        #Create and image composite/mosaic for thermal bands
+        thermal_median = thermal_collection.median().clip(aoi)
+        #composite for multispectral data
+        composite = collection.median().clip(aoi).addBands(thermal_median)
+        # Store in session state for use in other modules
+        st.session_state['composite'] = composite
+        st.session_state['Image_metadata'] = detailed_stats
+        st.session_state['AOI'] = aoi
+        st.session_state['visualization'] = vis_params
+        # Display the image using geemap
+        centroid = gdf.geometry.centroid.iloc[0]
+        m = geemap.Map(center=[centroid.y, centroid.x], zoom=6)
+        m.addLayer(thermal_median, thermal_vis, "Landsat Thermal Band" )
+        m.addLayer(collection, vis_params, 'Landsat Collection', shown=True)
+        m.addLayer(composite, vis_params, 'Landsat Composite', shown= True)
+        m.add_geojson(gdf.__geo_interface__, layer_name="AOI", shown = False)
+        m.to_streamlit(height=600)   
 else:
     st.info("Upload an AOI and specify search criteria to begin.")
 
