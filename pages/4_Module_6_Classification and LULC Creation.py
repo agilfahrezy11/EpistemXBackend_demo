@@ -667,6 +667,7 @@ with col1:
 with col2:
     if st.session_state.classification_result is not None:
         if st.button("➡️ Go to Module 7: Thematic Accuracy Assessment", width='stretch'):
+            st.switch_page("pages/5_Module_7_Thematic_Accuracy.py")
             st.info("Accuracy assessment module coming soon!")
     else:
         st.button("🔒 Complete Classification First", disabled=True, width='stretch')

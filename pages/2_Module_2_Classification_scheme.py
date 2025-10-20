@@ -51,8 +51,8 @@ with col1:
 with col2:
     # Forward to Module 3 button (conditional)
     if module_2_completed:
-        if st.button("➡️ Go to Module 4: Classification", type="primary", use_container_width=True):
-            st.switch_page("pages/3_Module_3_Training_data.py")
+        if st.button("➡️ Go to Module 4: Analyze ROI", type="primary", use_container_width=True):
+            st.switch_page("pages/3_Module_4_Analyze_ROI.py")
     else:
         st.button("🔒 Complete Module 2 First", disabled=True, use_container_width=True, 
                  help="Please add at least one class to the classification scheme")

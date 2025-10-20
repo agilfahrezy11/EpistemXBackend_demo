@@ -65,8 +65,11 @@ class Accuracy_Assessment:
         producers_accuracy_ls = confusion_matrix.producersAccuracy().getInfo()
         #here still used earth engine terminology
         consumers_accuracy_ls = confusion_matrix.consumersAccuracy().getInfo()
-        #Extract the array of confusion matrix
-        cm_array = confusion_matrix.getInfo()['array']
+        #Extract the confusion matrix information from EE
+        cm_info = confusion_matrix.getInfo()
+        #If EE returns a dictionary, get "array"; if it returns a list, use it directly
+        cm_array = cm_info['array'] if isinstance(cm_info, dict) else cm_info
+
         #Flatten using numpy
         producers_accuracy = np.array(producers_accuracy_ls).flatten().tolist()
         consumers_accuracy = np.array(consumers_accuracy_ls).flatten().tolist()

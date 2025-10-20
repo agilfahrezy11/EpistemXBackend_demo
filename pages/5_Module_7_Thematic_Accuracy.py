@@ -81,15 +81,15 @@ if uploaded_file:
                 
                 if gdf_cleaned is not None:
                     # Convert to EE geometry safely
-                    aoi = converter.convert_roi_gdf(gdf_cleaned)
+                    ref_data = converter.convert_roi_gdf(gdf_cleaned)
                     
-                    if aoi is not None:
+                    if ref_data is not None:
                         st.success("ROI conversion completed!")
                         
                         # Show a small preview map centered on AOI
                         # Store in session state
-                        st.session_state['training_data'] = aoi
-                        st.session_state['training_gdf'] = gdf_cleaned
+                        st.session_state['validation_data'] = ref_data
+                        st.session_state['validation_gdf'] = gdf_cleaned
                         st.text("Region of Interest distribution:")
                         centroid = gdf_cleaned.geometry.centroid.iloc[0]
                         preview_map = geemap.Map(center=[centroid.y, centroid.x], zoom=6)
@@ -109,14 +109,14 @@ st.divider()
 st.subheader("Step 2: Run Accuracy Assessment")
 
 if "validation_data" not in st.session_state or st.session_state.validation_data is None:
-    st.warning("⚠️ Please upload your validation shapefile first.")
+    st.warning("⚠️ Please upload your validation data first.")
 else:
-    class_prop = st.text_input(
-        "Class Property Name",
-        value=st.session_state.get('selected_class_property', 'class'),
-        help="Column name in your validation shapefile containing the class ID"
+    class_prop = st.selectbox(
+        "Select the field containing numeric class IDs, (example: 1, 2, 3, 4, etc):",
+        options=gdf_cleaned.columns.tolist(),
+        index=gdf_cleaned.columns.get_loc("CLASS_ID") if "CLASS_ID" in gdf_cleaned.columns else 0,
+        key="class_property"
     )
-
     scale = st.number_input(
         "Pixel Size (m)",
         min_value=10,
@@ -159,9 +159,9 @@ if "accuracy_results" in st.session_state:
     st.subheader("Class-Level Metrics")
 
     df_metrics = pd.DataFrame({
-        "Class ID": range(len(acc["precision"])),
-        "Producer's Accuracy (Recall) (%)": [round(v * 100, 2) for v in acc["recall"]],
-        "User's Accuracy (Precision) (%)": [round(v * 100, 2) for v in acc["precision"]],
+        "Class ID": range(len(acc['producer_accuracy'])),
+        "Producer's Accuracy (Recall) (%)": [round(v * 100, 2) for v in acc['producer_accuracy']],
+        "User's Accuracy (Precision) (%)": [round(v * 100, 2) for v in acc['user_accuracy']],
         "F1-score (%)": [round(v * 100, 2) for v in acc["f1_scores"]],
     })
     st.dataframe(df_metrics, use_container_width=True)
@@ -182,7 +182,7 @@ if "accuracy_results" in st.session_state:
         color_continuous_scale="Blues"
     )
     fig.update_layout(height=600)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 st.divider()
 st.markdown("Return to **Module 6** if you want to re-run or improve your classification model.")

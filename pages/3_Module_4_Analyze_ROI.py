@@ -1,7 +1,7 @@
 import streamlit as st
 from src.module_helpers import shapefile_validator, EE_converter
-from src.src_modul_3 import sample_quality
-from src.src_modul_3_part2 import spectral_plotter
+from src.src_modul_4 import sample_quality
+from src.src_modul_4_part2 import spectral_plotter
 import matplotlib.pyplot as plt
 import numpy as np
 import geemap.foliumap as geemap
@@ -597,14 +597,14 @@ with col1:
 with col2:
     # Forward to Module 3 button (conditional)
     if module_2_completed:
-        if st.button("➡️ Go to Module 4: Classification", type="primary", use_container_width=True):
-            st.switch_page("pages/3_Module_3_Training_data.py")
+        if st.button("➡️ Go to Module 6: Supervised Classification", type="primary", use_container_width=True):
+            st.switch_page("pages/4_Module_6_Classification and LULC Creation.py")
     else:
-        st.button("🔒 Complete Module 2 First", disabled=True, use_container_width=True, 
-                 help="Please add at least one class to the classification scheme")
+        st.button("🔒 Complete Module 3 First", disabled=True, use_container_width=True, 
+                 help="Analyze the region of interest in order to proceed")
 
 # Optional: Show completion status
 if module_2_completed:
-    st.success(f"✅ Classification scheme completed with {len(st.session_state['classes'])} classes")
+    st.success(f"✅ Analysis Complete")
 else:
-    st.info("Add at least one class to complete this module")
+    st.info("Analyze the region of interest in order to proceed")
