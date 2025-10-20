@@ -330,7 +330,6 @@ class Generate_LULC:
         else:
             overall_gmean = 0
 
-        
         #Compile the accuracy metrics results
         accuracy_metrics = {
             'overall_accuracy': overall_accuracy,

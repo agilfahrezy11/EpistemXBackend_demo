@@ -17,6 +17,8 @@ st.set_page_config(
     page_icon="logos\logo_epistem_crop.png",
     layout="wide"
 )
+
+#=========Page requirements (title, description, session state)===========
 #title of the module
 st.title("Search and Generate Landsat Image Mosaic")
 st.divider()
@@ -29,7 +31,8 @@ st.sidebar.title("About")
 st.sidebar.info(markdown)
 logo = "logos\logo_epistem.png"
 st.sidebar.image(logo)
-# Initialize session state for storing collection and composite
+#Initialize session state for storing collection, composite, aoi, AOI that has been converted to gdf, and export task
+#similar to a python dict, we fill it later
 if 'collection' not in st.session_state:
     st.session_state.collection = None
 if 'composite' not in st.session_state:
@@ -41,15 +44,15 @@ if 'gdf' not in st.session_state:
 if 'export_tasks' not in st.session_state:
     st.session_state.export_tasks = []
 #Based on early experiments, shapefile with complex geometry often cause issues in GEE
-#The following functions are used to handle the common geometry issues
-
 #User input, AOI upload
 st.subheader("Upload Area of Interest (Shapefile)")
 st.markdown("currently the platform only support shapefile in .zip format")
+
+
+#=========1. Area of Interest Definition (upload an AOI)===========
 uploaded_file = st.file_uploader("Upload a zipped shapefile (.zip)", type=["zip"])
 aoi = None
-
-#define AOI upload function
+#create a code for uploading the shapefile (what happen if the shapefile is uploaded)
 if uploaded_file:
     # Extract the uploaded zip file to a temporary directory
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -71,25 +74,24 @@ if uploaded_file:
         if len(shp_files) == 0:
             st.error("No .shp file found in the uploaded zip.")
         else:
+            #read the shapefile using geopandas
             try:
-                # Read the shapefile
                 gdf = gpd.read_file(shp_files[0])
                 st.success("Shapefile loaded successfully!")
+                #initialize the validator and converter
                 validate = shapefile_validator(verbose=False)
                 converter = EE_converter(verbose=False)
-                # Validate and fix geometry
+                #Validate and fix geometry
                 gdf_cleaned = validate.validate_and_fix_geometry(gdf)
-                
+                #convert geodataframe to ee geometry, several option avaliable if the conversion failed
                 if gdf_cleaned is not None:
-                    # Convert to EE geometry safely
                     aoi = converter.convert_aoi_gdf(gdf_cleaned)
-                    
                     if aoi is not None:
                         st.success("AOI conversion completed!")
                         st.session_state.aoi = aoi
                         st.session_state.gdf = gdf_cleaned
                         
-                        # Show a small preview map centered on AOI
+                        #Show a small preview map centered on AOI
                         st.text("Area of interest preview:")
                         centroid = gdf_cleaned.geometry.centroid.iloc[0]
                         preview_map = geemap.Map(center=[centroid.y, centroid.x], zoom=7)
@@ -104,6 +106,8 @@ if uploaded_file:
                 st.error(f"Error reading shapefile: {e}")
                 st.info("Make sure your shapefile includes all necessary files (.shp, .shx, .dbf, .prj)")
 
+
+#=========2. User input for image search criteria===========
 st.divider()
 #User input, search criteria
 st.subheader("Specify Imagery Search Criteria")
@@ -119,8 +123,6 @@ st.markdown("5. Landsat 7 Enhanced Thematic Mapper Plus/ETM+ (1999 - 2021)")
 st.markdown("6. Landsat 8 Operational Land Imager/OLI (2013 - present)")
 st.markdown("7. Landsat 9 Operational Land Imager-2/OLI-2 (2021 - present)")
 st.markdown("Spatial resolution for Landsat 1-3 is 60 m, while the rest of them have the spatial resolution of 30 m")
-#specified the avaliable sensor type
-#sensor_type = ['L5_SR', 'L7_SR', 'L8_SR', 'L9_SR']
 #create a selection box for sensor type
 sensor_dict = {
     "Landsat 1 MSS": "L1_RAW",
@@ -165,11 +167,13 @@ else:
     end_date = end_date_dt.strftime("%Y-%m-%d")
 
 #cloud cover slider
-cloud_cover = st.slider("Maximum Cloud Cover (%):", 0, 100, 30)
+cloud_cover = st.slider("Maximum Scene Cloud Cover (%):", 0, 100, 30)
 
-#Search the landsat imagery
+#=========3. Passing user input to backend codes ===========
+#What happend when the button is pres by the user
 if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi is not None:
     with st.spinner("Searching for Landsat imagery..."):
+        #first, search multispectral data (Collection 2 Tier 1, SR data)
         reflectance = Reflectance_Data()
         collection, meta = reflectance.get_optical_data(
             aoi=aoi,
@@ -180,7 +184,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             verbose=False,
             compute_detailed_stats=False
         )
-            # === Retrieve thermal (TOA) data ===
+        #Second, use the same parameter as multispectral data and use it to search collection 2 TOA data. Retrive thermal band only
         thermal_data = optical_data.replace('_SR', '_TOA')  # match Landsat pair automatically
         thermal_collection, meta = reflectance.get_thermal_bands(
             aoi=aoi,
@@ -191,6 +195,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             verbose=False,
             compute_detailed_stats=False
         )
+        #Get collection retrival statistic
         stats = Reflectance_Stats()
         detailed_stats = stats.get_collection_statistics(collection, compute_stats=True, print_report=True)
         st.success(f"Found {detailed_stats['total_images']} images.")
@@ -221,7 +226,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
     #maxPixels=1e13
     #).getInfo()
 
-
+#=========4. Displaying the result of the search===========
     #Display the search information as report
     summary_md = f"""
     ### Landsat Imagery Search Summary
@@ -229,9 +234,8 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
     - **Total Images Found:** {detailed_stats.get('total_images', 'N/A')}
     - **Available Date Range:** {detailed_stats.get('date_range', 'N/A')}
     """
-
     st.markdown(summary_md)
-    # Path/Row information in expandable section
+    #Path/Row information in expandable section
     path_row_tiles = detailed_stats.get('path_row_tiles', [])
     if path_row_tiles:
         with st.expander(f"WRS Path/Row Coverage ({len(path_row_tiles)} tiles)"):
@@ -250,7 +254,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
         cloud_covers = detailed_stats.get('cloud_cover', {}).get('values', [])
         
         if scene_ids and acquisition_dates:
-            # Create a dataframe with all information
+            #Create a dataframe with all information
             scene_df = pd.DataFrame({
                 '#': range(1, len(scene_ids) + 1),
                 'Scene ID': scene_ids,
@@ -258,7 +262,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
                 'Cloud Cover (%)': [round(cc, 2) for cc in cloud_covers] if cloud_covers else ['N/A'] * len(scene_ids)
             })
             
-            # Display the table with formatting
+            #Display the table with formatting
             st.dataframe(
                 scene_df,
                 width='stretch',
@@ -276,7 +280,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             )
             # Show cloud cover statistics
             if cloud_covers:
-                st.markdown("#### ☁️ Cloud Cover Statistics")
+                st.markdown("#### Cloud Cover Statistics")
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Minimum", f"{min(cloud_covers):.2f}%")
@@ -330,34 +334,34 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
 else:
     st.info("Upload an AOI and specify search criteria to begin.")
 
-#export the data
+#=========5. Exporting the image collection===========
+#check if the session state is not empty
 if st.session_state.composite is not None and st.session_state.aoi is not None:
     st.subheader("Export Mosaic to Google Drive")
-    
+    #Create an export setting for the user to filled
     with st.expander("Export Settings", expanded=True):
         col1, col2 = st.columns(2)
-        
+        #File Naming
         with col1:
-            # File naming
             default_name = f"Landsat_{st.session_state.search_metadata.get('sensor', 'unknown')}_{st.session_state.search_metadata.get('start_date', '')}_{st.session_state.search_metadata.get('end_date', '')}_mosaic"
             export_name = st.text_input(
                 "Export Filename:",
                 value=default_name,
                 help="The output will be saved as GeoTIFF (.tif)"
             )
-            
+            #Folder location
             drive_folder = st.text_input(
                 "Google Drive Folder:",
                 value="EarthEngine_Exports",
                 help="Google Drive folder to store the result"
             )
-            
+        #Coordinate Reference System (CRS)
+        #User can define their own CRS using EPSG code, if not, used WGS 1984 as default option    
         with col2:
             crs_options = {
                 "WGS 84 (EPSG:4326)": "EPSG:4326",
                 "Custom EPSG": "CUSTOM"
             }
-            
             crs_choice = st.selectbox(
                 "Coordinate Reference System:",
                 options=list(crs_options.keys()),
@@ -373,7 +377,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                 export_crs = f"EPSG:{custom_epsg}"
             else:
                 export_crs = crs_options[crs_choice]
-            
+            #Define the scale/spatial resolution of the imagery
             scale = st.number_input(
                 "Pixel Size (meters):",
                 min_value=10,
@@ -381,21 +385,22 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                 value=30,
                 step=10
             )
-        
+        #Button to start export the composite
         if st.button("Start Export to Google Drive", type="primary"):
             try:
                 with st.spinner("Preparing export task..."):
-                    # Use the composite from session state
+                    #Use the composite from session state
                     export_image = st.session_state.composite
                     
-                    # Ensure we have valid band names
+                    #Valid Band Names 
                     band_names = export_image.bandNames()
                     export_image = export_image.select(band_names)
                     
-                    # Get the geometry from AOI - FIXED
+                    #Get the AOI from geometry
                     aoi_obj = st.session_state.aoi
-                    
-                    # Convert to geometry based on type
+                    #try convert the AOI so that it is compatible with export requirement, several option avaliable if one failed
+                    #Convert to geometry based on type
+
                     if isinstance(aoi_obj, ee.FeatureCollection):
                         export_region = aoi_obj.geometry()
                     elif isinstance(aoi_obj, ee.Feature):
@@ -409,7 +414,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                         except:
                             raise ValueError(f"Cannot extract geometry from AOI object of type: {type(aoi_obj)}")
                     
-                    # Set export parameters
+                    #Summarize the export parameter from user input
                     export_params = {
                         "image": export_image,
                         "description": export_name.replace(" ", "_"),  # Remove spaces from description
@@ -423,7 +428,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                         "region": export_region
                     }
                     
-                    # Start the export task
+                    #Pass the parameters to earth engine export
                     task = ee.batch.Export.image.toDrive(**export_params)
                     task.start()
                     
