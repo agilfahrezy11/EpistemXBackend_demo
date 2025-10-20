@@ -11,6 +11,8 @@ class LULCSchemeClass:
     #line 14 - 18
     def __init__(self):
         # Initialize session state if not exists
+        if 'classes' not in st.session_state:
+            st.session_state.classes = []
         if 'lulc_classes' not in st.session_state:
             st.session_state.lulc_classes = []
         if 'lulc_next_id' not in st.session_state:
@@ -112,54 +114,42 @@ class LULCSchemeClass:
         st.session_state.lulc_edit_idx = None
 
     #adapted from line 266 - 320
-    def processCsvUpload(self, uploaded_file):
-        """Process uploaded CSV file"""
+    #Change so that csv is more tolaratable 
+    def process_csv_upload(self, df, id_col, name_col, color_col=None, default_color="#2e8540"):
+        """Process CSV after user maps columns manually or via auto-detect"""
         try:
-            df = pd.read_csv(uploaded_file)
-            
-            # Check for required columns
-            required_cols = ['ID', 'Kelas Tutupan/Penggunaan Lahan', 'Color Palette']
-            alt_cols = ['ID', 'Class Name', 'Color Code']
-            alt_cols2 = ['ID', 'Class Name', 'Color']
-            
-            if all(col in df.columns for col in required_cols):
-                # Standard format
-                self.classes = []
-                for _, row in df.iterrows():
-                    self.classes.append({
-                        'ID': int(row['ID']),
-                        'Class Name': row['Kelas Tutupan/Penggunaan Lahan'],
-                        'Color Code': row['Color Palette']
-                    })
-            #adapted from line 289 (add more tolerance to the template)
-            elif all(col in df.columns for col in alt_cols) or all(col in df.columns for col in alt_cols2):
-                # Unified alternative format
-                color_field = 'Color Code' if 'Color Code' in df.columns else 'Color'
-                self.classes = [
-                    {
-                        'ID': int(row['ID']),
-                        'Class Name': row['Class Name'],
-                        'Color Code': row[color_field]
-                    }
-                    for _, row in df.iterrows()
-                ]
+            # Build class records
+            class_list = []
+            used_ids = set()
 
-            else:
-                st.error(f"❌ CSV must contain one of these column sets:\n- {required_cols}\n- {alt_cols}\n- {alt_cols2}")
-                return False
-            
-            # Sort by ID
-            self.classes = sorted(self.classes, key=lambda x: x['ID'])
-            
-            # Update next ID
-            if self.classes:
-                self.next_id = max([c['ID'] for c in self.classes]) + 1
-            
-            st.success(f"✅ Successfully loaded {len(self.classes)} classes from CSV!")
+            for _, row in df.iterrows():
+                class_id = row[id_col]
+                class_name = row[name_col]
+
+                # Skip empty rows
+                if pd.isna(class_id) or pd.isna(class_name):
+                    continue
+
+                # Check duplicates
+                if class_id in used_ids:
+                    st.error(f"Duplicate Class ID found: {class_id}")
+                    return False
+                used_ids.add(class_id)
+
+                color = row[color_col] if color_col and not pd.isna(row[color_col]) else default_color
+
+                class_list.append({
+                    "Class ID": class_id,
+                    "Class Name": class_name,
+                    "Color": color
+                })
+
+            # Save to session
+            self.classes = class_list
             return True
-            
+
         except Exception as e:
-            st.error(f"❌ Error processing CSV: {e}")
+            st.error(f"Error reading CSV: {e}")
             return False
     #adapted from line 327
     def download_csv(self):
@@ -172,17 +162,32 @@ class LULCSchemeClass:
         return df.to_csv(index=False).encode('utf-8')    
     #adapted from line 370
     def get_dataframe(self):
-        """Get the classification scheme as a DataFrame"""
+        """Get the classification scheme as a DataFrame, normalized for UI rendering"""
         if not self.classes:
-            return pd.DataFrame(columns=['ID', 'Land Cover Class', 'Color Palette'])
-        
+            return pd.DataFrame(columns=["ID", "Land Cover Class", "Color Palette"])
+
         df = pd.DataFrame(self.classes)
-        df = df.rename(columns={
-            'ID': 'ID',
-            'Class Name': 'Land Cover Class',
-            'Color Code': 'Color Palette'
-        })
+
+        # Normalize column names from manual, default, or CSV uploads
+        rename_map = {
+            "ID": "ID",
+            "Class ID": "ID",
+            "Class Name": "Land Cover Class",
+            "Land Cover Class": "Land Cover Class",
+            "Color": "Color Palette",
+            "Color Code": "Color Palette",
+            "Color Palette": "Color Palette"
+        }
+
+        df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+        # Ensure final column order
+        final_cols = ["ID", "Land Cover Class", "Color Palette"]
+        df = df[[col for col in final_cols if col in df.columns]]
+
         return df
+
+
     #Adapted from line 407
     def load_default_scheme(self, default_classes):
         """Load a default classification scheme"""
@@ -194,8 +199,7 @@ class LULCSchemeClass:
         
         st.success(f"✅ Loaded default scheme with {len(self.classes)} classes!")
         return True
-    #new function  to load the user interface in streamlit envinronment 
- 
+    #default classification scheme (RESTORE+ Project)
     @staticmethod
     def get_default_schemes():
         """Return available default classification schemes"""
