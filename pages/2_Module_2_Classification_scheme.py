@@ -21,17 +21,8 @@ if "lulc_manager" not in st.session_state:
     st.session_state.lulc_manager = LULCSchemeClass()
 
 manager = st.session_state.lulc_manager
-#Force Initialization of session state (if failed on the source code)
-if 'classes' not in st.session_state:
-    st.session_state.classes = []
-if 'lulc_classes' not in st.session_state:
-    st.session_state.lulc_classes = []
-if 'lulc_next_id' not in st.session_state:
-    st.session_state.lulc_next_id = 1
-if 'lulc_edit_mode' not in st.session_state:
-    st.session_state.lulc_edit_mode = False
-if 'lulc_edit_idx' not in st.session_state:
-    st.session_state.lulc_edit_idx = None
+# Session state is handled by the manager initialization
+# No need for duplicate initialization here
 
 #User interface for manual input, upload CSV, or using a default classification scheme
 #Tab layout for different options
@@ -95,34 +86,33 @@ with tab1:
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 4])
     with col_btn1:
         if st.session_state.lulc_edit_mode:
-            if st.button("💾 Update Class", type="primary", use_container_width=True):
+            if st.button("💾 Update Class", type="primary",  width='stretch'):
                 if manager.add_class(class_id, class_name, color_code):
                     st.rerun()
         else:
-            if st.button("➕ Add Class", type="primary", use_container_width=True):
+            if st.button("➕ Add Class", type="primary",  width='stretch'):
                 if manager.add_class(class_id, class_name, color_code):
                     st.rerun()
     
     with col_btn2:
         if st.session_state.lulc_edit_mode:
-            if st.button("❌ Cancel", use_container_width=True):
+            if st.button("❌ Cancel",  width='stretch'):
                 manager.cancel_edit()
                 st.rerun()
 
-# Tab 2: Upload CSV
 # Tab 2: Upload CSV
 with tab2:
     st.markdown("#### Upload Classification Scheme")
     st.info("📝 CSV Requirements:\n"
             "- **Required**: ID column (e.g., 'ID', 'Class ID', 'Kode')\n"
-            "- **Required**: Class Name column (e.g., 'Class Name', 'Kelas', 'Name')\n"
-            "- **Optional**: Color column (e.g., 'Color', 'Color Code', 'Warna')\n\n"
-            "If no color column is provided, a default color will be used for all classes.")
+            "- **Required**: Class Name column (e.g., 'Class Name', 'Kelas', 'Name')\n\n"
+            "After uploading, you'll be able to assign colors to each class individually.")
 
     uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'], key="csv_uploader")
 
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file, sep=None, engine="python")
+        
         # --- AUTO-DETECT COLUMN NAMES ---
         columns_lower = [c.lower().replace(" ", "").replace("_", "") for c in df.columns]
 
@@ -135,28 +125,64 @@ with tab2:
 
         auto_id = auto_find(["id", "classid", "kode"])
         auto_name = auto_find(["classname", "class", "kelas", "name"])
-        auto_color = auto_find(["color", "colorcode", "warna"])
 
         # --- USER DROPDOWNS (MANUAL OVERRIDE) ---
         st.write("### Step 2: Map Columns")
         id_col = st.selectbox("Select ID Column *", df.columns, index=df.columns.get_loc(auto_id) if auto_id in df.columns else 0)
         name_col = st.selectbox("Select Class Name Column *", df.columns, index=df.columns.get_loc(auto_name) if auto_name in df.columns else 0)
 
-        color_choices = ["< None / No Color Column >"] + list(df.columns)
-        default_index = color_choices.index(auto_color) if auto_color in color_choices else 0
-        color_col = st.selectbox("Select Color Column (optional)", color_choices, index=default_index)
-
-        default_color = st.color_picker("Default Color (if no color column)", value="#2e8540")
-
-        # --- CONFIRM BUTTON ---
-        if st.button("✅ Confirm & Load Scheme", type="primary"):
-            use_color_col = None if color_col == "< None / No Color Column >" else color_col
-            if manager.process_csv_upload(df, id_col, name_col, use_color_col, default_color):
-                st.success("CSV classification scheme loaded successfully!")
-                preview_df = manager.get_dataframe()
-                st.dataframe(preview_df, use_container_width=True)
+        # --- LOAD CSV BUTTON ---
+        if st.button("📤 Load CSV Data", type="primary"):
+            if manager.process_csv_upload(df, id_col, name_col):
+                st.success("CSV data loaded successfully! Now assign colors to each class below.")
+                st.rerun()
             else:
                 st.error("Failed to load CSV. Check the column mapping and try again.")
+
+    # --- COLOR ASSIGNMENT SECTION ---
+    if 'csv_temp_classes' in st.session_state and st.session_state.csv_temp_classes:
+        st.markdown("---")
+        st.markdown("### Step 3: Assign Colors to Classes")
+        st.info("Choose a color for each class from your CSV file:")
+        
+        color_assignments = []
+        
+        # Create color pickers for each class
+        for i, class_data in enumerate(st.session_state.csv_temp_classes):
+            col1, col2, col3 = st.columns([1, 3, 2])
+            
+            with col1:
+                st.write(f"**ID: {class_data['ID']}**")
+            
+            with col2:
+                st.write(f"**{class_data['Class Name']}**")
+            
+            with col3:
+                color = st.color_picker(
+                    f"Color for {class_data['Class Name']}", 
+                    value="#2e8540",
+                    key=f"csv_color_{i}"
+                )
+                color_assignments.append(color)
+        
+        # Finalize button
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 1, 2])
+        
+        with col1:
+            if st.button("✅ Finalize Classification Scheme", type="primary", width='stretch'):
+                if manager.finalize_csv_upload(color_assignments):
+                    st.success("Classification scheme created successfully!")
+                    # Clear the temporary data
+                    if 'csv_temp_classes' in st.session_state:
+                        del st.session_state.csv_temp_classes
+                    st.rerun()
+        
+        with col2:
+            if st.button("❌ Cancel Upload",  width='stretch'):
+                if 'csv_temp_classes' in st.session_state:
+                    del st.session_state.csv_temp_classes
+                st.rerun()
 
 # Tab 3: Default Scheme
 with tab3:
@@ -190,7 +216,7 @@ else:
         col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 1, 1])
         
         with col1:
-            st.write(f"**{row['Class ID']}**")
+            st.write(f"**{row['ID']}**")
         
         with col2:
             st.write(row['Class Name'])
@@ -198,7 +224,7 @@ else:
         with col3:
             # Color preview
             st.markdown(
-                f"<div style='background-color: {row['Color Palette']}; "
+                f"<div style='background-color: {row['Color Code']}; "
                 f"width: 50px; height: 30px; border: 1px solid #ccc; "
                 f"display: inline-block; margin-right: 10px;'></div>"
                 f"<code>{row['Color Code']}</code>",
@@ -229,7 +255,7 @@ else:
         
         # Show preview
         with st.expander("📋 Preview Classification Scheme"):
-            st.dataframe(manager.get_dataframe(), use_container_width=True)
+            st.dataframe(manager.get_dataframe(),  width='stretch')
 
 
 # Optional: Access the data in other parts of your app
@@ -253,20 +279,20 @@ col1, col2 = st.columns(2)
 
 with col1:
     # Back to Module 1 button (always available)
-    if st.button("⬅️ Back to Module 2: Classification Scheme", use_container_width=True):
-        st.switch_page("pages/2_Module_2_Classification_scheme.py")
+    if st.button("⬅️ Back to Module 1: Data Upload",  width='stretch'):
+        st.switch_page("pages/1_Module_1_Data_Upload.py")
 
 with col2:
     # Forward to Module 3 button (conditional)
     if module_2_completed:
-        if st.button("➡️ Go to Module 4: Analyze ROI", type="primary", use_container_width=True):
+        if st.button("➡️ Go to Module 4: Analyze ROI", type="primary",  width='stretch'):
             st.switch_page("pages/3_Module_4_Analyze_ROI.py")
     else:
-        st.button("🔒 Complete Module 2 First", disabled=True, use_container_width=True, 
+        st.button("🔒 Complete Module 2 First", disabled=True,  width='stretch', 
                  help="Please add at least one class to the classification scheme")
 
 # Optional: Show completion status
 if module_2_completed:
-    st.success(f"✅ Classification scheme completed with {len(st.session_state['classes'])} classes")
+    st.success(f"✅ Classification scheme completed with {len(manager.classes)} classes")
 else:
     st.info("Add classification scheme to complete this module")

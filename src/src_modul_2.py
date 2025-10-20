@@ -10,9 +10,7 @@ class LULCSchemeClass:
     #use st.session state to store result, instead of using self.
     #line 14 - 18
     def __init__(self):
-        # Initialize session state if not exists
-        if 'classes' not in st.session_state:
-            st.session_state.classes = []
+        # Initialize session state if not exists - use consistent naming
         if 'lulc_classes' not in st.session_state:
             st.session_state.lulc_classes = []
         if 'lulc_next_id' not in st.session_state:
@@ -21,6 +19,8 @@ class LULCSchemeClass:
             st.session_state.lulc_edit_mode = False
         if 'lulc_edit_idx' not in st.session_state:
             st.session_state.lulc_edit_idx = None
+        if 'csv_temp_classes' not in st.session_state:
+            st.session_state.csv_temp_classes = []
     
     #Adapted from widget based layout (jupyter notebook) to streamlit session
     #@ is decorator or wrapper, so that when called, it does not need parenthesis
@@ -50,6 +50,13 @@ class LULCSchemeClass:
     def add_class(self, class_id, class_name, color_code):
         """Add a new class to the classification scheme"""
         class_name = class_name.strip()
+        
+        # Validate class_id type
+        try:
+            class_id = int(class_id)
+        except (ValueError, TypeError):
+            st.error("❌ Class ID must be a valid number!")
+            return False
         
         #Validate the class name input, must not empty
         if not class_name:
@@ -85,7 +92,10 @@ class LULCSchemeClass:
         self.classes = sorted(self.classes, key=lambda x: x['ID'])
         
         # Update next ID (adapted from line 214)
-        self.next_id = max([c['ID'] for c in self.classes]) + 1
+        if self.classes:
+            self.next_id = max([c['ID'] for c in self.classes]) + 1
+        else:
+            self.next_id = 1
         
         return True
     #adapted from line 229 onward
@@ -113,12 +123,10 @@ class LULCSchemeClass:
         st.session_state.lulc_edit_mode = False
         st.session_state.lulc_edit_idx = None
 
-    #adapted from line 266 - 320
-    #Change so that csv is more tolaratable 
-    def process_csv_upload(self, df, id_col, name_col, color_col=None, default_color="#2e8540"):
-        """Process CSV after user maps columns manually or via auto-detect"""
+    def process_csv_upload(self, df, id_col, name_col):
+        """Process CSV upload - only ID and Name columns, colors will be assigned later"""
         try:
-            # Build class records
+            # Build class records without colors
             class_list = []
             used_ids = set()
 
@@ -130,26 +138,57 @@ class LULCSchemeClass:
                 if pd.isna(class_id) or pd.isna(class_name):
                     continue
 
+                # Convert class_id to int if possible for consistency
+                try:
+                    class_id = int(class_id)
+                except (ValueError, TypeError):
+                    st.error(f"Invalid Class ID format: {class_id}. Must be a number.")
+                    return False
+
                 # Check duplicates
                 if class_id in used_ids:
                     st.error(f"Duplicate Class ID found: {class_id}")
                     return False
                 used_ids.add(class_id)
 
-                color = row[color_col] if color_col and not pd.isna(row[color_col]) else default_color
-
                 class_list.append({
-                    "Class ID": class_id,
+                    "ID": class_id,
                     "Class Name": class_name,
-                    "Color": color
+                    "Color Code": "#2e8540"  # Default color, will be changed by user
                 })
 
-            # Save to session
-            self.classes = class_list
+            # Store in session state for color assignment
+            if 'csv_temp_classes' not in st.session_state:
+                st.session_state.csv_temp_classes = []
+            st.session_state.csv_temp_classes = class_list
             return True
 
         except Exception as e:
             st.error(f"Error reading CSV: {e}")
+            return False
+    
+    def finalize_csv_upload(self, color_assignments):
+        """Finalize CSV upload with user-assigned colors"""
+        try:
+            # Update colors based on user assignments
+            for i, class_data in enumerate(st.session_state.csv_temp_classes):
+                if i < len(color_assignments):
+                    class_data["Color Code"] = color_assignments[i]
+            
+            # Save to main classes
+            self.classes = st.session_state.csv_temp_classes.copy()
+            self.classes = sorted(self.classes, key=lambda x: x['ID'])
+            
+            # Update next ID
+            if self.classes:
+                self.next_id = max([c['ID'] for c in self.classes]) + 1
+            
+            # Clear temporary storage
+            st.session_state.csv_temp_classes = []
+            return True
+            
+        except Exception as e:
+            st.error(f"Error finalizing CSV upload: {e}")
             return False
     #adapted from line 327
     def download_csv(self):
