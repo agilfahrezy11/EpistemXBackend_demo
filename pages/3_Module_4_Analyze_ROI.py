@@ -19,7 +19,7 @@ st.set_page_config(
     layout="wide"
 )
 #title of the module
-st.title("Analzye the Separability of Region of Interest (ROI)")
+st.title("Spectral Separability Analysis")
 st.divider()
 st.markdown("This module allow the user to perform separability analysis between the class in the region of interest (ROI). " \
 "Prior to the analysis, the user must upload the ROI data in shapefile format. This data should contain unique the class ID and corresponding class names. " \

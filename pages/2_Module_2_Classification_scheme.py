@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from src.src_modul_2 import LULCSchemeManager
+from src.src_modul_2 import LULC_Scheme_Manager
 
 #Page configuration
 st.set_page_config(
@@ -17,7 +17,7 @@ def get_lulc_manager():
 manager = get_lulc_manager()
 
 # Page header
-st.title("Classification Scheme Definition")
+st.title("Determining LULC Classification Schema and Classes")
 st.divider()
 
 st.markdown("""

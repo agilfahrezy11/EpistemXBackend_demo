@@ -20,7 +20,7 @@ st.set_page_config(
 
 #=========Page requirements (title, description, session state)===========
 #title of the module
-st.title("Search and Generate Landsat Image Mosaic")
+st.title("Acquisition of Near-Cloud-Free Satellite Imagery")
 st.divider()
 #module name
 markdown = """

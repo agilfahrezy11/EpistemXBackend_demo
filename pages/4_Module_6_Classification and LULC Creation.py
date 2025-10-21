@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 #Set the page title (for the canvas)
-st.title("Generate Land Cover Map using Supervised Classification")
+st.title("Land Cover Map Generations")
 st.divider()
 st.markdown("""
 This module performs land cover land use classification using Random Forest classifier. Random Forest is a non-parametric machine learning classifiers widely used in remote sensing community.

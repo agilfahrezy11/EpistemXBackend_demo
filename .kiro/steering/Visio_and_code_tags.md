@@ -24,7 +24,7 @@
 
 
 
-# Module 1: Cloudless Image Mosaic
+# Module 1: Acquisition of Near-Cloud-Free Satellite Imagery
    ## System Response 1.1: Area of Interest Definition
    ```
       ├── src/                      
@@ -47,7 +47,7 @@
       │            (if st.button("Start Export to Google Drive", type="primary"))
    ```
 
-# Module 2: Classification Scheme Definition
+# Module 2: Determining LULC Classification Schema and Classes
    ## System Response 2.1a: Upload Classification Scheme
       ├── src/                      
       │   └── src_modul_2.py
@@ -86,10 +86,10 @@
       │   ├── 2_Module_2_Classification_scheme.py
       │   │      └── st.download_button (line 265 - 285)
 
-# Module 3: Region of Interest (sample)
+# Module 3: Training Data Generation
 
 
-# Module 4: Region of Interest Separability Analysis
+# Module 4: Spectral Separability Analysis
 
    ## System Response 4.1 Separability Analysis
       ├── src/                      
@@ -123,9 +123,9 @@
       │                     │      └──  def add_elipse
       │                     └──  def scatter_plot_3d                       
 
-# Module 5: Covariates Definition
+# Module 5: Improving Model Quality with Multi-Source Data
 
-# Module 6: Land Cover Classification
+# Module 6: Land Use Land Cover Map Generation
    ## System Response 6.1 Prerequisites Check
       ├── pages/                     
       │   └── 4_Module_6_Classification and LULC Creation.py
