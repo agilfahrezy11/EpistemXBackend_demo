@@ -2,109 +2,195 @@ from src.module_helpers import init_gee
 init_gee()
 from scipy import stats
 import numpy as np
+import ee
+from typing import Dict, List, Tuple, Any, Optional
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-class Accuracy_Assessment:
+class AccuracyAssessmentManager:
+    """
+    Module 7: Thematic Accuracy Assessment Manager
+    Backend processing for land cover classification accuracy evaluation
+    """
+    
     def __init__(self):
-        """
-        Perform classification to generate Land Cover Land Use Map. The parameters used in the classification should be the result of hyperparameter tuning
-        """
-        pass
-    #Function to calculate overall accuracy confidence interval
-    def _calculate_accuracy_confidence_interval(self, n_correct, n_total, confidence=0.95):
-        """
-        Calculate confidence interval for overall accuracy using normal approximation.
-        """
+        """Initialize the accuracy assessment manager"""
+        self.supported_metrics = [
+            'overall_accuracy', 'kappa', 'producer_accuracy', 
+            'user_accuracy', 'f1_scores', 'confusion_matrix'
+        ]
+    def validate_inputs(self, lcmap: ee.Image, validation_data: ee.FeatureCollection, 
+                       class_property: str, scale: int) -> Tuple[bool, Optional[str]]:
+        """Validate input parameters for accuracy assessment"""
+        try:
+            # Check if lcmap has classification band
+            band_names = lcmap.bandNames().getInfo()
+            if 'classification' not in band_names:
+                return False, "Input land cover map must contain a band named 'classification'"
+            
+            # Check if validation data has the specified class property
+            first_feature = validation_data.first()
+            properties = first_feature.propertyNames().getInfo()
+            if class_property not in properties:
+                return False, f"Class property '{class_property}' not found in validation data"
+            
+            # Validate scale
+            if not isinstance(scale, (int, float)) or scale <= 0:
+                return False, "Scale must be a positive number"
+            
+            return True, None
+            
+        except Exception as e:
+            return False, f"Validation error: {str(e)}"
+    
+    def _calculate_confidence_interval(self, n_correct: int, n_total: int, 
+                                     confidence: float = 0.95) -> Tuple[float, float]:
+        """Calculate confidence interval for overall accuracy using normal approximation"""
         if n_total == 0:
-            return (0, 0)
+            return 0.0, 0.0
+        
         p = n_correct / n_total
         se = np.sqrt((p * (1 - p)) / n_total)
         z = stats.norm.ppf((1 + confidence) / 2)
         margin = z * se
-        lower = max(0, p - margin)
-        upper = min(1, p + margin)
-        return lower, upper
-    
-    #Main Function to calculate the thematic accuracy 
-    def thematic_assessment(self, lcmap, validation_data, class_property,
-                            scale=30, confidence=0.95):
-        """
-        Perform thematic accuracy assessment on the resulting land cover data (categorical raster) using independent ground reference data.
-        The approach use here similar to model evaluation procedure in module 6, with the main difference lies upon the data being tested.
-
-        Parameters
-            lcmap (ee.image): Categorical raster data from earth engine classifier. Must contain the band name: classification
-            validation_data (ee.featureCollection): Ground refrence data containing class id and names, containing class id and names
-            class_property (str):  Class property (column) contain unique class ID
-            scale (str): spatial resolution of the land cover dat
-            confidence (numeric): Confidence interval for overall accuracy
-
-        Returns:
-            accuracy metric (dict)
         
+        lower = max(0.0, p - margin)
+        upper = min(1.0, p + margin)
+        
+        return lower, upper
+    def _calculate_f1_scores(self, producer_accuracy: List[float], 
+                           user_accuracy: List[float]) -> List[float]:
+        """Calculate F1 scores for each class"""
+        f1_scores = []
+        
+        for producer_acc, user_acc in zip(producer_accuracy, user_accuracy):
+            if producer_acc + user_acc > 0:
+                f1 = 2 * (producer_acc * user_acc) / (producer_acc + user_acc)
+            else:
+                f1 = 0.0
+            f1_scores.append(f1)
+        
+        return f1_scores
+    
+    def _extract_confusion_matrix_data(self, confusion_matrix: ee.ConfusionMatrix) -> Dict[str, Any]:
+        """Extract all metrics from Earth Engine confusion matrix"""
+        try:
+            # Get basic metrics
+            overall_accuracy = confusion_matrix.accuracy().getInfo()
+            kappa = confusion_matrix.kappa().getInfo()
+            
+            # Get per-class accuracies
+            producers_accuracy_raw = confusion_matrix.producersAccuracy().getInfo()
+            consumers_accuracy_raw = confusion_matrix.consumersAccuracy().getInfo()
+            
+            # Get confusion matrix array
+            cm_info = confusion_matrix.getInfo()
+            cm_array = cm_info['array'] if isinstance(cm_info, dict) else cm_info
+            
+            # Flatten accuracy arrays
+            producers_accuracy = np.array(producers_accuracy_raw).flatten().tolist()
+            consumers_accuracy = np.array(consumers_accuracy_raw).flatten().tolist()
+            
+            return {
+                'overall_accuracy': overall_accuracy,
+                'kappa': kappa,
+                'producers_accuracy': producers_accuracy,
+                'consumers_accuracy': consumers_accuracy,
+                'cm_array': cm_array
+            }
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to extract confusion matrix data: {str(e)}")
+    
+    def run_accuracy_assessment(self, lcmap: ee.Image, validation_data: ee.FeatureCollection,
+                               class_property: str, scale: int = 30, 
+                               confidence: float = 0.95) -> Tuple[bool, Dict[str, Any]]:
         """
-        # quick check to make sure that the band names is correct
-        if 'classification' not in lcmap.bandNames().getInfo():
-            raise ValueError("Input land cover map must contain a band named 'classification'")
-        #Sample the classified map to get the predicted lc data
-        validation_sample = lcmap.select('classification').sampleRegions(
+        Perform comprehensive thematic accuracy assessment
+        
+        Args:
+            lcmap: Classified land cover map with 'classification' band
+            validation_data: Ground reference validation points
+            class_property: Column name containing class IDs in validation data
+            scale: Spatial resolution for sampling (meters)
+            confidence: Confidence level for accuracy intervals
+            
+        Returns:
+            Tuple of (success, results_dict or error_message)
+        """
+        try:
+            # Validate inputs
+            is_valid, error_msg = self.validate_inputs(lcmap, validation_data, class_property, scale)
+            if not is_valid:
+                return False, {"error": error_msg}
+            
+            logger.info("Starting accuracy assessment...")
+            
+            # Sample the classified map at validation points
+            validation_sample = lcmap.select('classification').sampleRegions(
                 collection=validation_data,
                 properties=[class_property],
                 scale=scale,
                 geometries=False,
                 tileScale=4
             )
-        
-        #Create confusion matrix
-        confusion_matrix = validation_sample.errorMatrix(class_property, 'classification')
-        
-        #Extract the confusion matrix related information
-        overall_accuracy = confusion_matrix.accuracy().getInfo()
-        kappa = confusion_matrix.kappa().getInfo()
-        #here still used earth engine terminology
-        producers_accuracy_ls = confusion_matrix.producersAccuracy().getInfo()
-        #here still used earth engine terminology
-        consumers_accuracy_ls = confusion_matrix.consumersAccuracy().getInfo()
-        #Extract the confusion matrix information from EE
-        cm_info = confusion_matrix.getInfo()
-        #If EE returns a dictionary, get "array"; if it returns a list, use it directly
-        cm_array = cm_info['array'] if isinstance(cm_info, dict) else cm_info
-
-        #Flatten using numpy
-        producers_accuracy = np.array(producers_accuracy_ls).flatten().tolist()
-        consumers_accuracy = np.array(consumers_accuracy_ls).flatten().tolist()
-
-        #Confidence interval calculation
-        #Compute n_correct and n_total for CI
-        n_correct = np.trace(np.array(cm_array))
-        n_total = np.sum(np.array(cm_array))
-        # Calculate 95% CI for overall accuracy
-        ci_lower, ci_upper = self._calculate_accuracy_confidence_interval(n_correct, n_total, confidence)
-
-        # Calculate F1 scores
-        #create and empty dict for storing the result
-        #use remote sensing terminology
-        f1_scores = []
-        for i in range(len(producers_accuracy)):
-            producer_acc = producers_accuracy[i] #recall (machine learning terms)
-            user_acc = consumers_accuracy[i] #precision (machine learning terms)
-            #calculate each class f1 score first
-            if producer_acc + user_acc > 0:
-                f1 = 2 * (producer_acc * user_acc) / (producer_acc + user_acc)
             
-            else:
-                f1 = 0
-            f1_scores.append(f1)        
-        #Compile the accuracy metrics results
-        accuracy_metrics = {
-            'overall_accuracy': overall_accuracy,
-            'kappa': kappa,
-            'user_accuracy': consumers_accuracy,
-            'producer_accuracy': producers_accuracy,
-            'confusion_matrix': cm_array,
-            'f1_scores': f1_scores,
-            'overall_accuracy_ci': (ci_lower, ci_upper),
-            'n_total': int(n_total)
+            # Create confusion matrix
+            confusion_matrix = validation_sample.errorMatrix(class_property, 'classification')
+            
+            # Extract all metrics
+            cm_data = self._extract_confusion_matrix_data(confusion_matrix)
+            
+            # Calculate confidence interval
+            n_correct = int(np.trace(np.array(cm_data['cm_array'])))
+            n_total = int(np.sum(np.array(cm_data['cm_array'])))
+            ci_lower, ci_upper = self._calculate_confidence_interval(n_correct, n_total, confidence)
+            
+            # Calculate F1 scores
+            f1_scores = self._calculate_f1_scores(
+                cm_data['producers_accuracy'], 
+                cm_data['consumers_accuracy']
+            )
+            
+            # Compile final results
+            results = {
+                'overall_accuracy': cm_data['overall_accuracy'],
+                'kappa': cm_data['kappa'],
+                'producer_accuracy': cm_data['producers_accuracy'],
+                'user_accuracy': cm_data['consumers_accuracy'],
+                'f1_scores': f1_scores,
+                'confusion_matrix': cm_data['cm_array'],
+                'overall_accuracy_ci': (ci_lower, ci_upper),
+                'confidence_level': confidence,
+                'n_total': n_total,
+                'n_correct': n_correct,
+                'scale': scale
+            }
+            
+            logger.info("Accuracy assessment completed successfully")
+            return True, results
+            
+        except Exception as e:
+            error_msg = f"Accuracy assessment failed: {str(e)}"
+            logger.error(error_msg)
+            return False, {"error": error_msg}
+    
+    @staticmethod
+    def format_accuracy_summary(results: Dict[str, Any]) -> Dict[str, str]:
+        """Format accuracy results for display"""
+        if 'error' in results:
+            return results
+        
+        summary = {
+            'overall_accuracy': f"{results['overall_accuracy']*100:.2f}%",
+            'kappa': f"{results['kappa']:.3f}",
+            'confidence_interval': f"{results['overall_accuracy_ci'][0]*100:.2f}% - {results['overall_accuracy_ci'][1]*100:.2f}%",
+            'sample_size': str(results['n_total'])
         }
         
-        return accuracy_metrics
+        return summary
+# 

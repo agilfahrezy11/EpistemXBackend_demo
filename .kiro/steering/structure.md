@@ -12,10 +12,10 @@
 │   └── 5_Module_7_Thematic_Accuracy.py
 ├── src/                       # Core processing logic
 │   ├── module_helpers.py      # Shared utilities and helper functions
-│   ├── src_modul_1.py        # Module 1 backend (image collection)
+│   ├── src_modul_1.py        # Module 1 backend (Image collection search and preprocess)
 │   ├── src_modul_2.py        # Module 2 backend (classification scheme)
 │   ├── src_modul_4.py        # Module 4 backend (ROI and separability analysis)
-│   ├── src_modul_4_part2.py  # Module 4 extended functionality
+│   ├── src_modul_4_part2.py  # Module 4 extended functionality (plot and visualization)
 │   ├── src_modul_6.py        # Module 6 backend (LULC creation)
 │   └── src_modul_7.py        # Module 7 backend (accuracy assessment)
 ├── logos/                     # Application branding assets
@@ -35,11 +35,49 @@
 - **Functions**: snake_case with descriptive names
 
 ### Session State Variables
-- `st.session_state.collection` - Image collection objects
-- `st.session_state.composite` - Processed image composites
-- `st.session_state.aoi` - Area of Interest geometry
-- `st.session_state.gdf` - GeoPandas DataFrames
-- `st.session_state.export_tasks` - Earth Engine export tracking
+
+#### Module 1 - Image Mosaic Generation
+- `st.session_state.collection` - Earth Engine ImageCollection object from Landsat search
+- `st.session_state.composite` - Processed image composite/mosaic for analysis
+- `st.session_state.aoi` - Area of Interest as Earth Engine geometry
+- `st.session_state.gdf` - GeoPandas DataFrame of uploaded AOI shapefile
+- `st.session_state.export_tasks` - List of Earth Engine export task IDs
+- `st.session_state.search_metadata` - Metadata from imagery search (sensor, dates, image count)
+- `st.session_state.Image_metadata` - Detailed statistics about the image collection
+- `st.session_state.AOI` - Area of Interest geometry for clipping operations
+- `st.session_state.visualization` - Visualization parameters for map display
+
+#### Module 2 - Classification Scheme
+- `st.session_state.lulc_classes` - List of classification classes with ID, name, description, color
+- `st.session_state.lulc_next_id` - Next available class ID for new classes
+- `st.session_state.lulc_edit_mode` - Boolean flag for edit mode state
+- `st.session_state.lulc_edit_idx` - Index of class being edited
+- `st.session_state.csv_temp_classes` - Temporary storage for CSV-uploaded classes
+
+#### Module 4 - ROI Analysis & Separability
+- `st.session_state.training_data` - Earth Engine FeatureCollection of training ROI data
+- `st.session_state.training_gdf` - GeoPandas DataFrame of uploaded training shapefile
+- `st.session_state.selected_class_property` - Selected field name for class IDs
+- `st.session_state.selected_class_name_property` - Selected field name for class names
+- `st.session_state.analyzer` - Separability analysis object with computed statistics
+
+#### Module 6 - LULC Classification
+- `st.session_state.extracted_training_data` - Extracted spectral features for training
+- `st.session_state.extracted_testing_data` - Extracted spectral features for testing
+- `st.session_state.class_property` - Property name used for class identification
+- `st.session_state.classification_result` - Generated land cover classification map
+- `st.session_state.classification_mode` - Type of classification (Hard/Soft)
+- `st.session_state.trained_model` - Trained machine learning model
+- `st.session_state.classification_params` - Classification parameters (ntrees, etc.)
+- `st.session_state.include_final_map` - Boolean for including final map in soft classification
+
+#### Module 7 - Accuracy Assessment
+- `st.session_state.validation_data` - Earth Engine FeatureCollection for validation
+- `st.session_state.validation_gdf` - GeoPandas DataFrame of validation shapefile
+- `st.session_state.accuracy_results` - Computed accuracy assessment results
+
+#### System-wide
+- `st.session_state.ee_initialized` - Boolean flag for Earth Engine initialization status
 
 ## Code Organization Patterns
 

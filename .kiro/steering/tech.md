@@ -1,52 +1,66 @@
-# Technology Stack
+---
+inclusion: always
+---
 
-## Framework & Platform
-- **Streamlit**: Multi-page web application framework
-- **Google Earth Engine (GEE)**: Satellite imagery processing and analysis
-- **Python 3.x**: Core programming language
+# Technology Stack & Development Guidelines
 
-## Key Libraries
-- **geemap**: Earth Engine integration with interactive mapping
-- **geopandas**: Geospatial data manipulation and analysis
-- **leafmap**: Interactive mapping with Folium backend
-- **streamlit-folium**: Streamlit-Folium integration
-- **ee**: Google Earth Engine Python API
-- **pandas**: Data manipulation and analysis
-- **numpy**: Numerical computing
-- **shapely**: Geometric operations
-- **owslib**: OGC web services client
+## Core Technologies
+- **Streamlit**: Multi-page web application framework - use `st.session_state` for data persistence across modules
+- **Google Earth Engine (GEE)**: Primary satellite imagery platform - always initialize with `init_gee()` before GEE operations
+- **Python 3.x**: Core language - follow PEP 8 conventions
 
-## System Dependencies
-- **GDAL**: Geospatial Data Abstraction Library
-- **gdal-bin**: GDAL command line utilities
-- **libgdal-dev**: GDAL development libraries
+## Essential Libraries
+- **ee**: Google Earth Engine Python API - use for all satellite data operations
+- **geemap/leafmap**: Interactive mapping - prefer geemap for GEE integration
+- **geopandas**: Geospatial data handling - validate geometries before GEE conversion
+- **streamlit-folium**: Map visualization in Streamlit
+- **pandas/numpy**: Data manipulation - use for statistical analysis and data processing
+- **shapely**: Geometric operations - validate coordinates before processing
 
-## Authentication & Deployment
-- **Google Service Account**: Earth Engine authentication via `st.secrets["earthengine"]`
-- **Streamlit Cloud**: Deployment platform
-- **Google Drive**: Export destination for processed imagery
+## Authentication Requirements
+- **Earth Engine**: Service account authentication via `st.secrets["earthengine"]`
+- Always check `st.session_state.ee_initialized` before GEE operations
+- Handle authentication failures gracefully with user-friendly error messages
 
-## Common Commands
+## Code Style Guidelines
 
-### Development
+### Class Naming
+- Use PascalCase with descriptive names: `Reflectance_Data`, `EE_converter`
+- Group related functionality in classes (e.g., `sample_quality` for separability analysis)
+
+### Function Naming
+- Use snake_case: `validate_and_fix_geometry`, `extract_spectral_values`
+- Prefix private methods with underscore: `_fix_crs`, `_clean_geometries`
+
+### Session State Management
+- Use descriptive keys: `st.session_state.composite`, `st.session_state.training_data`
+- Initialize session state variables at page start
+- Clear temporary variables when no longer needed
+
+### Error Handling
+- Implement graceful degradation with multiple conversion attempts
+- Use try-catch blocks for GEE operations and file I/O
+- Provide user-friendly error messages via `st.error()`
+- Log technical details for debugging
+
+### Geospatial Data Processing
+- Always validate geometries before GEE conversion using `shapefile_validator` class
+- Handle CRS transformations explicitly
+- Validate coordinate ranges and vertex counts
+- Use `EE_converter` class for consistent GDF to GEE conversions
+
+## Development Workflow
 ```bash
+# Local development
+streamlit run Home.py 
+python -m streamlit run Home.py 
+
 # Install dependencies
 pip install -r requirements.txt
-
-# Run locally
-streamlit run Home.py
-
-# Check Streamlit version
-streamlit --version
 ```
 
-### Earth Engine Setup
-- Requires service account credentials in `.streamlit/secrets.toml`
-- Authentication handled automatically via `init_gee()` function
-- Export tasks monitored via Earth Engine Task Manager
-
-### File Structure
-- Main entry point: `Home.py`
-- Module pages: `pages/` directory with numbered prefixes
-- Source code: `src/` directory with module helpers and processing logic
-- Assets: `logos/` directory for branding
+## Architecture Patterns
+- **Page Structure**: Import → Config → Session State → Input → Processing → Display → Navigation
+- **Backend Classes**: Separate data retrieval, processing, and helper functionality
+- **Module Dependencies**: Check prerequisites (composite, training data) before processing
+- **Export Operations**: Use Earth Engine Task Manager for large exports to Google Drive
