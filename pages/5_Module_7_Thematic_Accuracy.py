@@ -1,7 +1,7 @@
 import streamlit as st
 from src.module_helpers import init_gee, shapefile_validator, EE_converter
 init_gee()
-from src.src_modul_7 import AccuracyAssessmentManager
+from src.src_modul_7 import Thematic_Accuracy_Assessment
 import pandas as pd
 import geemap.foliumap as geemap
 import tempfile
@@ -10,28 +10,29 @@ import os
 import geopandas as gpd
 import plotly.express as px
 
-# Page configuration
+#Page configuration
 st.set_page_config(
     page_title="Thematic Accuracy Assessment",
     page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
 
-# Initialize accuracy assessment manager
+#Initialize accuracy assessment manager
 @st.cache_resource
 def get_accuracy_manager():
-    return AccuracyAssessmentManager()
+    return Thematic_Accuracy_Assessment()
 
 manager = get_accuracy_manager()
 
 # Page header
-st.title("📊 Thematic Accuracy Assessment")
+st.title("Thematic Accuracy Assessment")
 st.divider()
 
 st.markdown("""
-**Evaluate the accuracy** of your land cover classification from Module 6 using independent validation data.
+Evaluate the thematic accuracy of your land cover classification from Module 6 using independent validation data. 
+In order to run this module you need an ground reference data containing class ID and class name similar to a ROI
+The accuracy of land cover map is evaluated using a confusion matrix, with the following key metrics
 
-**Key Metrics:**
 - **Overall Accuracy** with confidence intervals
 - **Kappa Coefficient** for agreement assessment  
 - **F1-Score** for class-level performance
@@ -39,6 +40,7 @@ st.markdown("""
 
 st.markdown("---")
 
+#This module wont run if classification result from module 6 is not avaliable
 def check_prerequisites():
     """Check if required data from previous modules is available"""
     if 'classification_result' not in st.session_state or st.session_state.classification_result is None:
@@ -49,9 +51,9 @@ def check_prerequisites():
         st.success("✅ Classification map loaded from Module 6")
         return st.session_state.classification_result
 
-# Check prerequisites
+#Initialize the functions
 lcmap = check_prerequisites()
-
+#function to upload the ground reference data (similar to module 3, but in a function)
 def process_shapefile_upload(uploaded_file):
     """Process uploaded shapefile and convert to Earth Engine format"""
     try:
@@ -78,7 +80,7 @@ def process_shapefile_upload(uploaded_file):
             # Read and process shapefile
             gdf = gpd.read_file(shp_files[0])
             
-            # Validate and clean geometry
+            #Validate and clean geometry using the helper module 
             validator = shapefile_validator(verbose=False)
             converter = EE_converter(verbose=False)
             
@@ -87,7 +89,7 @@ def process_shapefile_upload(uploaded_file):
             if gdf_cleaned is None:
                 return False, "Geometry validation failed", None, None
             
-            # Convert to Earth Engine format
+            # Convert to Earth Engine format using helper module
             ee_data = converter.convert_roi_gdf(gdf_cleaned)
             
             if ee_data is None:
@@ -98,6 +100,7 @@ def process_shapefile_upload(uploaded_file):
     except Exception as e:
         return False, f"Error processing shapefile: {str(e)}", None, None
 
+#similar to module 1 but wrap in function
 def render_validation_upload():
     """Render validation data upload section"""
     st.subheader("Step 1: Upload Ground Reference Data")
@@ -132,9 +135,10 @@ def render_validation_upload():
                 if "Make sure your shapefile includes" not in message:
                     st.info("💡 Ensure your shapefile includes all necessary files (.shp, .shx, .dbf, .prj)")
 
-# Render validation upload section
+#run validation data upload
 render_validation_upload()
-def render_accuracy_assessment():
+#Function for definining user input for accuracy assessment
+def user_input_for_accuracy_assessment():
     """Render accuracy assessment configuration and execution"""
     st.divider()
     st.subheader("Step 2: Configure and Run Assessment")
@@ -197,14 +201,16 @@ def render_accuracy_assessment():
             else:
                 st.error(f"❌ Assessment failed: {results.get('error', 'Unknown error')}")
 
-# Render accuracy assessment section
-render_accuracy_assessment()
+#run user inpur function
+user_input_for_accuracy_assessment()
 
+#Function to display accuracy assessment
 def render_accuracy_results():
     """Render accuracy assessment results"""
+    #if not initialize yet
     if "accuracy_results" not in st.session_state:
         return
-
+    #Then initialze the session state to store the accuracy
     results = st.session_state["accuracy_results"]
     
     if 'error' in results:
@@ -212,9 +218,9 @@ def render_accuracy_results():
         return
 
     st.divider()
-    st.subheader("📊 Accuracy Assessment Results")
+    st.subheader("Accuracy Assessment Results")
 
-    # Summary metrics
+    #Prepared to display the key result
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -245,7 +251,7 @@ def render_accuracy_results():
 
     # Class-level metrics table
     st.markdown("---")
-    st.subheader("📈 Class-Level Performance")
+    st.subheader("Class-Level Performance")
 
     df_metrics = pd.DataFrame({
         "Class ID": range(len(results['producer_accuracy'])),

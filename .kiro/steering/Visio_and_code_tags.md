@@ -154,34 +154,24 @@
    ## System Response 7.1 Prerequisite check
       ├── pages/                     
       │   └── 5_Module_7_Thematic_Accuracy.py
-      │         └── line 34-40 (classification check)
+      │         └── def check_prerequisites   
+      ├── src/ 
+          └── src_modul_7.py
+            └──  def validate_inputs
 
    ## System Response 7.2 Ground Reference Verification
       ├── pages/                     
       │   └── 5_Module_7_Thematic_Accuracy.py
-      │         └── line 50-106 (shapefile verification)
+      │         └── def process_shapefile_upload
 
    ## System Response 7.3 Thematic Accuracy Assessment
       ├── src/                      
-      │   ├── src_modul_7.py
-      │          ├── Class Accuracy_Assessment
-      │          ├── def _calculate_accuracy_confidence_interval
-      │          └── def thematic_assessment  
+      │   └── src_modul_7.py
+      │          └── Class Thematic_Accuracy_Assessment
+      │               ├── def _calculate_accuracy_confidence_interval
+      │               ├── def _calculate_f1_scores
+      │               ├── def _extract_confusion_matrix_data
+      │               ├── def run_accuracy_assessment                
+      │               └── def format_accuracy_summary
 
-# Module 8: 
-
-   
-
-
-
-
-
-
-      
-
-
-
-
-
-
-
+# Module 8: House

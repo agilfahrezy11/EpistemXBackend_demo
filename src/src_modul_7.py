@@ -6,12 +6,12 @@ import ee
 from typing import Dict, List, Tuple, Any, Optional
 import logging
 
-# Configure logging
+#Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-class AccuracyAssessmentManager:
+#Create a class for thematic assesment
+class Thematic_Accuracy_Assessment:
     """
     Module 7: Thematic Accuracy Assessment Manager
     Backend processing for land cover classification accuracy evaluation
@@ -23,6 +23,7 @@ class AccuracyAssessmentManager:
             'overall_accuracy', 'kappa', 'producer_accuracy', 
             'user_accuracy', 'f1_scores', 'confusion_matrix'
         ]
+    
     def validate_inputs(self, lcmap: ee.Image, validation_data: ee.FeatureCollection, 
                        class_property: str, scale: int) -> Tuple[bool, Optional[str]]:
         """Validate input parameters for accuracy assessment"""

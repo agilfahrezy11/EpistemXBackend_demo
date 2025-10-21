@@ -12,6 +12,7 @@ import zipfile
 import os
 from src.module_helpers import init_gee
 init_gee()
+
 #Page configuration
 st.set_page_config(
     page_title="Perform ROI Analysis", #visible in the browser
@@ -27,12 +28,12 @@ st.markdown("This module allow the user to perform separability analysis between
 st.markdown("1. Define the training data attributes (class ID and class names)")
 st.markdown("2. Select separability parameters, which consist of selecting separability methods, spatial resolution, and maximum pixel per class. The platform support two methods," \
 " Jeffries-Matusita (JM) and Transformed Divergence (TD)")
-#module name
+
+#set page layout and side info
+st.sidebar.title("About")
 markdown = """
 This module is designed to perform separability analysis of the training data.
 """
-#set page layout and side info
-st.sidebar.title("About")
 st.sidebar.info(markdown)
 logo = "logos\logo_epistem.png"
 st.sidebar.image(logo)
@@ -109,7 +110,6 @@ if uploaded_file:
                     
                     if aoi is not None:
                         st.success("ROI conversion completed!")
-                        
                         # Show a small preview map centered on AOI
                         # Store in session state
                         st.session_state['training_data'] = aoi
@@ -319,7 +319,7 @@ if st.session_state.get("analysis_complete", False):
             st.write("No problematic pairs data available")            
 
 st.divider()
-st.subheader("Plot the Region of Interest")
+st.subheader("D. Plot the Region of Interest")
 st.markdown("You can visualize the ROI using several plots, namely histogram, box plot, and scatter plot. This allows the user to assess the overlap between classes, which might led to difficulties in separating them")
 if (st.session_state.get("analysis_complete", False) and 
     "pixel_extract" in st.session_state and
