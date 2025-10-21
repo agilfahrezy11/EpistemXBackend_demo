@@ -1,132 +1,148 @@
 import pandas as pd
 import streamlit as st
-# ----- System response 2.1.b -----
-class LULCSchemeClass:
+from typing import List, Dict, Optional, Any
+
+
+class LULC_Scheme_Manager:
     """
     Module 2: Land Cover Classification Scheme Manager
-    Allows users to define, edit, and manage land cover classification schemes
+    Backend processing for classification scheme management
     """
+    
+    def __init__(self):
+        """Initialize session state variables for LULC scheme management"""
+        self._init_session_state()
     #adapted from def init 
     #use st.session state to store result, instead of using self.
     #line 14 - 18
-    def __init__(self):
-        # Initialize session state if not exists - use consistent naming
-        if 'lulc_classes' not in st.session_state:
-            st.session_state.lulc_classes = []
-        if 'lulc_next_id' not in st.session_state:
-            st.session_state.lulc_next_id = 1
-        if 'lulc_edit_mode' not in st.session_state:
-            st.session_state.lulc_edit_mode = False
-        if 'lulc_edit_idx' not in st.session_state:
-            st.session_state.lulc_edit_idx = None
-        if 'csv_temp_classes' not in st.session_state:
-            st.session_state.csv_temp_classes = []
-    
+    def _init_session_state(self) -> None:
+        """Initialize all required session state variables"""
+        session_vars = {
+            'lulc_classes': [],
+            'lulc_next_id': 1,
+            'lulc_edit_mode': False,
+            'lulc_edit_idx': None,
+            'csv_temp_classes': []
+        }
+        
+        for var, default_value in session_vars.items():
+            if var not in st.session_state:
+                st.session_state[var] = default_value
     #Adapted from widget based layout (jupyter notebook) to streamlit session
     #@ is decorator or wrapper, so that when called, it does not need parenthesis
     #it provide clean access to each variable in streamlit session state
     #The original code (faza) use jupyter notebook UI, which is incompatible with streamlit
     @property
-    def classes(self):
+    def classes(self) -> List[Dict[str, Any]]:
         """Get classes from session state"""
         return st.session_state.lulc_classes
+    #adapter from line 46-51 (self.class_id_input)
     @classes.setter
-    def classes(self, value):
+    def classes(self, value: List[Dict[str, Any]]) -> None:
         """Set classes in session state"""
         st.session_state.lulc_classes = value
     
-    #adapter from line 46-51 (self.class_id_input)
     @property 
-    def next_id(self):
+    def next_id(self) -> int:
         """Get next ID from session state"""
         return st.session_state.lulc_next_id
     
     @next_id.setter
-    def next_id(self, value):
+    def next_id(self, value: int) -> None:
         """Set next ID in session state"""
         st.session_state.lulc_next_id = value
-    
-    #adapted from line 184, but tailored with streamlit session state
-    def add_class(self, class_id, class_name, color_code):
-        """Add a new class to the classification scheme"""
-        class_name = class_name.strip()
-        
-        # Validate class_id type
+
+    def validate_class_input(self, class_id: Any, class_name: str) -> tuple[bool, Optional[str]]:
+        """Validate class input parameters"""
+        #Validate class_id type
         try:
             class_id = int(class_id)
         except (ValueError, TypeError):
-            st.error("❌ Class ID must be a valid number!")
-            return False
+            return False, "Class ID must be a valid number!"
         
-        #Validate the class name input, must not empty
+        #Validate class name
+        class_name = class_name.strip()
         if not class_name:
-            st.error("❌ Class name cannot be empty!")
-            return False
-        #check if ID already exist
+            return False, "Class name cannot be empty!"
+        
+        #Check if ID already exists (only for new classes)
         if not st.session_state.lulc_edit_mode:
             if any(c['ID'] == class_id for c in self.classes):
-                st.error(f"❌ Class ID {class_id} already exists!")
-                return False
+                return False, f"Class ID {class_id} already exists!"
         
-        #Class updating 
+        return True, None
+    #adapted from line 184, but tailored with streamlit compability    
+    def add_class(self, class_id: Any, class_name: str, color_code: str) -> tuple[bool, str]:
+        """Add or update a class in the classification scheme"""
+        # Validate input
+        is_valid, error_msg = self.validate_class_input(class_id, class_name)
+        if not is_valid:
+            return False, error_msg
+        
+        class_id = int(class_id)
+        class_name = class_name.strip()
+        
+        class_data = {
+            'ID': class_id,
+            'Class Name': class_name,
+            'Color Code': color_code
+        }
+        
+        # Update existing class
         if st.session_state.lulc_edit_mode and st.session_state.lulc_edit_idx is not None:
-            #Update existing class. Adapted from line 205 - 209
-            self.classes[st.session_state.lulc_edit_idx] = {
-                'ID': class_id,
-                'Class Name': class_name,
-                'Color Code': color_code
-            }
-            st.success(f"✅ Class '{class_name}' (ID: {class_id}) updated successfully!")
-            st.session_state.lulc_edit_mode = False
-            st.session_state.lulc_edit_idx = None
+            self.classes[st.session_state.lulc_edit_idx] = class_data
+            success_msg = f"Class '{class_name}' (ID: {class_id}) updated successfully!"
+            self._reset_edit_mode()
         else:
             # Add new class
-            self.classes.append({
-                'ID': class_id,
-                'Class Name': class_name,
-                'Color Code': color_code
-            })
-            st.success(f"✅ Class '{class_name}' (ID: {class_id}) added successfully!")
+            self.classes.append(class_data)
+            success_msg = f"Class '{class_name}' (ID: {class_id}) added successfully!"
         
-        #Sort classes by ID (adapted from line 211)
+        self._sort_and_update_next_id()
+        return True, success_msg
+
+    #functions for manual input options
+    def _reset_edit_mode(self) -> None:
+        """Reset edit mode session state"""
+        st.session_state.lulc_edit_mode = False
+        st.session_state.lulc_edit_idx = None
+    
+    def _sort_and_update_next_id(self) -> None:
+        """Sort classes by ID and update next available ID"""
         self.classes = sorted(self.classes, key=lambda x: x['ID'])
         
-        # Update next ID (adapted from line 214)
         if self.classes:
             self.next_id = max([c['ID'] for c in self.classes]) + 1
         else:
             self.next_id = 1
-        
-        return True
     #adapted from line 229 onward
-    def EditClass(self, idx):
-        """Edit an existing class"""
+    def edit_class(self, idx: int) -> Optional[Dict[str, Any]]:
+        """Set class for editing mode"""
         if 0 <= idx < len(self.classes):
             st.session_state.lulc_edit_mode = True
             st.session_state.lulc_edit_idx = idx
             return self.classes[idx]
         return None
     #adapted from line 247
-
-    def DeleteClass(self, idx):
+    def delete_class(self, idx: int) -> tuple[bool, str]:
         """Delete a class from the scheme"""
         if 0 <= idx < len(self.classes):
             class_to_delete = self.classes[idx]
             del self.classes[idx]
-            st.success(f"Class '{class_to_delete['Class Name']}' (ID: {class_to_delete['ID']}) deleted successfully!")
-            return True
-        return False
+            success_msg = f"Class '{class_to_delete['Class Name']}' (ID: {class_to_delete['ID']}) deleted successfully!"
+            return True, success_msg
+        return False, "Invalid class index"
     
-    #new additional function to cancel edit if needed
-    def cancel_edit(self):
+    def cancel_edit(self) -> None:
         """Cancel edit mode"""
-        st.session_state.lulc_edit_mode = False
-        st.session_state.lulc_edit_idx = None
+        self._reset_edit_mode()
 
-    def process_csv_upload(self, df, id_col, name_col):
-        """Process CSV upload - only ID and Name columns, colors will be assigned later"""
+    #adapted from line 266 - 320
+    #Change so that csv is more tolaratable 
+
+    def process_csv_upload(self, df: pd.DataFrame, id_col: str, name_col: str) -> tuple[bool, str]:
+        """Process CSV upload - validate and prepare for color assignment"""
         try:
-            # Build class records without colors
             class_list = []
             used_ids = set()
 
@@ -138,36 +154,30 @@ class LULCSchemeClass:
                 if pd.isna(class_id) or pd.isna(class_name):
                     continue
 
-                # Convert class_id to int if possible for consistency
+                # Validate and convert class_id
                 try:
                     class_id = int(class_id)
                 except (ValueError, TypeError):
-                    st.error(f"Invalid Class ID format: {class_id}. Must be a number.")
-                    return False
+                    return False, f"Invalid Class ID format: {class_id}. Must be a number."
 
-                # Check duplicates
+                # Check for duplicates
                 if class_id in used_ids:
-                    st.error(f"Duplicate Class ID found: {class_id}")
-                    return False
+                    return False, f"Duplicate Class ID found: {class_id}"
                 used_ids.add(class_id)
 
                 class_list.append({
                     "ID": class_id,
-                    "Class Name": class_name,
-                    "Color Code": "#2e8540"  # Default color, will be changed by user
+                    "Class Name": str(class_name).strip(),
+                    "Color Code": "#2e8540"  # Default color
                 })
 
-            # Store in session state for color assignment
-            if 'csv_temp_classes' not in st.session_state:
-                st.session_state.csv_temp_classes = []
             st.session_state.csv_temp_classes = class_list
-            return True
+            return True, f"Successfully loaded {len(class_list)} classes from CSV"
 
         except Exception as e:
-            st.error(f"Error reading CSV: {e}")
-            return False
+            return False, f"Error processing CSV: {str(e)}"
     
-    def finalize_csv_upload(self, color_assignments):
+    def finalize_csv_upload(self, color_assignments: List[str]) -> tuple[bool, str]:
         """Finalize CSV upload with user-assigned colors"""
         try:
             # Update colors based on user assignments
@@ -175,42 +185,36 @@ class LULCSchemeClass:
                 if i < len(color_assignments):
                     class_data["Color Code"] = color_assignments[i]
             
-            # Save to main classes
+            # Save to main classes and sort
             self.classes = st.session_state.csv_temp_classes.copy()
-            self.classes = sorted(self.classes, key=lambda x: x['ID'])
-            
-            # Update next ID
-            if self.classes:
-                self.next_id = max([c['ID'] for c in self.classes]) + 1
+            self._sort_and_update_next_id()
             
             # Clear temporary storage
             st.session_state.csv_temp_classes = []
-            return True
+            
+            return True, f"Classification scheme created with {len(self.classes)} classes"
             
         except Exception as e:
-            st.error(f"Error finalizing CSV upload: {e}")
-            return False
-    #adapted from line 327
-    def download_csv(self):
-        """Generate CSV for download"""
+            return False, f"Error finalizing CSV upload: {str(e)}"
+    def get_csv_data(self) -> Optional[bytes]:
+        """Generate CSV data for download"""
         if not self.classes:
-            st.warning("⚠️ No classes to download! Please add classes first.")
             return None
         
         df = self.get_dataframe()
-        return df.to_csv(index=False).encode('utf-8')    
-    #adapted from line 370
-    def get_dataframe(self):
-        """Get the classification scheme as a DataFrame, normalized for UI rendering"""
+        return df.to_csv(index=False).encode('utf-8')
+    
+    def get_dataframe(self) -> pd.DataFrame:
+        """Get the classification scheme as a normalized DataFrame"""
         if not self.classes:
             return pd.DataFrame(columns=["ID", "Land Cover Class", "Color Palette"])
 
         df = pd.DataFrame(self.classes)
 
-        # Normalize column names from manual, default, or CSV uploads
-        rename_map = {
+        # Normalize column names
+        column_mapping = {
             "ID": "ID",
-            "Class ID": "ID",
+            "Class ID": "ID", 
             "Class Name": "Land Cover Class",
             "Land Cover Class": "Land Cover Class",
             "Color": "Color Palette",
@@ -218,29 +222,30 @@ class LULCSchemeClass:
             "Color Palette": "Color Palette"
         }
 
-        df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+        # Apply column renaming
+        df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
 
-        # Ensure final column order
-        final_cols = ["ID", "Land Cover Class", "Color Palette"]
-        df = df[[col for col in final_cols if col in df.columns]]
-
-        return df
-
+        # Ensure consistent column order
+        expected_columns = ["ID", "Land Cover Class", "Color Palette"]
+        available_columns = [col for col in expected_columns if col in df.columns]
+        
+        return df[available_columns]
 
     #Adapted from line 407
-    def load_default_scheme(self, default_classes):
-        """Load a default classification scheme"""
-        self.classes = default_classes.copy()
-        self.classes = sorted(self.classes, key=lambda x: x['ID'])
+    def load_default_scheme(self, scheme_name: str) -> tuple[bool, str]:
+        """Load a predefined classification scheme"""
+        default_schemes = self.get_default_schemes()
         
-        if self.classes:
-            self.next_id = max([c['ID'] for c in self.classes]) + 1
+        if scheme_name not in default_schemes:
+            return False, f"Unknown scheme: {scheme_name}"
         
-        st.success(f"✅ Loaded default scheme with {len(self.classes)} classes!")
-        return True
-    #default classification scheme (RESTORE+ Project)
+        self.classes = default_schemes[scheme_name].copy()
+        self._sort_and_update_next_id()
+        
+        return True, f"Loaded {scheme_name} with {len(self.classes)} classes"
+    #Add RESTORE+ classification scheme
     @staticmethod
-    def get_default_schemes():
+    def get_default_schemes() -> Dict[str, List[Dict[str, Any]]]:
         """Return available default classification schemes"""
         return {
             "RESTORE+ Project": [
@@ -255,4 +260,21 @@ class LULCSchemeClass:
                 {'ID': 9, 'Class Name': 'Cleared Land', 'Color Code': "#E9B970"},
                 {'ID': 10, 'Class Name': 'Waterbody', 'Color Code': "#1512F3"},
             ]
-        } 
+        }
+    
+    @staticmethod
+    def auto_detect_csv_columns(df: pd.DataFrame) -> tuple[Optional[str], Optional[str]]:
+        """Auto-detect ID and Name columns in CSV"""
+        columns_lower = [c.lower().replace(" ", "").replace("_", "") for c in df.columns]
+        
+        def find_column(keywords: List[str]) -> Optional[str]:
+            for keyword in keywords:
+                for i, col in enumerate(columns_lower):
+                    if keyword in col:
+                        return df.columns[i]
+            return None
+        
+        id_col = find_column(["id", "classid", "kode"])
+        name_col = find_column(["classname", "class", "kelas", "name"])
+        
+        return id_col, name_col 

@@ -13,9 +13,9 @@ class FeatureExtraction:
         """
         Initializing the class function for feature extraction
         """
-############################# 1. Single Random Split ###########################
-#extract pixel value for the labeled region of interest and partitioned them into training and testing data
-#This can be used if the training/reference data is balanced across class and required more fast result
+    ############################# 1. Single Random Split ###########################
+    #extract pixel value for the labeled region of interest and partitioned them into training and testing data
+    #This can be used if the training/reference data is balanced across class and required more fast result
     def random_split(self, image, roi, class_property, split_ratio = 0.6, pixel_size = 30, tile_scale=16):
         """
         Perform single random split and extract pixel value from the imagery

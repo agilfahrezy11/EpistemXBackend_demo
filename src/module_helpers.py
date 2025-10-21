@@ -294,7 +294,7 @@ class EE_converter:
 #Conversion for Multi Geometry (ROI)     
     def convert_roi_gdf(self, gdf):
         """
-    Convert geodataframe into EE feture collection, build for the region of interest (ROI) data
+        Convert geodataframe into EE feture collection, build for the region of interest (ROI) data
          """
         try:
             self.log("Converting training data to Earth Engine FeatureCollection...")
