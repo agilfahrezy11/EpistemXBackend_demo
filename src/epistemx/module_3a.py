@@ -734,11 +734,11 @@ class LULCSamplingTool:
                 name="AOI Boundary"
             )
             self.map.add_layer(self.aoi_layer)
-        #     with self.output:
-        #         print("SUCCESS: AOI boundary layer added to map (white outline, no fill)")
-        # except Exception as e:
-        #     with self.output:
-        #         print(f"ERROR: Error adding AOI layer to map: {str(e)}")
+            with self.output:
+                print("SUCCESS: AOI boundary layer added to map")
+        except Exception as e:
+            with self.output:
+                print(f"ERROR: Error adding AOI layer to map: {str(e)}")
 
     def IsPointInAoi(self, lat: float, lon: float) -> bool:
         """
