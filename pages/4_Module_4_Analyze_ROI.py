@@ -598,7 +598,7 @@ with col2:
     # Forward to Module 3 button (conditional)
     if module_2_completed:
         if st.button("➡️ Go to Module 6: Supervised Classification", type="primary", use_container_width=True):
-            st.switch_page("pages/4_Module_6_Classification and LULC Creation.py")
+            st.switch_page("pages/5_Module_6_Classification and LULC Creation.py")
     else:
         st.button("🔒 Complete Module 3 First", disabled=True, use_container_width=True, 
                  help="Analyze the region of interest in order to proceed")

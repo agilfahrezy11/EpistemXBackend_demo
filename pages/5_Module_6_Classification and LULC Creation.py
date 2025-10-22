@@ -662,12 +662,12 @@ col1, col2 = st.columns(2)
 
 with col1:
     if st.button("⬅️ Back to Module 3: Analyze ROI", width='stretch'):
-        st.switch_page("pages/3_Module_4_Analyze_ROI.py")
+        st.switch_page("pages/4_Module_4_Analyze_ROI.py")
 
 with col2:
     if st.session_state.classification_result is not None:
         if st.button("➡️ Go to Module 7: Thematic Accuracy Assessment", width='stretch'):
-            st.switch_page("pages/5_Module_7_Thematic_Accuracy.py")
+            st.switch_page("pages/6_Module_7_Thematic_Accuracy.py")
             st.info("Accuracy assessment module coming soon!")
     else:
         st.button("🔒 Complete Classification First", disabled=True, width='stretch')

@@ -78,9 +78,10 @@ if uploaded_file:
             try:
                 gdf = gpd.read_file(shp_files[0])
                 st.success("Shapefile loaded successfully!")
-                #initialize the validator and converter
+                #(System Response 1.1: Area of Interest Definition)
+                #initialize the validator and converter 
                 validate = shapefile_validator(verbose=False)
-                converter = EE_converter(verbose=False)
+                converter = EE_converter(verbose=False) 
                 #Validate and fix geometry
                 gdf_cleaned = validate.validate_and_fix_geometry(gdf)
                 #convert geodataframe to ee geometry, several option avaliable if the conversion failed
@@ -180,6 +181,8 @@ cloud_cover = st.slider("Maximum Scene Cloud Cover (%):", 0, 100, 30)
 if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi is not None:
     with st.spinner("Searching for Landsat imagery..."):
         #first, search multispectral data (Collection 2 Tier 1, SR data)
+
+        #(System Response 1.2: Search and Filter Imagery)
         reflectance = Reflectance_Data()
         collection, meta = reflectance.get_optical_data(
             aoi=aoi,
@@ -284,7 +287,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
                     )
                 }
             )
-            # Show cloud cover statistics
+            #Show cloud cover statistics
             if cloud_covers:
                 st.markdown("#### Cloud Cover Statistics")
                 col1, col2, col3 = st.columns(3)
@@ -295,7 +298,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
                 with col3:
                     st.metric("Maximum", f"{max(cloud_covers):.2f}%")
             
-            # Download button
+            #Download button
             csv = scene_df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="Download Scene List as CSV",
@@ -392,6 +395,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                 step=10
             )
         #Button to start export the composite
+        #System Response 1.3: Imagery Download
         if st.button("Start Export to Google Drive", type="primary"):
             try:
                 with st.spinner("Preparing export task..."):

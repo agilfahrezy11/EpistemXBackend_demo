@@ -37,7 +37,21 @@
       ├── src/                       
       │   ├── src_modul_1.py
       │         ├── class Reflectance_Data
-      │         └── class Reflectance_Stats  
+      │         │      ├── OPTICAL_DATASETS
+      │         │      ├── THERMAL_DATASETS      
+      │         │      ├── def __init_
+      │         │      ├── def mask_landsat_sr
+      │         │      ├── def rename_landsat_bands
+      │         │      ├── def apply_scale_factors 
+      │         │      ├── def get_optical_data
+      │         │             └── def parse_year_or_date  
+      │         │      └── def get_thermal_bands
+      │         │             ├── def parse_year_or_date
+      │         │             └── def rename_thermal_band      
+      │         ├── class Reflectance_Stats
+      │         │      ├── def __init_
+      │         │      ├── def get_collection_statistics
+      │         │      └── def print_collection_report       
    ```
    ## System Response 1.3: Imagery Download
    ```
@@ -87,7 +101,18 @@
       │   │      └── st.download_button (line 265 - 285)
 
 # Module 3: Training Data Generation
+   ## System Response 3.1: Module 3 Pre-requisite check
+      ├── src/                      
+      │   ├── src_modul_3.py
+      │   │      ├── Class InputCheck
 
+   ## System Response 3.2a: ROI Format Verification
+
+   ## System Response 3.2b: ROI Conten  Verification
+
+   ## System Response 3.3: ROI on-screen digitization
+
+   ## System Response 3.4: ROI Preview
 
 # Module 4: Spectral Separability Analysis
 
