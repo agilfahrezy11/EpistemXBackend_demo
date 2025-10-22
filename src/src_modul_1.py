@@ -10,9 +10,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 class Reflectance_Data:
-    """
-    Class for fetching and analyzing Landsat optical/thermal image collections with logging.
-    """
+    """Class for fetching and pre-processing Landsat image collection from Google Earth Engine API."""
     #Define the optical datasets. The band reflectances used is from Collection 2 Surface Reflectancce Data
     OPTICAL_DATASETS = {
         'L1_RAW': {
@@ -124,17 +122,29 @@ class Reflectance_Data:
     def mask_landsat_sr(self, image,cloud_conf_thresh=2, shadow_conf_thresh=2, cirrus_conf_thresh=2):
             """
             Mask clouds, shadows and cirrus for Landsat Collection 2 SR using QA_PIXEL band.
-            Optionally process thermal band to Celsius.
-            
+                
             Parameters:
             -----------
             image : ee.Image: Landsat SR image
             cloud_conf_thresh : int. Cloud confidence threshold (0=None, 1=Low, 2=Med, 3=High)
             shadow_conf_thresh : int. Shadow confidence threshold (0=None, 1=Low, 2=Med, 3=High)
             cirrus_conf_thresh : int. Cirrus confidence threshold (0=None, 1=Low, 2=Med, 3=High)
+
             Returns:
             --------
-            ee.Image : Masked image
+            ee.Image : Masked image (ee.)
+
+            References
+            --------
+            https://www.usgs.gov/landsat-missions/landsat-collection-2-quality-assessment-bands 
+
+            Example
+            --------
+            >>> get_landsat = Reflectance_Data()
+            #Implementation on image collection
+            >>> collection = (collection.map(lambda img: get_landsat.mask_landsat_sr(img))
+            #Implementatio on Image
+            >>> masked_image = get_landsat.mask_landsat_sr(image)
             """
             qa = image.select('QA_PIXEL')
             #Deterministic bits ---
@@ -152,25 +162,26 @@ class Reflectance_Data:
                         .And(shadow_conf.lt(shadow_conf_thresh))
                         #.And(snow_conf.lt(snow_conf_thresh))
                         .And(cirrus_conf.lt(cirrus_conf_thresh)))
-            # Final mask
+            #Final mask
             final_mask = cloud_mask.And(shadow_mask).And(conf_mask)
-            # --- Apply scaling to optical bands ---
-            #optical_bands = image.select('SR_B.*').multiply(0.0000275).add(-0.2)
             return image.updateMask(final_mask).copyProperties(image, image.propertyNames())
     #Functions to rename Landsat bands 
     def rename_landsat_bands(self, image, sensor_type):
         """
-        Standardize Landsat Surface Reflectance (SR) band names 
-        based on sensor type (L5, L7, L8, L9).
+        Standardize Landsat Surface Reflectance (SR) band names based on sensor type. From 'SR_B*' or 'B*' to 'NIR', 'GREEN', etc.
 
         Parameters
         ----------
         image : ee.Image. Landsat SR image
         sensor_type : str. Sensor type ('L5', 'L7', 'L8', 'L9')
+
         Returns
         -------
-        ee.Image
-            Image with standardized band names
+        ee.Image : Image with standardized band names
+
+        Example
+        --------
+
         """
         if sensor_type in ['L4','L5', 'L7']:
             # Landsat 5/7 SR bands
@@ -191,10 +202,21 @@ class Reflectance_Data:
             )
         else:
             raise ValueError(f"Unsupported sensor type for SR data: {sensor_type}")
-    
-
-
+    #function to implement Landsat Collection 2 Tier 1 SR scale factor
     def apply_scale_factors(self, image):
+        """
+        Apply Landsat collection 2 scalling factors using the following formula: Digital Number (DN) * scale_factor + offset.
+        Allowing the user to get the data back to its original floating point value, a scale factor and offset.
+
+        Parameters
+        ----------
+        image : ee.Image (Landsat SR image) with DN value
+        sensor_type : str. Sensor type ('L4', 'L5', 'L7', 'L8', 'L9')
+
+        Returns
+        -------
+        ee.Image : Image with floating point, corresponding to surface reflectance value
+        """        
         optical_bands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
         #thermal_bands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
         return image.addBands(optical_bands, None, True)
@@ -203,14 +225,14 @@ class Reflectance_Data:
                         cloud_cover=30,
                         verbose=True, compute_detailed_stats=True):
         """
-        Get optical image collection for Landsat 5-9 SR data with detailed information logging.
+        Get optical image collection for Landsat 1-9 SR data with detailed information logging.
 
         Parameters
         ----------
         aoi :  ee.FeatureCollection. Area of interest.
         start_date : str. Start date in format 'YYYY-MM-DD' or year.
         end_date : str. End date in format 'YYYY-MM-DD' or year.
-        optical_data : str. Dataset type: 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
+        optical_data : str. Dataset type: i.e 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
         cloud_cover : int. Maximum cloud cover percentage on land (default: 30).
         verbose : bool. Print detailed information about the collection (default: True).
         compute_detailed_stats : bool
