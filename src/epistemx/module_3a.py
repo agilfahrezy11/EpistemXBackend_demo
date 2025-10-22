@@ -11,6 +11,13 @@ from IPython.display import display
 from shapely.geometry import mapping
 import random
 import geemap
+import time
+import json
+from typing import Any, Dict, List, Optional
+from shapely.geometry import Point
+import ipywidgets as widgets
+from ipywidgets import Button, Output, VBox, HBox, Dropdown, Label, HTML
+from ipyleaflet import Map, Marker, basemaps, LayersControl, GeoJSON, DivIcon
 
 # --- System response 3.1 ---
 class InputCheck:
@@ -557,3 +564,707 @@ class SplitTrainData:
         folium.LayerControl().add_to(m)
 
         display(m)
+
+# ----- System respons 3.3.a -----
+class LULCSamplingTool:
+    """
+    LULC Sampling Tool using ipyleaflet for interactive point sampling.
+
+    This class expects a pandas DataFrame containing class definitions and optionally
+    an Earth Engine FeatureCollection (geometry) for AOI restriction.
+    """
+
+    def __init__(self, lulc_dataframe: pd.DataFrame, aoi_ee_featurecollection: Optional[Any] = None) -> None:
+        """
+        Initialize the sampling tool.
+
+        Parameters:
+            lulc_dataframe: pd.DataFrame containing at least ID and class/type and color
+            aoi_ee_featurecollection: Optional Earth Engine FeatureCollection/Geometry for AOI
+        """
+        self.lulc_df = lulc_dataframe
+        self.aoi_ee_featurecollection = aoi_ee_featurecollection
+        self.aoi_geometry = None
+        self.training_data: List[Dict[str, Any]] = []
+        self.TrainDataSampling = pd.DataFrame(columns=['ID', 'LULC_Type', 'Points', 'Coordinates'])
+        self.current_class: Optional[Dict[str, Any]] = None
+        self.markers: List[Marker] = []
+        self.marker_data_map: Dict[Any, Dict[str, Any]] = {}
+        self.aoi_layer = None
+        self.point_counter: Dict[str, int] = {}
+        self.edit_mode: bool = False
+        self.last_click_time: float = 0.0
+
+        # Initialize UI and related components
+        self.CreateUi()
+
+        # Initialize point counter
+        for idx, row in self.lulc_df.iterrows():
+            self.point_counter[row['LULC_Type']] = 0
+
+        # Load AOI if provided
+        if self.aoi_ee_featurecollection is not None:
+            self.LoadAoiFromEe()
+
+        # Create map with dynamic center/zoom
+        # If AOI not loaded, set defaults
+        if not hasattr(self, 'map_center'):
+            self.map_center = [0, 0]
+        if not hasattr(self, 'zoom'):
+            self.zoom = 10
+
+        self.CreateMap()
+
+    def LoadAoiFromEe(self) -> None:
+        """
+        Load AOI from Earth Engine FeatureCollection (or Geometry) and prepare map center and zoom.
+        """
+        try:
+            aoi_geojson = self.aoi_ee_featurecollection.geometry().getInfo()
+            self.aoi_gdf = gpd.GeoDataFrame.from_features([{
+                "type": "Feature",
+                "geometry": aoi_geojson,
+                "properties": {}
+            }], crs="EPSG:4326")
+
+            # Use union_all() to merge geometries if needed
+            self.aoi_geometry = self.aoi_gdf.union_all()
+
+            bounds = self.aoi_gdf.bounds
+            minx, miny, maxx, maxy = bounds.iloc[0]
+            self.map_center = [(miny + maxy) / 2, (minx + maxx) / 2]
+
+            width_deg = maxx - minx
+            height_deg = maxy - miny
+            max_dimension = max(width_deg, height_deg)
+
+            if max_dimension > 20:
+                self.zoom = 6
+            elif max_dimension > 10:
+                self.zoom = 7
+            elif max_dimension > 5:
+                self.zoom = 8
+            elif max_dimension > 2:
+                self.zoom = 9
+            elif max_dimension > 1:
+                self.zoom = 10
+            elif max_dimension > 0.5:
+                self.zoom = 11
+            elif max_dimension > 0.2:
+                self.zoom = 12
+            elif max_dimension > 0.1:
+                self.zoom = 13
+            elif max_dimension > 0.05:
+                self.zoom = 14
+            else:
+                self.zoom = 15
+
+            with self.output:
+                print("SUCCESS: AOI loaded from Earth Engine FeatureCollection")
+                print(f"  - CRS: {self.aoi_gdf.crs}")
+                try:
+                    area_value = float(self.aoi_geometry.area)
+                    print(f"  - Area: {area_value:.6f} square degrees")
+                except Exception:
+                    print("  - Area: unavailable")
+                print(f"  - Map center: {self.map_center}")
+                # print(f"  - Zoom level: {self.zoom} (showing entire AOI)")
+
+        except Exception as e:
+            with self.output:
+                print(f"ERROR: Error loading AOI from Earth Engine: {str(e)}")
+            self.aoi_geometry = None
+            self.map_center = [0, 0]
+            self.zoom = 10
+
+    def CreateMap(self) -> None:
+        """
+        Create ipyleaflet map with computed center and zoom, add controls and interaction.
+        """
+        self.map = Map(
+            center=self.map_center,
+            zoom=self.zoom,
+            basemap=basemaps.Esri.WorldImagery,
+            scroll_wheel_zoom=True
+        )
+
+        self.map.add_control(LayersControl())
+
+        if self.aoi_geometry is not None:
+            self.AddAoiLayer()
+
+        # Map interaction event
+        self.map.on_interaction(self.HandleMapClick)
+
+        # Add custom cursor styling
+        self.AddCrosshairCursor()
+
+    def AddCrosshairCursor(self) -> None:
+        """
+        Add CSS that sets the cursor to crosshair over the leaflet map container.
+        """
+        crosshair_style = """
+        <style>
+        .jupyter-widgets.widget-container.widget-box.widget-vbox .jupyter-widgets.widget-container.widget-box.widget-vbox {
+            cursor: default !important;
+        }
+        .leaflet-container {
+            cursor: crosshair !important;
+        }
+        </style>
+        """
+        display(HTML(crosshair_style))
+
+    def AddAoiLayer(self) -> None:
+        """
+        Add AOI boundary layer (white outline, no fill) to the map.
+        """
+        try:
+            aoi_geojson = json.loads(self.aoi_gdf.to_json())
+            self.aoi_layer = GeoJSON(
+                data=aoi_geojson,
+                style={
+                    'color': 'white',
+                    'weight': 3,
+                    'fillColor': 'white',
+                    'fillOpacity': 0.0,
+                    'opacity': 1.0,
+                    'dashArray': '5, 5'
+                },
+                name="AOI Boundary"
+            )
+            self.map.add_layer(self.aoi_layer)
+        #     with self.output:
+        #         print("SUCCESS: AOI boundary layer added to map (white outline, no fill)")
+        # except Exception as e:
+        #     with self.output:
+        #         print(f"ERROR: Error adding AOI layer to map: {str(e)}")
+
+    def IsPointInAoi(self, lat: float, lon: float) -> bool:
+        """
+        Check whether a geographic point (lat, lon) is within the AOI boundary.
+        Returns True if no AOI is set (points allowed everywhere).
+        """
+        if self.aoi_geometry is None:
+            return True
+        point = Point(lon, lat)
+        return self.aoi_geometry.contains(point)
+
+    def HandleMapClick(self, **kwargs) -> None:
+        """
+        Handle click interactions from the ipyleaflet map.
+        Expects kwargs containing 'type' and 'coordinates' for click events.
+        """
+        if kwargs.get('type') == 'click':
+            if self.current_class is None:
+                with self.output:
+                    print("WARNING: Please select a class first!")
+                return
+
+            coords = kwargs.get('coordinates')
+            if coords:
+                lat, lon = coords
+
+                if not self.IsPointInAoi(lat, lon):
+                    with self.output:
+                        print(f"ERROR: Point at ({lat:.6f}, {lon:.6f}) is outside AOI boundary! Point rejected.")
+                    return
+
+                self.AddPointMarker(lat, lon)
+
+    def AddPointMarker(self, lat: float, lon: float) -> None:
+        """
+        Add a marker to the map for the currently selected class and store it in training data.
+        """
+        color = self.current_class.get('color', '#0000FF')
+
+        marker = self.CreateCustomMarker(lat, lon, color)
+        marker.draggable = self.edit_mode
+
+        marker_data = {
+            'latitude': lat,
+            'longitude': lon,
+            'class_id': self.current_class['id'],
+            'class_type': self.current_class['type'],
+            'color': color
+        }
+        self.marker_data_map[marker] = marker_data
+
+        def _HandleMove(event: Any) -> None:
+            if not self.edit_mode:
+                return
+
+            # traitlets observe passes change dict; ipyleaflet may pass (name, old, new) etc.
+            # Try to get new coordinates robustly
+            new_lat, new_lon = None, None
+            try:
+                # If event is a dict from traitlets
+                if isinstance(event, dict) and 'new' in event:
+                    new_lat, new_lon = event['new']
+                elif hasattr(event, 'new'):
+                    new_lat, new_lon = event.new
+                else:
+                    new_lat, new_lon = marker.location
+            except Exception:
+                new_lat, new_lon = marker.location
+
+            old_lat = self.marker_data_map[marker]['latitude']
+            old_lon = self.marker_data_map[marker]['longitude']
+
+            if not self.IsPointInAoi(new_lat, new_lon):
+                with self.output:
+                    print(f"ERROR: Cannot move point to ({new_lat:.6f}, {new_lon:.6f}) - outside AOI boundary!")
+                marker.location = (old_lat, old_lon)
+                return
+
+            # Update internal state
+            self.marker_data_map[marker]['latitude'] = new_lat
+            self.marker_data_map[marker]['longitude'] = new_lon
+
+            for i, point in enumerate(self.training_data):
+                if (point['latitude'] == old_lat and point['longitude'] == old_lon and
+                        point['class_id'] == self.current_class['id']):
+                    self.training_data[i]['latitude'] = new_lat
+                    self.training_data[i]['longitude'] = new_lon
+                    break
+
+            with self.output:
+                print(f"SUCCESS: Point moved from ({old_lat:.6f}, {old_lon:.6f}) to ({new_lat:.6f}, {new_lon:.6f})")
+
+            self.UpdateTrainDataSampling()
+            self.UpdateTableDisplay()
+
+        marker.observe(_HandleMove, names=['location'])
+
+        def _HandleClick(**ev_kwargs: Any) -> None:
+            current_time = time.time()
+            time_diff = current_time - self.last_click_time
+            if time_diff < 0.5 and self.edit_mode:
+                self.RemovePoint(marker)
+            self.last_click_time = current_time
+
+        marker.on_click(_HandleClick)
+
+        self.map.add_layer(marker)
+        self.markers.append(marker)
+        self.training_data.append(marker_data)
+
+        class_type = self.current_class['type']
+        self.point_counter[class_type] = self.point_counter.get(class_type, 0) + 1
+
+        with self.output:
+            print(f"SUCCESS: Point added at ({lat:.6f}, {lon:.6f}) for class: {class_type}")
+
+        self.UpdateStatistics()
+        self.UpdateTrainDataSampling()
+        self.UpdateTableDisplay()
+
+    def CreateCustomMarker(self, lat: float, lon: float, hex_color: str) -> Marker:
+        """
+        Create a custom DivIcon marker with exact hex color and return an ipyleaflet.Marker.
+        """
+        icon_html = f"""
+        <div style="
+            background-color: {hex_color};
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            cursor: pointer;
+        "></div>
+        """
+
+        marker = Marker(
+            location=(lat, lon),
+            draggable=self.edit_mode,
+            icon=DivIcon(
+                icon_size=(20, 20),
+                icon_anchor=(10, 10),
+                html=icon_html
+            )
+        )
+        return marker
+
+    def RemovePoint(self, marker: Marker) -> None:
+        """
+        Remove a specified marker from the map and from stored training data.
+        """
+        if marker in self.markers:
+            self.map.remove_layer(marker)
+            self.markers.remove(marker)
+
+            marker_data = self.marker_data_map.get(marker, {})
+            lat = marker_data.get('latitude', 0)
+            lon = marker_data.get('longitude', 0)
+            class_type = marker_data.get('class_type', 'Unknown')
+
+            self.training_data = [
+                point for point in self.training_data
+                if not (point['latitude'] == lat and point['longitude'] == lon and point['class_type'] == class_type)
+            ]
+
+            if marker in self.marker_data_map:
+                del self.marker_data_map[marker]
+
+            if class_type in self.point_counter:
+                self.point_counter[class_type] = max(0, self.point_counter[class_type] - 1)
+
+            with self.output:
+                print(f"SUCCESS: Point removed at ({lat:.6f}, {lon:.6f}) for class: {class_type}")
+
+            self.UpdateStatistics()
+            self.UpdateTrainDataSampling()
+            self.UpdateTableDisplay()
+
+    def ToggleEditMode(self, b: Optional[Any] = None) -> None:
+        """
+        Toggle edit mode on/off. In edit mode markers are draggable and double-click removes them.
+        """
+        self.edit_mode = not self.edit_mode
+
+        for marker in self.markers:
+            marker.draggable = self.edit_mode
+
+        if self.edit_mode:
+            self.edit_btn.button_style = 'warning'
+            self.edit_btn.description = 'Edit Mode: ON'
+            with self.output:
+                print("INFO: Edit Mode: ON - Double-click points to remove them, drag to reposition")
+        else:
+            self.edit_btn.button_style = ''
+            self.edit_btn.description = 'Edit Mode: OFF'
+            with self.output:
+                print("INFO: Edit Mode: OFF - Points are now locked")
+
+    def CreateUi(self) -> None:
+        """
+        Create the user interface widgets and prepare output areas.
+        """
+        id_col = 'ID'
+        type_col = None
+        color_col = None
+
+        for col in self.lulc_df.columns:
+            col_lower = col.lower()
+            if 'type' in col_lower or 'class' in col_lower:
+                type_col = col
+            elif 'color' in col_lower or 'palette' in col_lower:
+                color_col = col
+
+        if type_col is None:
+            type_col = self.lulc_df.columns[1]
+        if color_col is None:
+            color_col = self.lulc_df.columns[2] if len(self.lulc_df.columns) > 2 else self.lulc_df.columns[1]
+
+        self.id_col = id_col
+        self.type_col = type_col
+        self.color_col = color_col
+
+        class_options = [(f"{row[self.id_col]}: {row[self.type_col]}", idx)
+                         for idx, row in self.lulc_df.iterrows()]
+
+        self.class_dropdown = Dropdown(
+            options=class_options,
+            description='Select Class:',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='300px')
+        )
+
+        self.class_info = Label(value="Select a class to start sampling")
+        aoi_status = "Loaded" if self.aoi_ee_featurecollection is not None else "Not provided"
+        # self.aoi_info = Label(value=f"AOI Status: {aoi_status}")
+
+        self.update_class_btn = Button(
+            description='Set Active Class',
+            button_style='success',
+            layout=widgets.Layout(width='150px')
+        )
+        self.update_class_btn.on_click(self.OnClassSelect)
+
+        self.save_btn = Button(
+            description='Update Data',
+            button_style='primary',
+            layout=widgets.Layout(width='150px')
+        )
+        self.save_btn.on_click(self.SaveTrainingData)
+
+        self.clear_btn = Button(
+            description='Clear All Points',
+            button_style='danger',
+            layout=widgets.Layout(width='150px')
+        )
+        self.clear_btn.on_click(self.ClearData)
+
+        self.edit_btn = Button(
+            description='Edit Mode: OFF',
+            button_style='',
+            layout=widgets.Layout(width='150px')
+        )
+        self.edit_btn.on_click(self.ToggleEditMode)
+
+        self.export_btn = Button(
+            description='Export to Shapefile',
+            button_style='info',
+            layout=widgets.Layout(width='150px')
+        )
+        self.export_btn.on_click(self.ExportToShapefile)
+
+        self.output = Output()
+        self.stats_output = Output()
+        self.table_output = Output()
+
+    def OnClassSelect(self, b: Optional[Any] = None) -> None:
+        """
+        Handle class selection from dropdown and set the active class.
+        """
+        if self.class_dropdown.value is None:
+            with self.output:
+                print("WARNING: Please select a class from the dropdown!")
+            return
+
+        idx = self.class_dropdown.value
+        row = self.lulc_df.iloc[idx]
+
+        self.current_class = {
+            'id': row[self.id_col],
+            'type': row[self.type_col],
+            'color': row[self.color_col]
+        }
+        self.class_info.value = f"Active Class: {row[self.id_col]} - {row[self.type_col]} (Color: {row[self.color_col]})"
+
+        with self.output:
+            print(f"SUCCESS: Active class set to: {row[self.type_col]}")
+
+    def SaveTrainingData(self, b: Optional[Any] = None) -> None:
+        """
+        Update TrainDataSampling variable with current training data and display info.
+        """
+        if not self.training_data:
+            with self.output:
+                print("WARNING: No training data to save!")
+            return
+
+        self.UpdateTrainDataSampling()
+
+        with self.output:
+            print("SUCCESS: Training data updated successfully!")
+            print(f"  - Total samples: {len(self.training_data)}")
+            print("  - Data stored in: tool.TrainDataSampling")
+
+        self.UpdateTableDisplay()
+
+    def UpdateTrainDataSampling(self) -> None:
+        """
+        Build/refresh the TrainDataSampling DataFrame that summarizes points per class.
+        """
+        summary_data: List[Dict[str, Any]] = []
+
+        if not self.training_data:
+            for idx, row in self.lulc_df.iterrows():
+                summary_data.append({
+                    'ID': int(row[self.id_col]),
+                    'LULC_Type': row[self.type_col],
+                    'Points': 0,
+                    'Coordinates': ''
+                })
+            self.TrainDataSampling = pd.DataFrame(summary_data)
+            return
+
+        df = pd.DataFrame(self.training_data)
+        all_classes = set(self.lulc_df[self.id_col])
+        sampled_classes = set(df['class_id'].unique())
+
+        for class_id in all_classes:
+            class_row = self.lulc_df[self.lulc_df[self.id_col] == class_id].iloc[0]
+            if class_id in sampled_classes:
+                group = df[df['class_id'] == class_id]
+                coords = list(zip(group['latitude'], group['longitude']))
+                coords_str = '; '.join([f"({lat:.6f}, {lon:.6f})" for lat, lon in coords])
+                summary_data.append({
+                    'ID': int(class_id),
+                    'LULC_Type': class_row[self.type_col],
+                    'Points': len(group),
+                    'Coordinates': coords_str
+                })
+            else:
+                summary_data.append({
+                    'ID': int(class_id),
+                    'LULC_Type': class_row[self.type_col],
+                    'Points': 0,
+                    'Coordinates': ''
+                })
+
+        self.TrainDataSampling = pd.DataFrame(summary_data).sort_values('ID')
+
+    def ClearData(self, b: Optional[Any] = None) -> None:
+        """
+        Clear all training data and remove markers from the map.
+        """
+        for marker in self.markers:
+            try:
+                self.map.remove_layer(marker)
+            except Exception:
+                pass
+
+        self.markers = []
+        self.training_data = []
+        self.marker_data_map = {}
+
+        for key in self.point_counter:
+            self.point_counter[key] = 0
+
+        self.edit_mode = False
+        self.edit_btn.button_style = ''
+        self.edit_btn.description = 'Edit Mode: OFF'
+
+        with self.output:
+            print("SUCCESS: All training data and markers cleared!")
+
+        self.UpdateTrainDataSampling()
+        self.UpdateStatistics()
+        self.UpdateTableDisplay()
+
+    def UpdateStatistics(self) -> None:
+        """
+        Show a simple statistics summary in the stats_output area.
+        """
+        with self.stats_output:
+            self.stats_output.clear_output()
+            if not self.training_data:
+                print("INFO: No samples collected yet.")
+                return
+
+            print("INFO: === Training Data Statistics ===")
+            print(f"Total points: {len(self.training_data)}")
+            # print("\nPoints per class:")
+            # for class_type, count in self.point_counter.items():
+            #     if count > 0:
+            #         print(f"  {class_type}: {count}")
+
+    def UpdateTableDisplay(self) -> None:
+        """
+        Display the TrainDataSampling DataFrame in a styled format in the table_output area.
+        """
+        with self.table_output:
+            self.table_output.clear_output(wait=True)
+
+            if self.TrainDataSampling.empty:
+                print("INFO: No data to display.")
+            else:
+                display_df = self.TrainDataSampling.copy()
+                styled_df = display_df.style.set_properties(**{
+                    'background-color': '#f8f9fa',
+                    'border': '1px solid #dee2e6',
+                    'padding': '8px',
+                    'text-align': 'left'
+                }).set_table_styles([{
+                    'selector': 'thead th',
+                    'props': [('background-color', '#007bff'),
+                             ('color', 'white'),
+                             ('font-weight', 'bold'),
+                             ('padding', '12px')]
+                }])
+
+                print("INFO: === Training Data Summary (TrainDataSampling) ===")
+                display(styled_df)
+
+    def ExportToShapefile(self, b: Optional[Any] = None):
+        """
+        Export current training data to a shapefile in the output/ directory.
+        Returns the GeoDataFrame if successful, otherwise None.
+        """
+        if not self.training_data:
+            with self.output:
+                print("WARNING: No training data to export!")
+            return None
+
+        try:
+            geometries = [Point(item['longitude'], item['latitude']) for item in self.training_data]
+            attributes_df = pd.DataFrame([
+                {
+                    'class_id': item['class_id'],
+                    'class_type': item['class_type'],
+                    'color': item['color']
+                } for item in self.training_data
+            ])
+
+            gdf = gpd.GeoDataFrame(
+                attributes_df,
+                geometry=geometries,
+                crs="EPSG:4326"
+            )
+
+            os.makedirs('output', exist_ok=True)
+            shapefile_path = 'output/training_data_points.shp'
+            gdf.to_file(shapefile_path, driver='ESRI Shapefile')
+
+            verified_gdf = gpd.read_file(shapefile_path)
+
+            with self.output:
+                print("SUCCESS: Training data exported to shapefile!")
+                print(f"  - File: {shapefile_path}")
+                print(f"  - Total features: {len(gdf)}")
+                print(f"  - CRS: {gdf.crs}")
+                print(f"  - Coordinate order: (longitude, latitude)")
+                try:
+                    bounds = verified_gdf.total_bounds
+                    print(f"  - Bounds: {bounds}")
+                except Exception:
+                    print("  - Bounds: unavailable")
+                print("\nShapefile components created:")
+                for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
+                    file_path = f'output/training_data_points{ext}'
+                    if os.path.exists(file_path):
+                        print(f"  - {file_path}")
+
+            return gdf
+
+        except Exception as e:
+            with self.output:
+                print(f"ERROR: Error exporting to shapefile: {str(e)}")
+            return None
+
+    def Display(self) -> None:
+        """
+        Render the UI controls, the map, and the output areas in the notebook.
+        """
+        instructions = HTML(
+            """
+            <div style='background-color: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>
+                <h3 style='margin-top: 0;'>LULC Point Sampling Tool</h3>
+                <ol>
+                    <li>Select a LULC class from the dropdown menu</li>
+                    <li>Click <b>'Set Active Class'</b> button</li>
+                    <li><b>Click on the map</b> to add points for the selected class</li>
+                    <li>Each class will have points in different colors</li>
+                    <li>Click <b>'Update Data'</b> to update the summary table</li>
+                    <li>Use <b>'Clear All Points'</b> to start over</li>
+                    <li>Toggle <b>'Edit Mode'</b> to remove points (double-click) or reposition (drag)</li>
+                    <li>Click <b>'Export to Shapefile'</b> to save as GIS vector data</li>
+                </ol>
+                <p><b>Note:</b> Hover over the map to activate crosshair cursor for precise point placement</p>
+                <p><b>AOI Restriction:</b> Points can only be placed within the AOI boundary (white outline)</p>
+            </div>
+            """
+        )
+
+        controls_top = VBox([
+            instructions,
+            Label(value="=== Class Selection ==="),
+            self.class_dropdown,
+            self.update_class_btn,
+            self.class_info,
+            self.aoi_info,
+            Label(value=""),
+            HBox([self.save_btn, self.clear_btn, self.edit_btn, self.export_btn]),
+            self.stats_output,
+            self.table_output
+        ])
+
+        display(controls_top)
+        display(self.map)
+        display(self.output)
+
+        self.UpdateTrainDataSampling()
+        self.UpdateTableDisplay()
