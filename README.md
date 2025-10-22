@@ -25,18 +25,19 @@ Before you begin, ensure you have the following installed on your system:
 - **Python environment manager**: If you do not yet have one installed, we recommend [Miniforge](https://github.com/conda-forge/miniforge); it is lightweight, no-frills compared to Anaconda, and works well for this project. If you already have another Conda-compatible manager, you can continue using it.
 
 To confirm these tools are available in your shell, run:
+
 ```bash
 git --version
 conda --version
 ```
 
-> **⚠️ Warning: Conda PATH Configuration (Windows Only)**
+> **⚠️ Warning: Python PATH Configuration (Windows Only)**
 >
-> **For Windows users: Do not add Conda to your system PATH environment variable.** Adding Conda to PATH can cause conflicts with other software and system tools on Windows. This is particularly important for the epistemx environment setup.
+> **For Windows users: Do not add Python or Conda to your system PATH environment variable.** Adding Python installations to PATH can cause conflicts with other software and system tools on Windows. This is particularly important for the epistemx environment setup.
 >
-> When Conda is added to PATH on Windows, your system will use the global Conda installation for `python` and `pip` commands instead of the intended epistemx environment. This prevents proper access to the epistemx environment and its dependencies.
+> When Python installations are added to PATH on Windows, your system will use the global Python installation for `python` and `pip` commands instead of the intended epistemx environment. This prevents proper access to the epistemx environment and its dependencies.
 >
-> For more information about Anaconda and Python PATH issues, please refer to the [Anaconda FAQ](https://docs.anaconda.com/anaconda/user-guide/faq/#should-i-add-anaconda-to-the-macos-or-linux-path).
+> For more information about Python PATH issues, please refer to the [FAQ- Should I add Anaconda to the Windows PATH?](https://www.anaconda.com/docs/getting-started/working-with-conda/reference/faq#should-i-add-anaconda-to-the-windows-path).
 
 ### 2. Set Up the Python Environment
 
