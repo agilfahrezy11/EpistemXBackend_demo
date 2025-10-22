@@ -30,6 +30,14 @@ git --version
 conda --version
 ```
 
+> **⚠️ Warning: Conda PATH Configuration**
+>
+> **Do not add Conda to your system PATH environment variable.** Adding Conda to PATH can cause conflicts with other software and system tools. This is particularly important for the epistemx environment setup.
+>
+> When Conda is added to PATH, your system will use the global Conda installation for `python` and `pip` commands instead of the intended epistemx environment. This prevents proper access to the epistemx environment and its dependencies.
+>
+> For more information about Anaconda and Python PATH issues, please refer to the [Anaconda FAQ](https://docs.anaconda.com/anaconda/user-guide/faq/#should-i-add-anaconda-to-the-macos-or-linux-path).
+
 ### 2. Set Up the Python Environment
 
 **Recommended (prepackaged Conda-Pack environment)**
