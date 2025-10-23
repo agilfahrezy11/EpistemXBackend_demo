@@ -3,8 +3,11 @@ import geopandas as gpd
 import pandas as pd
 import json
 import ee 
-ee.Initialize()
 import geemap
+from .ee_config import ensure_ee_initialized
+
+# Ensure Earth Engine is initialized
+ensure_ee_initialized()
 from shapely.validation import make_valid
 from shapely.geometry import MultiPoint
 

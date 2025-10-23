@@ -1,8 +1,10 @@
 import ee
 from datetime import datetime
 import logging
-ee.Authenticate()
-ee.Initialize()
+from .ee_config import ensure_ee_initialized
+
+# Ensure Earth Engine is initialized
+ensure_ee_initialized()
 
 #Configure root for global functions
 logging.basicConfig(

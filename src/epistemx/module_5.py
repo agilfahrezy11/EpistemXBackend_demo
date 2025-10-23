@@ -3,7 +3,10 @@ import logging
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
-ee.Initialize()
+from .ee_config import ensure_ee_initialized
+
+# Ensure Earth Engine is initialized
+ensure_ee_initialized()
 
 #Configure logging globally
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

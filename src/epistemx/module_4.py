@@ -3,7 +3,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-ee.Initialize()
+from .ee_config import ensure_ee_initialized
+
+# Ensure Earth Engine is initialized
+ensure_ee_initialized()
 
 class sample_quality:
     """

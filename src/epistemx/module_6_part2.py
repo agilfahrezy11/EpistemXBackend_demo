@@ -1,6 +1,9 @@
 import ee
-ee.Initialize()
 import pandas as pd
+from .ee_config import ensure_ee_initialized
+
+# Ensure Earth Engine is initialized
+ensure_ee_initialized()
 from tqdm import tqdm
 
 class Hyperparameter_tuning:

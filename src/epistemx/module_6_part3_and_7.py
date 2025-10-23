@@ -1,13 +1,15 @@
 import ee
 import pandas as pd
-ee.Initialize()
+from .ee_config import ensure_ee_initialized
+
+# Ensure Earth Engine is initialized
+ensure_ee_initialized()
 
 class Generate_and_evaluate_LULC:
     def __init__(self):
         """
         Perform classification to generate Land Cover Land Use Map. The parameters used in the classification should be the result of hyperparameter tuning
         """
-        ee.Initialize()
         pass
 
     ############################# 1. Multiclass Classification ###########################

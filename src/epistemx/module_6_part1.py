@@ -1,5 +1,8 @@
 import ee
-ee.Initialize()
+from .ee_config import ensure_ee_initialized
+
+# Ensure Earth Engine is initialized
+ensure_ee_initialized()
 
 class FeatureExtraction:
     """
