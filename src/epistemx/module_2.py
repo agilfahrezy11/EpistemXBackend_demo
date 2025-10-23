@@ -3,6 +3,7 @@ import ipywidgets as widgets
 from ipywidgets import VBox, HBox, Button, Text, Output, HTML, ColorPicker, IntText, FileUpload
 from IPython.display import display, clear_output
 import io
+from typing import Dict, List, Any
 
 # ----- System response 2.1.b -----
 class LULCSchemeClass:
@@ -424,3 +425,27 @@ def LoadClassificationScheme(classifier, filename='lc_scheme.csv'):
     except Exception as e:
         print(f"Error loading file: {e}")
         return False
+
+def get_default_schemes() -> Dict[str, List[Dict[str, Any]]]:
+    """Return available default classification schemes"""
+    return {
+        "RESTORE+ Project": [
+            {'ID': 1,  'Class Name': 'Undisturbed dry-land forest', 'Color Code': '#006400'},
+            {'ID': 2,  'Class Name': 'Logged-over dry-land forest', 'Color Code': '#228B22'},
+            {'ID': 3,  'Class Name': 'Undisturbed mangrove',       'Color Code': '#4169E1'},
+            {'ID': 4,  'Class Name': 'Logged-over mangrove',       'Color Code': '#87CEEB'},
+            {'ID': 5,  'Class Name': 'Undisturbed swamp forest',   'Color Code': '#2E8B57'},
+            {'ID': 6,  'Class Name': 'Logged-over swamp forest',   'Color Code': '#8FBC8F'},
+            {'ID': 7,  'Class Name': 'Agroforestry',               'Color Code': '#9ACD32'},
+            {'ID': 8,  'Class Name': 'Plantation forest',          'Color Code': '#32CD32'},
+            {'ID': 9,  'Class Name': 'Rubber monoculture',         'Color Code': '#8B4513'},
+            {'ID': 10, 'Class Name': 'Oil palm monoculture',       'Color Code': '#FF8C00'},
+            {'ID': 11, 'Class Name': 'Other monoculture',          'Color Code': '#DAA520'},
+            {'ID': 12, 'Class Name': 'Grass/savanna',              'Color Code': '#ADFF2F'},
+            {'ID': 13, 'Class Name': 'Shrub',                      'Color Code': '#90EE90'},
+            {'ID': 14, 'Class Name': 'Cropland',                   'Color Code': '#FFFF00'},
+            {'ID': 15, 'Class Name': 'Settlement',                 'Color Code': '#FF0000'},
+            {'ID': 16, 'Class Name': 'Cleared land',               'Color Code': '#D2B48C'},
+            {'ID': 17, 'Class Name': 'Waterbody',                  'Color Code': '#0000FF'},
+        ]
+    }
