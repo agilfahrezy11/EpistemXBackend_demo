@@ -4,10 +4,21 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 from .ee_config import ensure_ee_initialized
-
 # Ensure Earth Engine is initialized
 ensure_ee_initialized()
 
+"""
+
+THIS CODE IS USED FOR PHASE 2!!!!!!!!!
+
+"""
+
+
+
+
+
+
+#=================================== THIS CODE IS USED FOR PHASE 2!!!!!!!!!
 #Configure logging globally
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()

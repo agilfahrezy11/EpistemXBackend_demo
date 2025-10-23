@@ -5,7 +5,18 @@ from .ee_config import ensure_ee_initialized
 # Ensure Earth Engine is initialized
 ensure_ee_initialized()
 from tqdm import tqdm
+"""
 
+THIS CODE IS USED FOR PHASE 2!!!!!!!!!
+
+"""
+
+
+
+
+
+
+#=================================== THIS CODE IS USED FOR PHASE 2!!!!!!!!!
 class Hyperparameter_tuning:
     """
     Perform hyperparameter optimization for random forest classifiers. Several optimization are presented for different training data:
