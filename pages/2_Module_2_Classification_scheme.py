@@ -30,12 +30,17 @@ Three methods are supported in this platform:
 
 st.markdown("---")
 
-# Tab layout for different input methods
+#Tab layout for different classification definition
 tab1, tab2, tab3 = st.tabs(["➕ Manual Input", "📤 Upload CSV", "📋 Default Scheme"])
 
 #Createa function for manual input the class
 def render_manual_input_form():
-    """Render the manual class input form"""
+    """
+    Render the manual class input form.
+    
+    Creates input fields for class ID, name, and color, with support for
+    both adding new classes and editing existing ones.
+    """
     st.markdown("#### Add a New Class")
     #3 columns
     col1, col2, col3 = st.columns([1, 3, 2])
@@ -109,8 +114,9 @@ with tab2:
     **CSV Requirements:**
     - **ID column**: Numeric identifiers (e.g., 'ID', 'Class ID', 'Kode')
     - **Name column**: Class names (e.g., 'Class Name', 'Kelas', 'Name')
+    - **Color column** (Optional): Hex color codes (e.g., 'Color', 'Color Code', 'Hex')
     
-    Colors will be assigned after upload.
+    If no color column is detected, distinct colors will be automatically assigned.
     """)
     #Code to upload csv
     uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'])
@@ -121,29 +127,47 @@ with tab2:
             df = pd.read_csv(uploaded_file, sep=None, engine="python")
             
             #Auto-detect columns
-            auto_id, auto_name = manager.auto_detect_csv_columns(df)
+            auto_id, auto_name, auto_color = manager.auto_detect_csv_columns(df)
             
-            st.markdown("### Select Columns Corresponding to ID and Class Name")
-            col1, col2 = st.columns(2)
-            #prior to load the CSV, select the column corresponding to ID and class name
+            st.markdown("### Select Columns")
+            col1, col2, col3 = st.columns(3)
+            #first column to select class ID's column
             with col1:
                 id_col = st.selectbox(
                     "Select ID Column *", 
                     df.columns, 
                     index=df.columns.get_loc(auto_id) if auto_id in df.columns else 0
                 )
-            
+            #second column to select class name's column
             with col2:
                 name_col = st.selectbox(
                     "Select Class Name Column *", 
                     df.columns,
                     index=df.columns.get_loc(auto_name) if auto_name in df.columns else 0
                 )
+            #new column for detecting color palette column
+            with col3:
+                color_options = ["< No Color Column >"] + list(df.columns)
+                default_color_idx = 0
+                if auto_color and auto_color in df.columns:
+                    default_color_idx = color_options.index(auto_color)
+                
+                color_col_selection = st.selectbox(
+                    "Select Color Column (Optional)",
+                    color_options,
+                    index=default_color_idx
+                )
             #After selection, load the CSV
             if st.button("📤 Load CSV Data", type="primary"):
-                success, message = manager.process_csv_upload(df, id_col, name_col)
+                color_col = None if color_col_selection == "< No Color Column >" else color_col_selection
+                success, message = manager.process_csv_upload(df, id_col, name_col, color_col)
                 if success:
                     st.success(f"✅ {message}")
+                    # If colors were detected, finalize immediately
+                    if color_col:
+                        success_final, message_final = manager.finalize_csv_upload()
+                        if success_final:
+                            st.success(f"✅ {message_final}")
                     st.rerun()
                 else:
                     st.error(f"❌ {message}")
@@ -151,10 +175,11 @@ with tab2:
         except Exception as e:
             st.error(f"Error reading CSV file: {str(e)}")
 
-    #Color assignment section
+    #Color assignment section (only show if no colors were auto-detected)
     if st.session_state.get('csv_temp_classes'):
         st.markdown("---")
-        st.markdown("### Step 3: Assign Colors to Classes")
+        st.markdown("### Adjust Color for each class")
+        st.info("Color have been randomly generated. You can adjust them if needed.")
         
         color_assignments = []
         temp_classes = st.session_state.csv_temp_classes
@@ -169,7 +194,7 @@ with tab2:
             with col3:
                 color = st.color_picker(
                     f"Color", 
-                    value="#2e8540",
+                    value=class_data.get('Color Code', '#2e8540'),
                     key=f"csv_color_{i}",
                     label_visibility="collapsed"
                 )
@@ -220,7 +245,12 @@ with tab3:
 
 #new function to render selected classification scheme from one of the three methods
 def render_class_display():
-    """Render the current classification scheme display"""
+    """
+    Render the current classification scheme display.
+    
+    Shows all defined classes in a table format with color previews,
+    edit/delete buttons, and download functionality.
+    """
     st.markdown("---")
     st.markdown("#### Current Classification Scheme")
 
@@ -286,7 +316,12 @@ def render_class_display():
 render_class_display()
 
 def render_navigation():
-    """Render module navigation and completion status"""
+    """
+    Render module navigation and completion status.
+    
+    Provides navigation buttons to previous/next modules and displays
+    completion status based on whether classes have been defined.
+    """
     st.divider()
     
     # Store classification data for other modules
@@ -305,9 +340,9 @@ def render_navigation():
     
     with col2:
         if module_completed:
-            if st.button("➡️ Go to Module 4: Analyze ROI", 
+            if st.button("➡️ Go to Module 3: Training data generation", 
                         type="primary", width = 'stretch'):
-                st.switch_page("pages/3_Module_4_Analyze_ROI.py")
+                st.switch_page("pages/3_Module_3_Generate_ROI.py")
         else:
             st.button("🔒 Complete Module 2 First", 
                      disabled=True, width = 'stretch',
