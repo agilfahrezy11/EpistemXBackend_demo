@@ -1,8 +1,6 @@
 import ee
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from .ee_config import ensure_ee_initialized
 
 # Ensure Earth Engine is initialized
@@ -196,7 +194,7 @@ class sample_quality:
             # Single getInfo() call to get all data
             sample_data = training_sample.getInfo()
             if 'features' not in sample_data or len(sample_data['features']) == 0:
-                print("Warning: No spectral data extracted. Check your training data and image overlap.")
+                print("Warning: No spectral data extracted. Check your training data quantity. Increase pixel size to reduce the size of sample")
                 return pd.DataFrame()
             # Convert to panda
             df = pd.DataFrame([feat['properties'] for feat in sample_data['features']])
@@ -222,7 +220,7 @@ class sample_quality:
         """
          #If the panda dataframe from previous step failed
         #if df.empty:
-         #   return {}
+         #  return {}
          #Define the properties which include band pixel value   
         spectral_bands = [col for col in df.columns if col != self.class_property and col in self.band_names]
         classes = df[self.class_property].unique()
@@ -252,14 +250,12 @@ class sample_quality:
     def get_sample_pixel_stats_df(self, df):
         """
         Get pixel statistics as a formatted DataFrame
-        
         Parameters:
         -----------
         df : pandas.DataFrame
             The dataframe from extract_spectral_values
         statistic : str
             Which statistic to display ('mean', 'std', 'min', 'max', 'median', 'count')
-            
         Returns:
         --------
         pandas.DataFrame
@@ -294,25 +290,20 @@ class sample_quality:
         return result_df
     #Calculate class separability using jeffries matusita distance
     #Note: This approach is not ideal for machine learning classifier, since JM distance works best with gaussian distribution
-    def check_class_separability(self, df, method='jeffries_matusita'):
+    def check_class_separability(self, df, method='JM'):
         """
-        Calculate class separability 
+        Calculate class separability.
+        Available methods: 'JM' (Jeffries-Matusita), 'TD' (Transformed Divergence)
         """
-        #if df.empty:
-         #   return {}
-        #Exclude Class ID from analysis
-        properties_to_exclude = [self.class_property]
-        if self.class_name_property:
-            properties_to_exclude.append(self.class_name_property)            
         spectral_bands = [col for col in df.columns if col != self.class_property and col in self.band_names]
         classes = df[self.class_property].unique()
-        
+
         if len(classes) < 2:
             print("Warning: Required at least 2 class for separability analysis")
             return {}
-        
+
         separability_matrix = {}
-        
+
         for i, class1 in enumerate(classes):
             separability_matrix[str(class1)] = {}
             for j, class2 in enumerate(classes):
@@ -320,69 +311,103 @@ class sample_quality:
                     try:
                         data1 = df[df[self.class_property] == class1][spectral_bands].dropna().values
                         data2 = df[df[self.class_property] == class2][spectral_bands].dropna().values
-                        
+
                         if len(data1) == 0 or len(data2) == 0:
                             separability_matrix[str(class1)][str(class2)] = 0.0
                             continue
-                        if method == 'jeffries_matusita':
+
+                        if method == 'JM':
                             sep = self._jeffries_matusita_distance(data1, data2)
+                        elif method == 'TD':
+                            sep = self.transform_divergence(data1, data2)
+                        else:
+                            raise ValueError("Unsupported method. Choose 'JM' or 'TD'.")
+
                         separability_matrix[str(class1)][str(class2)] = float(sep)
-                        
+
                     except Exception as e:
                         print(f"Error calculating separability for classes {class1}-{class2}: {e}")
                         separability_matrix[str(class1)][str(class2)] = 0.0
                 else:
                     separability_matrix[str(class1)][str(class2)] = 0.0
-        
+
         return separability_matrix
-    def get_separability_df(self, df):
+
+    def get_separability_df(self, df, method='JM'):
         """
-        This function is used to get separability panda dataframe
-        """    
-        separability = self.check_class_separability(df)
+        Get separability results as a DataFrame.
+        method: 'JM' (Jeffries-Matusita) or 'TD' (Transformed Divergence)
+        """
+        separability = self.check_class_separability(df, method=method)
         if not separability:
             return pd.DataFrame()
-        #get pairwise separability 
+
         pairs = []
         class_mapping = self.class_renaming()
+        metric_name = "JM_Distance" if method == 'JM' else "TD_Distance"
+
         for class1_id, class1_data in separability.items():
-            for class2_id, jm_distance in class1_data.items():
-                if jm_distance > 0:
-                    class1_name = class_mapping.get(int(class1_id), f"Class {class1_id}")
-                    class2_name = class_mapping.get(int(class2_id), f"Class {class2_id}")     
-                    #append the pairwise separability into the list
+            for class2_id, value in class1_data.items():
+                if value > 0:
+                    # Use consistent key type for mapping
+                    try:
+                        class1_key = int(class1_id)
+                    except ValueError:
+                        class1_key = class1_id
+                    try:
+                        class2_key = int(class2_id)
+                    except ValueError:
+                        class2_key = class2_id
+
+                    class1_name = class_mapping.get(class1_key, f"Class {class1_id}")
+                    class2_name = class_mapping.get(class2_key, f"Class {class2_id}")
                     pairs.append({
-                                    'Class1_ID': int(class1_id),
-                                    'Class1_Name': class1_name,
-                                    'Class2_ID': int(class2_id),
-                                    'Class2_Name': class2_name,
-                                    'JM_Distance': round(jm_distance, 3),
-                                    'Separability_Level': self.separability_level(jm_distance)            
-                    })      
+                        'Class1_ID': class1_id,
+                        'Class1_Name': class1_name,
+                        'Class2_ID': class2_id,
+                        'Class2_Name': class2_name,
+                        metric_name: round(value, 3),
+                        'Separability_Level': self.separability_level(value)
+                    })
+
         pairs_df = pd.DataFrame(pairs)
         if not pairs_df.empty:
-            pairs_df = pairs_df.sort_values('JM_Distance').reset_index(drop=True)
+            pairs_df = pairs_df.sort_values(metric_name).reset_index(drop=True)
         return pairs_df
-    def lowest_separability(self, df, top_n=10):
+
+    def lowest_separability(self, df, top_n=10, method='JM'):
         """
-        get the class pair which resulted in lowest separability value
+        Get the class pairs with the lowest separability value.
+        Args:
+            df: DataFrame with spectral values
+            top_n: Number of lowest pairs to return
+            method: 'JM' or 'TD'
+        Returns:
+            DataFrame of lowest separability pairs
         """
-        separability_df = self.get_separability_df(df)
+        separability_df = self.get_separability_df(df, method=method)
         if separability_df.empty:
             return pd.DataFrame()
-        # Get the lowest separability pairs
+        metric_name = "JM_Distance" if method == 'JM' else "TD_Distance"
         lowest_pairs = separability_df.head(top_n).copy()
-        lowest_pairs['Interpretation'] = lowest_pairs['JM_Distance'].apply(
-            lambda x: self.separability_level(x)
+        lowest_pairs['Interpretation'] = lowest_pairs[metric_name].apply(
+            lambda x: self.separability_level(x, method=method)
         )
         return lowest_pairs
-    def separability_level(self, jm_distance):
+
+    def separability_level(self, value, method='JM'):
         """
-        Categorize JM distance value
+        Categorize separability value for JM or TD distance.
+        Args:
+            value: Separability metric value
+            method: 'JM' or 'TD'
+        Returns:
+            String interpretation
         """
-        if jm_distance >=1.8:
+        # Thresholds are for JM/TD (range 0–2)
+        if value >= 1.8:
             return "Good Separability"
-        elif 1.0 <= jm_distance < 1.8:
+        elif 1.0 <= value < 1.8:
             return "Weak/marginal Separability"
         else:
             return "Class confusions"
@@ -464,54 +489,36 @@ class sample_quality:
             print(f"Error in JM distance calculation: {e}")
             return 0.0
         
+    def transform_divergence(self, class1_data, class2_data):
+        """Calculate Transform Divergence between two classes"""
+        try:
+            #Compute mean and covariance
+            mean1 = np.mean(class1_data, axis=0)
+            mean2 = np.mean(class2_data, axis=0)
+            cov1 = np.cov(class1_data.T) + np.eye(class1_data.shape[1]) * 1e-6
+            cov2 = np.cov(class2_data.T) + np.eye(class2_data.shape[1]) * 1e-6
+            diff_mean  = mean1 - mean2
+            #inverse covariance matrix
+            try:
+                inv_cov1 = np.linalg.inv(cov1)
+            except np.linalg.LinAlgError:
+                inv_cov1 = np.linalg.pinv(cov1)
+            try:
+                inv_cov2 = np.linalg.inv(cov2)
+            except np.linalg.LinAlgError:
+                inv_cov2 = np.linalg.pinv(cov2)
+            #compute Divergence
+            term1 = 0.5 * np.trace((cov1 - cov2) @ (inv_cov2 - inv_cov1))
+            term2 = 0.5 * diff_mean.T @ (inv_cov1 + inv_cov2) @ diff_mean
+            divergence = term1 + term2
+            #Apply transformation
+            td = 2 * (1 - np.exp(-divergence/8))
+            return float(np.clip(td, 0, 2))
+        except Exception as e:
+            print(f"Error in Transform Divergence calculation: {e}")
+            return 0.0
     #Plotting data distribution for evaluation
     #Data Histogram
-    def plot_facet_histograms(self, df, bands=None, max_bands=3, bins=30):
-        """
-        Plot faceted histograms by class for selected bands.
-        """
-        if df.empty:
-            print("No data available for histogram plotting.")
-            return
-        
-        if bands is None:
-            bands = [b for b in self.band_names if b in df.columns][:max_bands]
-        
-        for band in bands:
-            g = sns.displot(
-                data=df, x=band, col=self.class_property,
-                bins=bins, facet_kws={'sharey': False, 'sharex': True}, height=3
-            )
-            g.set_titles(col_template="Class {col_name}")
-            plt.suptitle(f"Faceted Histograms for {band}", y=1.05, fontsize=14)
-            plt.show()   
-
-    #Box Plot
-    def plot_boxplots_by_band(self, df, bands=None, max_bands=5):
-        """
-        Plot boxplots for each band across all classes.
-        
-        Parameters
-        ----------
-        df : pandas.DataFrame
-        bands : list, optional
-            Bands to plot. If None, take the first `max_bands`.
-        max_bands : int
-            Maximum number of bands to plot.
-        """
-        if df.empty:
-            print("No data available for boxplot plotting.")
-            return
-        
-        if bands is None:
-            bands = [b for b in self.band_names if b in df.columns][:max_bands]
-        
-        for band in bands:
-            plt.figure(figsize=(12, 6))
-            sns.boxplot(x=self.class_property, y=band, data=df)
-            plt.title(f"Boxplot of {band} by Class")
-            plt.xticks(rotation=90)  # rotate labels for 17 classes
-            plt.show()
 
     def print_analysis_summary(self, df):
         """
@@ -532,4 +539,4 @@ class sample_quality:
             display_cols = ['Class1_Name', 'Class2_Name', 'JM_Distance', 'Separability_Level', 'Interpretation']
             print(lowest_pairs[display_cols].to_string(index=False))
         
-        print("\n" + "="*80)        
+        print("\n" + "="*80)
