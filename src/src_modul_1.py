@@ -70,8 +70,8 @@ class Reflectance_Data:
             'description': 'Landsat 9 Operational Land Imager-2 Surface Reflectance'
         }
     }
-#Define the thermal datasets. The thermal bands used is from Collection 2 Top-of-atmosphere data 
-#The TOA data provide consistent result and contain minimum mising pixel data
+    #Define the thermal datasets. The thermal bands used is from Collection 2 Top-of-atmosphere data 
+    #The TOA data provide consistent result and contain minimum mising pixel
     THERMAL_DATASETS = {
         'L4_TOA': {
             'collection':'LANDSAT/LT04/C02/T1_TOA"',
@@ -112,12 +112,12 @@ class Reflectance_Data:
     #Initialize the class
     def __init__(self, log_level=logging.INFO):
         """
-        Initialize the ReflectanceData object and set up a class-specific logger.
+        Initialize the Reflectance_Data object and set up a class-specific logger
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(log_level)
 
-        self.logger.info("ReflectanceData initialized.")
+        self.logger.info("Reflectance_Data initialized.")
     #Function to mask clouds, shadow, and cirrus. Using QA Bands
     def mask_landsat_sr(self, image,cloud_conf_thresh=2, shadow_conf_thresh=2, cirrus_conf_thresh=2):
             """
@@ -143,19 +143,20 @@ class Reflectance_Data:
             >>> get_landsat = Reflectance_Data()
             #Implementation on image collection
             >>> collection = (collection.map(lambda img: get_landsat.mask_landsat_sr(img))
-            #Implementatio on Image
+            #Implementation on single Image
+            >>> image = ee.Image('LANDSAT/LC8_L1T/LC80440342014077LGN00')
             >>> masked_image = get_landsat.mask_landsat_sr(image)
             """
+            #select the Quality Assessment Band 
             qa = image.select('QA_PIXEL')
             #Deterministic bits ---
             cloud_bit = 1 << 3
             shadow_bit = 1 << 4
             cloud_mask = qa.bitwiseAnd(cloud_bit).eq(0)
             shadow_mask = qa.bitwiseAnd(shadow_bit).eq(0)
-            #Confidence bits ---
+            #Confidence bits
             cloud_conf = qa.rightShift(8).bitwiseAnd(3)     # Bits 8–9
             shadow_conf = qa.rightShift(10).bitwiseAnd(3)   # Bits 10–11
-            #snow_conf = qa.rightShift(12).bitwiseAnd(3)     # Bits 12–13
             cirrus_conf = qa.rightShift(14).bitwiseAnd(3)   # Bits 14–15
             #Keep pixels below thresholds
             conf_mask = (cloud_conf.lt(cloud_conf_thresh)
@@ -181,7 +182,9 @@ class Reflectance_Data:
 
         Example
         --------
-
+         >>> get_landsat = Reflectance_Data()
+         >>> image = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044034_20201028')
+         >>> band_renaming = get_landsat.rename_landsat_bands(image, sensor_type = 'L8')
         """
         if sensor_type in ['L4','L5', 'L7']:
             # Landsat 5/7 SR bands
@@ -210,52 +213,68 @@ class Reflectance_Data:
 
         Parameters
         ----------
-        image : ee.Image (Landsat SR image) with DN value
-        sensor_type : str. Sensor type ('L4', 'L5', 'L7', 'L8', 'L9')
+        image (ee.Image): Landsat SR image with DN value
 
         Returns
         -------
         ee.Image : Image with floating point, corresponding to surface reflectance value
-        """        
+
+        References
+        --------
+        https://www.usgs.gov/faqs/how-do-i-use-a-scale-factor-landsat-level-2-science-products
+
+        Example
+        --------
+        >>> get_landsat = Reflectance_Data()
+        >>> image = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044034_20201028')
+        >>> scaled_image = get_landsat.apply_scale_factors(image)
+        """
+        #select the surface reflectance band only, and apply the scalling factors
         optical_bands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
-        #thermal_bands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
         return image.addBands(optical_bands, None, True)
+
     #Function to retrive Landsat multispectral bands
     def get_optical_data(self, aoi, start_date, end_date, optical_data='L8_SR',
                         cloud_cover=30,
                         verbose=True, compute_detailed_stats=True):
         """
-        Get optical image collection for Landsat 1-9 SR data with detailed information logging.
+        Get optical image collection for Landsat 1-9 SR data from google earth engine API.
 
         Parameters
         ----------
-        aoi :  ee.FeatureCollection. Area of interest.
-        start_date : str. Start date in format 'YYYY-MM-DD' or year.
-        end_date : str. End date in format 'YYYY-MM-DD' or year.
-        optical_data : str. Dataset type: i.e 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
-        cloud_cover : int. Maximum cloud cover percentage on land (default: 30).
-        verbose : bool. Print detailed information about the collection (default: True).
-        compute_detailed_stats : bool
+        aoi (ee.FeatureCollection): Area of interest.
+        start_date (str): Start date in format 'YYYY-MM-DD' or year.
+        end_date (str): End date in format 'YYYY-MM-DD' or year.
+        optical_data (str): Dataset type: i.e 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
+        cloud_cover (int):Maximum cloud cover percentage over land (default: 30).
+        verbose (bool): Print detailed information about the collection (default: True).
+        compute_detailed_stats (bool):
             If True, compute detailed statistics 
             If False, return only basic information (default: True).
 
         Returns
         -------
         tuple : (ee.ImageCollection, dict)
-            Filtered and preprocessed image collection with statistics.
+            Filtered and preprocessed image collection with statistics regarding retrival information.
+        Example
+        --------
+        >>> get_landsat = Reflectance_Data()
+        >>> aoi = ee.FeatureCollection(path/to_your/ee_asset_shapefile)
+        >>> image_coll, metadata = get_landsat.get_optical_data(aoi, start_date = 2020, end_date = 2020, optical_data = 'L8_SR', cloud_cover = 30)
         """
         #Helper function so that the user only input year or specific date range
         def parse_year_or_date(date_input, is_start=True):
-            if isinstance(date_input, int):  # User gave integer year like 2024
+            """Helper function for get_optical_data function to parse year string into a dateformat compatible with GEE"""
+            if isinstance(date_input, int):  #input date is a single year (2024)
                 return f"{date_input}-01-01" if is_start else f"{date_input}-12-31"
             elif isinstance(date_input, str):
                 if len(date_input) == 4 and date_input.isdigit():
                     return f"{date_input}-01-01" if is_start else f"{date_input}-12-31"
                 else:
-                    return date_input  # Already full date
+                    return date_input  #translate that into a full ee date (01-01 until 12-31)
             else:
                 raise ValueError("Date must be either YYYY or YYYY-MM-DD format")
-        # Parse inputs (handles both year and full date)
+        #Parse inputs (handles both year and full date)
         start_date = parse_year_or_date(start_date, is_start=True)
         end_date   = parse_year_or_date(end_date, is_start=False)
 
@@ -276,23 +295,7 @@ class Reflectance_Data:
         initial_collection = (ee.ImageCollection(config['collection'])
                             .filterBounds(aoi)
                             .filterDate(start_date, end_date))
-        #Compute cloud within the area of interest (produce additional processing time)
-        '''
-        def add_aoi_cloud(img):
-            qa = img.select('QA_PIXEL')
-            cloud_mask = qa.bitwiseAnd(1 << 3).Or(qa.bitwiseAnd(1<<4))
-            total = ee.Number(cloud_mask.reduceRegion(
-                reducer=ee.Reducer.count(), geometry=aoi, scale=30, maxPixels=1e9
-            ).values().get(0))
-            cloudy = ee.Number(cloud_mask.reduceRegion(
-                reducer=ee.Reducer.sum(), geometry=aoi, scale=30, maxPixels=1e9
-            ).values().get(0))
-            cloud_perc = cloudy.divide(total).multiply(100)
-            return img.set({'CLOUDY_PERC_AOI': cloud_perc})
-        
-        #Apply the AOI cloud percentage to the image collection
-        initial_collection = initial_collection.map(add_aoi_cloud)
-        '''
+
         #initial_stats = self.get_collection_statistics(initial_collection, compute_detailed_stats)
         stats_object = Reflectance_Stats()
         initial_stats = stats_object.get_collection_statistics(initial_collection, compute_detailed_stats)
@@ -351,27 +354,28 @@ class Reflectance_Data:
     def get_thermal_bands(self, aoi, start_date, end_date, thermal_data = 'L8_TOA', cloud_cover=30,
                         verbose=True, compute_detailed_stats=True):
         """
-        Get the thermal bands from landsat TOA data
+        Get the thermal bands from landsat collection Top-of-Atmosphere (TOA) data
     
         Parameters
         ----------
-        aoi :  ee.FeatureCollection. Area of interest.
-        start_date : str. Start date in format 'YYYY-MM-DD' or year.
-        end_date : str. End date in format 'YYYY-MM-DD' or year.
-        optical_data : str. Dataset type: 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
-        cloud_cover : int. Maximum cloud cover percentage on land (default: 30).
-        verbose : bool. Print detailed information about the collection (default: True).
-        compute_detailed_stats : bool
+        aoi (ee.FeatureCollection) :   Area of interest.
+        start_date (str): Start date in format 'YYYY-MM-DD' or year.
+        end_date (str): End date in format 'YYYY-MM-DD' or year.
+        optical_data (str): Dataset type: 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
+        cloud_cover (int): Maximum cloud cover percentage on land (default: 30).
+        verbose (bool): Print detailed information about the collection (default: True).
+        compute_detailed_stats (bool):
             If True, compute detailed statistics 
             If False, return only basic information (default: True).
             
         Returns
         -------
-        tuple : (ee.ImageCollection, dict)
+        tuple (ee.ImageCollection, dict): 
             Filtered and preprocessed image collection with statistics.
         """
         #Helper function to parse the date so that the user can only input the year
         def parse_year_or_date(date_input, is_start=True):
+            """Helper function for get_optical_data function to parse year string into a dateformat compatible with GEE"""
             if isinstance(date_input, int):  # User gave integer year like 2024
                 return f"{date_input}-01-01" if is_start else f"{date_input}-12-31"
             elif isinstance(date_input, str):
@@ -386,11 +390,12 @@ class Reflectance_Data:
         end_date   = parse_year_or_date(end_date, is_start=False)
         #Helper function to rename the bands
         def rename_thermal_band(img):
+            """ Select and standarized the band name. i.e from 'B10' to 'THERMAL'  """
             sensor = config['sensor']
             thermal_band_map = {
                 'L4': ['B6'],
                 'L5': ['B6'],
-                'L7': ['B6'],
+                'L7': ['B6_VCID_2'],
                 'L8': ['B10'],
                 'L9': ['B10']
             }
@@ -407,7 +412,9 @@ class Reflectance_Data:
 
         #Decide which thermal band to select
         sensor = config['sensor']
-        if sensor == 'L5':
+        if sensor == 'L4':
+            thermal_band = 'B6',
+        elif sensor == 'L5':
             thermal_band = 'B6'
         elif sensor == 'L7':
             thermal_band = 'B6_VCID_2'
@@ -445,7 +452,7 @@ class Reflectance_Data:
         elif verbose:
             self.logger.info("Filtered collection created (use compute_detailed_stats=True for detailed info)")
         
-        #Apply masking (QA-based)
+        #Apply cloud masking, select the thermal bands, and rename it
         collection = collection.map(lambda img: self.mask_landsat_sr(img))
         collection = collection.select(thermal_band)
         collection = collection.map(rename_thermal_band)
@@ -462,21 +469,25 @@ class Reflectance_Data:
             'detailed_stats_computed': compute_detailed_stats
         }
 class Reflectance_Stats:
-    """
-    Class for fetching image collection statistics
-    """
+    """Class for fetching image collection statiststic and retrival report from Reflectance_Data class"""
     def __init__(self, log_level=logging.INFO):
-        """
-        Initialize the ReflectanceStats object and set up a class-specific logger.
-        """
+        """Initialize the Reflectance_Stats object and set up a class specific logger"""
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(log_level)
 
         self.logger.info("Reflectance Stats initialized.")
     def get_collection_statistics(self, collection, compute_stats=True, print_report=False):
-        """
-        Get comprehensive statistics about an image collection.
-        """
+        """Get comprehensive statistics about an image collection search retrival from get_optical_data and get_thermal_band function
+        
+        Parameters
+        ----------
+        collection (ee.ImageCollection): Imagery image collection from the retrival process
+        compute_stats (bool): option to compute detailed collection statistical report (default = True)
+        print_report (bool): option to print the collection retrival report in readiable format (default = False)
+        
+        Returns
+        -------
+        dict: Collection retrival report."""
         #Get the number of image used 
         try:
             size = collection.size()

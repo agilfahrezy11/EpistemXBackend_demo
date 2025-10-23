@@ -4,11 +4,7 @@ from typing import List, Dict, Optional, Any
 
 
 class LULC_Scheme_Manager:
-    """
-    Module 2: Land Cover Classification Scheme Manager
-    Backend processing for classification scheme management
-    """
-    
+    """ Class for facilitating land cover classification scheme definition"""
     def __init__(self):
         """Initialize session state variables for LULC scheme management"""
         self._init_session_state()
@@ -139,7 +135,6 @@ class LULC_Scheme_Manager:
 
     #adapted from line 266 - 320
     #Change so that csv is more tolaratable 
-
     def process_csv_upload(self, df: pd.DataFrame, id_col: str, name_col: str) -> tuple[bool, str]:
         """Process CSV upload - validate and prepare for color assignment"""
         try:
@@ -246,7 +241,7 @@ class LULC_Scheme_Manager:
     #Add RESTORE+ classification scheme
     @staticmethod
     def get_default_schemes() -> Dict[str, List[Dict[str, Any]]]:
-        """Return available default classification schemes"""
+        """Return available default classification schemes, currently using RESTORE+ Project"""
         return {
             "RESTORE+ Project": [
                 {'ID': 1, 'Class Name': 'Natural Forest', 'Color Code': "#0E6D0E"},
