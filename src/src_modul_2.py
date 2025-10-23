@@ -1,5 +1,4 @@
 import pandas as pd
-import streamlit as st
 import random
 from typing import List, Dict, Optional, Any, Tuple
 
@@ -10,7 +9,7 @@ class LULC_Scheme_Manager:
     
     This class manages the creation, editing, and validation of land use/land cover
     classification schemes through manual input, CSV upload, or default templates.
-    All data is stored in Streamlit session state for persistence across page interactions.
+    Pure business logic without UI dependencies.
     
     Attributes
     ----------
@@ -18,78 +17,74 @@ class LULC_Scheme_Manager:
         List of classification classes with ID, name, and color information
     next_id : int
         Next available ID for new classes
+    edit_mode : bool
+        Whether currently in edit mode
+    edit_idx : Optional[int]
+        Index of class being edited
+    csv_temp_classes : List[Dict[str, Any]]
+        Temporary storage for CSV classes during color assignment
     """
     
     def __init__(self):
-        """Initialize session state variables for LULC scheme management. Sets up all required session state variables"""
-        self._init_session_state()
-    #adapted from def init 
-    #use st.session state to store result, instead of using self.
-    #line 14 - 18
-    def _init_session_state(self) -> None:
-        """Initialize all required session state variables."""
-        session_vars = {
-            'lulc_classes': [],
-            'lulc_next_id': 1,
-            'lulc_edit_mode': False,
-            'lulc_edit_idx': None,
-            'csv_temp_classes': []
-        }
-        
-        for var, default_value in session_vars.items():
-            if var not in st.session_state:
-                st.session_state[var] = default_value
-    #Adapted from widget based layout (jupyter notebook) to streamlit session
-    #@ is decorator or wrapper, so that when called, it does not need parenthesis
-    #it provide clean access to each variable in streamlit session state
-    #The original code (faza) use jupyter notebook UI, which is incompatible with streamlit
-    @property
-    def classes(self) -> List[Dict[str, Any]]:
+        """Initialize the LULC scheme manager with empty state."""
+        self.classes: List[Dict[str, Any]] = []
+        self.next_id: int = 1
+        self.edit_mode: bool = False
+        self.edit_idx: Optional[int] = None
+        self.csv_temp_classes: List[Dict[str, Any]] = []
+    def get_state(self) -> Dict[str, Any]:
         """
-        Get classes from session state.
+        Get current state as dictionary for persistence.
         
         Returns
         -------
-        List[Dict[str, Any]]
-            List of classification classes, each containing 'ID', 'Class Name', and 'Color Code'
+        Dict[str, Any]
+            Current state including classes, next_id, edit_mode, etc.
         """
-        return st.session_state.lulc_classes
-    #adapter from line 46-51 (self.class_id_input)
-    @classes.setter
-    def classes(self, value: List[Dict[str, Any]]) -> None:
+        return {
+            'classes': self.classes,
+            'next_id': self.next_id,
+            'edit_mode': self.edit_mode,
+            'edit_idx': self.edit_idx,
+            'csv_temp_classes': self.csv_temp_classes
+        }
+    
+    def set_state(self, state: Dict[str, Any]) -> None:
         """
-        Set classes in session state.
+        Set state from dictionary for persistence.
         
         Parameters
         ----------
-        value : List[Dict[str, Any]]
-            List of classification classes to store in session state
+        state : Dict[str, Any]
+            State dictionary to restore
         """
-        st.session_state.lulc_classes = value
+        self.classes = state.get('classes', [])
+        self.next_id = state.get('next_id', 1)
+        self.edit_mode = state.get('edit_mode', False)
+        self.edit_idx = state.get('edit_idx', None)
+        self.csv_temp_classes = state.get('csv_temp_classes', [])
     
-    @property 
-    def next_id(self) -> int:
+    def has_classes(self) -> bool:
         """
-        Get next available ID from session state.
+        Check if any classes are defined.
+        
+        Returns
+        -------
+        bool
+            True if classes exist, False otherwise
+        """
+        return len(self.classes) > 0
+    
+    def get_class_count(self) -> int:
+        """
+        Get the number of defined classes.
         
         Returns
         -------
         int
-            Next available class ID for new classes
+            Number of classes currently defined
         """
-        return st.session_state.lulc_next_id
-    
-    @next_id.setter
-    def next_id(self, value: int) -> None:
-        """
-        Set next available ID in session state.
-        
-        Parameters
-        ----------
-        value : int
-            Next available class ID to set
-        """
-        st.session_state.lulc_next_id = value
+        return len(self.classes)
 
     def validate_class_input(self, class_id: Any, class_name: str) -> Tuple[bool, Optional[str]]:
         """
@@ -119,7 +114,7 @@ class LULC_Scheme_Manager:
             return False, "Class name cannot be empty!"
         
         # Check if ID already exists (only for new classes)
-        if not st.session_state.lulc_edit_mode:
+        if not self.edit_mode:
             if any(c['ID'] == class_id for c in self.classes):
                 return False, f"Class ID {class_id} already exists!"
         
@@ -158,8 +153,8 @@ class LULC_Scheme_Manager:
         }
         
         # Update existing class
-        if st.session_state.lulc_edit_mode and st.session_state.lulc_edit_idx is not None:
-            self.classes[st.session_state.lulc_edit_idx] = class_data
+        if self.edit_mode and self.edit_idx is not None:
+            self.classes[self.edit_idx] = class_data
             success_msg = f"Class '{class_name}' (ID: {class_id}) updated successfully!"
             self._reset_edit_mode()
         else:
@@ -173,12 +168,12 @@ class LULC_Scheme_Manager:
     #functions for manual input options
     def _reset_edit_mode(self) -> None:
         """
-        Reset edit mode session state.
+        Reset edit mode state.
         
         Clears the edit mode flags to return to normal add mode.
         """
-        st.session_state.lulc_edit_mode = False
-        st.session_state.lulc_edit_idx = None
+        self.edit_mode = False
+        self.edit_idx = None
     
     def _sort_and_update_next_id(self) -> None:
         """
@@ -255,8 +250,8 @@ class LULC_Scheme_Manager:
             Class data if valid index, None otherwise
         """
         if 0 <= idx < len(self.classes):
-            st.session_state.lulc_edit_mode = True
-            st.session_state.lulc_edit_idx = idx
+            self.edit_mode = True
+            self.edit_idx = idx
             return self.classes[idx]
         return None
     #adapted from line 247
@@ -358,7 +353,7 @@ class LULC_Scheme_Manager:
                 for i, class_data in enumerate(class_list):
                     class_data["Color Code"] = distinct_colors[i]
 
-            st.session_state.csv_temp_classes = class_list
+            self.csv_temp_classes = class_list
             color_msg = "with colors from CSV" if color_col else "with auto-generated colors"
             return True, f"Successfully loaded {len(class_list)} classes from CSV {color_msg}"
 
@@ -382,16 +377,16 @@ class LULC_Scheme_Manager:
         try:
             # Update colors based on user assignments if provided
             if color_assignments:
-                for i, class_data in enumerate(st.session_state.csv_temp_classes):
+                for i, class_data in enumerate(self.csv_temp_classes):
                     if i < len(color_assignments):
                         class_data["Color Code"] = color_assignments[i]
             
             # Save to main classes and sort
-            self.classes = st.session_state.csv_temp_classes.copy()
+            self.classes = self.csv_temp_classes.copy()
             self._sort_and_update_next_id()
             
             # Clear temporary storage
-            st.session_state.csv_temp_classes = []
+            self.csv_temp_classes = []
             
             return True, f"Classification scheme created with {len(self.classes)} classes"
             

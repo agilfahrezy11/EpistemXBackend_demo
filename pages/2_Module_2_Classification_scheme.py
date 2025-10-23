@@ -1,3 +1,15 @@
+"""
+Module 2: Land Cover Classification Scheme Definition
+
+This module provides a user interface for defining land cover classification schemes
+through three methods: manual input, CSV upload, or default templates.
+
+Architecture:
+- Backend (src_modul_2.py): Pure business logic without UI dependencies
+- Frontend (this file): Streamlit UI with session state management
+- State synchronization ensures data persistence across page interactions
+"""
+
 import streamlit as st
 import pandas as pd
 from src.src_modul_2 import LULC_Scheme_Manager
@@ -9,12 +21,49 @@ st.set_page_config(
     layout="wide"
 )
 
-#Initialize the manager from the source code
-@st.cache_resource
-def get_lulc_manager():
-    return LULC_Scheme_Manager()
+# Initialize session state for persistence
+def init_session_state():
+    """Initialize session state variables for LULC scheme management."""
+    session_vars = {
+        'lulc_classes': [],
+        'lulc_next_id': 1,
+        'lulc_edit_mode': False,
+        'lulc_edit_idx': None,
+        'csv_temp_classes': []
+    }
+    
+    for var, default_value in session_vars.items():
+        if var not in st.session_state:
+            st.session_state[var] = default_value
 
-manager = get_lulc_manager()
+# Initialize session state
+init_session_state()
+
+# Create manager and sync with session state
+manager = LULC_Scheme_Manager()
+
+def sync_manager_from_session():
+    """Sync manager state from Streamlit session state."""
+    state = {
+        'classes': st.session_state.lulc_classes,
+        'next_id': st.session_state.lulc_next_id,
+        'edit_mode': st.session_state.lulc_edit_mode,
+        'edit_idx': st.session_state.lulc_edit_idx,
+        'csv_temp_classes': st.session_state.csv_temp_classes
+    }
+    manager.set_state(state)
+
+def sync_session_from_manager():
+    """Sync Streamlit session state from manager state."""
+    state = manager.get_state()
+    st.session_state.lulc_classes = state['classes']
+    st.session_state.lulc_next_id = state['next_id']
+    st.session_state.lulc_edit_mode = state['edit_mode']
+    st.session_state.lulc_edit_idx = state['edit_idx']
+    st.session_state.csv_temp_classes = state['csv_temp_classes']
+
+# Sync manager with current session state
+sync_manager_from_session()
 
 # Page header
 st.title("Determining LULC Classification Schema and Classes")
@@ -45,12 +94,12 @@ def render_manual_input_form():
     #3 columns
     col1, col2, col3 = st.columns([1, 3, 2])
     
-    # Get current values for edit mode
-    edit_mode = st.session_state.get('lulc_edit_mode', False)
-    edit_idx = st.session_state.get('lulc_edit_idx', None)
+    # Sync manager state
+    sync_manager_from_session()
     
-    if edit_mode and edit_idx is not None:
-        current_class = manager.classes[edit_idx]
+    # Get current values for edit mode
+    if manager.edit_mode and manager.edit_idx is not None:
+        current_class = manager.classes[manager.edit_idx]
         default_id = current_class['ID']
         default_name = current_class['Class Name']
         default_color = current_class['Color Code']
@@ -89,18 +138,20 @@ def render_manual_input_form():
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 4])
     
     with col_btn1:
-        button_text = "💾 Update Class" if edit_mode else "➕ Add Class"
+        button_text = "💾 Update Class" if manager.edit_mode else "➕ Add Class"
         if st.button(button_text, type="primary", width = 'stretch'):
             success, message = manager.add_class(class_id, class_name, color_code)
             if success:
+                sync_session_from_manager()  # Sync back to session state
                 st.success(f"✅ {message}")
                 st.rerun()
             else:
                 st.error(f"❌ {message}")
     
     with col_btn2:
-        if edit_mode and st.button("❌ Cancel", width = 'stretch'):
+        if manager.edit_mode and st.button("❌ Cancel", width = 'stretch'):
             manager.cancel_edit()
+            sync_session_from_manager()  # Sync back to session state
             st.rerun()
 
 # Tab 1: Manual Input
@@ -159,15 +210,21 @@ with tab2:
                 )
             #After selection, load the CSV
             if st.button("📤 Load CSV Data", type="primary"):
+                sync_manager_from_session()  # Sync current state
                 color_col = None if color_col_selection == "< No Color Column >" else color_col_selection
                 success, message = manager.process_csv_upload(df, id_col, name_col, color_col)
                 if success:
-                    st.success(f"✅ {message}")
                     # If colors were detected, finalize immediately
                     if color_col:
                         success_final, message_final = manager.finalize_csv_upload()
                         if success_final:
+                            sync_session_from_manager()  # Sync back to session state
                             st.success(f"✅ {message_final}")
+                        else:
+                            st.error(f"❌ {message_final}")
+                    else:
+                        sync_session_from_manager()  # Sync back to session state
+                        st.success(f"✅ {message}")
                     st.rerun()
                 else:
                     st.error(f"❌ {message}")
@@ -176,13 +233,14 @@ with tab2:
             st.error(f"Error reading CSV file: {str(e)}")
 
     #Color assignment section (only show if no colors were auto-detected)
-    if st.session_state.get('csv_temp_classes'):
+    sync_manager_from_session()  # Sync current state
+    if manager.csv_temp_classes:
         st.markdown("---")
         st.markdown("### Adjust Color for each class")
         st.info("Color have been randomly generated. You can adjust them if needed.")
         
         color_assignments = []
-        temp_classes = st.session_state.csv_temp_classes
+        temp_classes = manager.csv_temp_classes
         
         for i, class_data in enumerate(temp_classes):
             col1, col2, col3 = st.columns([1, 3, 2])
@@ -207,6 +265,7 @@ with tab2:
             if st.button("✅ Finalize Scheme", type="primary", width = 'stretch'):
                 success, message = manager.finalize_csv_upload(color_assignments)
                 if success:
+                    sync_session_from_manager()  # Sync back to session state
                     st.success(f"✅ {message}")
                     st.rerun()
                 else:
@@ -214,7 +273,8 @@ with tab2:
         
         with col2:
             if st.button("❌ Cancel Upload", width = 'stretch'):
-                st.session_state.csv_temp_classes = []
+                manager.csv_temp_classes = []
+                sync_session_from_manager()  # Sync back to session state
                 st.rerun()
 
 # Tab 3: Default Scheme
@@ -236,8 +296,10 @@ with tab3:
             st.dataframe(preview_df, width = 'stretch')
     
     if st.button("📋 Load Default Scheme", type="primary", width = 'stretch'):
+        sync_manager_from_session()  # Sync current state
         success, message = manager.load_default_scheme(selected_scheme)
         if success:
+            sync_session_from_manager()  # Sync back to session state
             st.success(f"✅ {message}")
             st.rerun()
         else:
@@ -254,6 +316,9 @@ def render_class_display():
     st.markdown("---")
     st.markdown("#### Current Classification Scheme")
 
+    # Sync manager state
+    sync_manager_from_session()
+    
     if not manager.classes:
         st.warning("⚠️ No classes defined yet. Add your first class above!")
         return
@@ -283,12 +348,14 @@ def render_class_display():
         with col4:
             if st.button("✏️", key=f"edit_{idx}", help="Edit class"):
                 manager.edit_class(idx)
+                sync_session_from_manager()  # Sync back to session state
                 st.rerun()
         
         with col5:
             if st.button("🗑️", key=f"delete_{idx}", help="Delete class"):
                 success, message = manager.delete_class(idx)
                 if success:
+                    sync_session_from_manager()  # Sync back to session state
                     st.success(f"✅ {message}")
                     st.rerun()
 
@@ -324,12 +391,13 @@ def render_navigation():
     """
     st.divider()
     
-    # Store classification data for other modules
+    # Sync manager state and store classification data for other modules
+    sync_manager_from_session()
     if manager.classes:
         st.session_state['classification_df'] = manager.get_dataframe()
     
     # Module completion check
-    module_completed = len(manager.classes) > 0
+    module_completed = manager.has_classes()
     
     # Navigation buttons
     col1, col2 = st.columns(2)
@@ -350,7 +418,7 @@ def render_navigation():
     
     # Status indicator
     if module_completed:
-        st.success(f"✅ Module completed with {len(manager.classes)} classes")
+        st.success(f"✅ Module completed with {manager.get_class_count()} classes")
     else:
         st.info("💡 Add at least one class to complete this module")
 
