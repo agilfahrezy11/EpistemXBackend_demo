@@ -1,8 +1,6 @@
 import ee
 import pandas as pd
 import numpy as np
-from src.module_helpers import init_gee
-init_gee()
 
 class sample_quality:
     """

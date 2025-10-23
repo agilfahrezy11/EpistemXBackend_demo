@@ -1,8 +1,6 @@
 import pandas as pd
 import numpy as np
 import ee
-from src.module_helpers import init_gee
-init_gee()
 
 class FeatureExtraction:
     """

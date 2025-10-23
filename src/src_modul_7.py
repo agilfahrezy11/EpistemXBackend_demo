@@ -1,5 +1,4 @@
-from src.module_helpers import init_gee
-init_gee()
+
 from scipy import stats
 import numpy as np
 import ee
