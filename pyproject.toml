@@ -16,5 +16,6 @@ dependencies = [
     "tqdm",
     "pillow",
     "shapely",
+    "ipykernel"
 ]
 requires-python = ">=3.9"
