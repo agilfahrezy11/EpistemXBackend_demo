@@ -1,19 +1,24 @@
 import streamlit as st
 from epistemx.shapefile_utils import shapefile_validator, EE_converter
 from epistemx.module_4 import sample_quality
+from epistemx.module_4_part2 import spectral_plotter
+import matplotlib.pyplot as plt
+import numpy as np
 import geemap.foliumap as geemap
 import geopandas as gpd
-import ee
 import traceback
 import tempfile
 import zipfile
 import os
-ee.Authenticate()
-ee.Initialize()
 
-
+#Page configuration
+st.set_page_config(
+    page_title="Perform ROI Analysis", #visible in the browser
+    page_icon="logos\logo_epistem_crop.png",
+    layout="wide"
+)
 #title of the module
-st.title("Analzye the Separability of Region of Interest (ROI)")
+st.title("Spectral Separability Analysis")
 st.divider()
 st.markdown("This module allow the user to perform separability analysis between the class in the region of interest (ROI). " \
 "Prior to the analysis, the user must upload the ROI data in shapefile format. This data should contain unique the class ID and corresponding class names. " \
@@ -21,12 +26,12 @@ st.markdown("This module allow the user to perform separability analysis between
 st.markdown("1. Define the training data attributes (class ID and class names)")
 st.markdown("2. Select separability parameters, which consist of selecting separability methods, spatial resolution, and maximum pixel per class. The platform support two methods," \
 " Jeffries-Matusita (JM) and Transformed Divergence (TD)")
-#module name
+
+#set page layout and side info
+st.sidebar.title("About")
 markdown = """
 This module is designed to perform separability analysis of the training data.
 """
-#set page layout and side info
-st.sidebar.title("About")
 st.sidebar.info(markdown)
 logo = "logos\logo_epistem.png"
 st.sidebar.image(logo)
@@ -103,7 +108,6 @@ if uploaded_file:
                     
                     if aoi is not None:
                         st.success("ROI conversion completed!")
-                        
                         # Show a small preview map centered on AOI
                         # Store in session state
                         st.session_state['training_data'] = aoi
@@ -146,7 +150,8 @@ if "training_gdf" in st.session_state:
     st.session_state["selected_class_property"] = class_property
     st.session_state["selected_class_name_property"] = class_name_property
 
-        #Separability Parameters
+    
+    #Separability Parameters
     st.subheader("Analysis Parameters")
     method = st.radio("Select separability method:", ["JM", "TD"], horizontal=True, 
                         help="JM = Jeffries-Matusita Distance, TD = Transformed Divergence")
@@ -230,7 +235,7 @@ if "training_gdf" in st.session_state:
                 summary_df = analyzer.sum_separability(pixel_extract)
                 #store all separability data
                 st.session_state["separability_results"] = separability_df
-                st.session_state["lowest separability"] = lowest_sep
+                st.session_state["lowest_separability"] = lowest_sep
                 st.session_state["separability_summary"] = summary_df
                 st.session_state["separability_method"] = method
                 st.session_state["analysis_complete"] = True
@@ -259,26 +264,26 @@ if st.session_state.get("analysis_complete", False):
             st.metric("Total Pixels Extracted", total_pixels)
     if "separability_summary" in st.session_state and not st.session_state["separability_summary"].empty:
         with col4:
-            method_used = st.session_state.get("analysis_method", "N/A")
+            method_used = st.session_state.get("separability_method", "N/A")
             st.metric("Method", method_used)
 
     #Display the results in table format
     #ROI Stats
     with st.expander("ROI Statistics", expanded=False):
         if "sample_stats" in st.session_state:
-            st.dataframe(st.session_state["sample_stats"], use_container_width=True)
+            st.dataframe(st.session_state["sample_stats"], width='stretch')
         else:
             st.write("No sample statistics available")
     #Pixel stats
     with st.expander("Pixel Statistics", expanded=True):  
         if "pixel_stats" in st.session_state:
-            st.dataframe(st.session_state["pixel_stats"], use_container_width=True)
+            st.dataframe(st.session_state["pixel_stats"], width='stretch')
         else:
             st.write("No pixel statistics available")
     #Separability summary
     with st.expander("Separability Summary", expanded=True):
         if "separability_summary" in st.session_state:
-            st.dataframe(st.session_state["separability_summary"], use_container_width=True)
+            st.dataframe(st.session_state["separability_summary"], width='stretch')
             
             # Add interpretation
             summary = st.session_state["separability_summary"].iloc[0]
@@ -300,20 +305,279 @@ if st.session_state.get("analysis_complete", False):
     # Detailed Separability Results
     with st.expander("Detailed Separability Results", expanded=False):
         if "separability_results" in st.session_state:
-            st.dataframe(st.session_state["separability_results"], use_container_width=True)
+            st.dataframe(st.session_state["separability_results"], width='stretch')
         else:
             st.write("No detailed separability results available")
-    
     # Most Problematic Class Pairs
     with st.expander("Most Problematic Class Pairs", expanded=True):
         if "lowest_separability" in st.session_state:
             st.markdown("*These class pairs have the lowest separability and may cause classification confusion:*")
-            st.dataframe(st.session_state["lowest_separability"], use_container_width=True)
+            st.dataframe(st.session_state["lowest_separability"], width='stretch')
         else:
             st.write("No problematic pairs data available")            
 
+st.divider()
+st.subheader("D. Plot the Region of Interest")
+st.markdown("You can visualize the ROI using several plots, namely histogram, box plot, and scatter plot. This allows the user to assess the overlap between classes, which might led to difficulties in separating them")
+if (st.session_state.get("analysis_complete", False) and 
+    "pixel_extract" in st.session_state and
+    "analyzer" in st.session_state and
+    not st.session_state["pixel_extract"].empty):
 
-
+    #initialize the plotter
+    try:
+        plotter = spectral_plotter(st.session_state["analyzer"])
+        pixel_data = st.session_state["pixel_extract"]
+        #verification
+        available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+        if not available_bands:
+            st.error("No valid spectral bands found in the extracted pixel data.")
+            st.stop()
+        #Tabs for different visualization
+        viz1, viz2, viz3, viz4 = st.tabs([
+            "Histograms",
+            "Box Plots",
+            "Scatter Plot",
+            "3D Scatter Plot"
+        ])
+        #Tab 1: Facet Histograms
+        with viz1:
+            st.markdown("### Distribution of Spectral Values by Class")
+            st.markdown("Interactive histograms showing all classes overlaid for easy comparison. " \
+                       "Click legend items to show/hide specific classes.")
+            
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                selected_hist_bands = st.multiselect(
+                    "Select bands to plot:",
+                    options=available_bands,
+                    default=available_bands[:3] if len(available_bands) >= 3 else available_bands,
+                    key="hist_bands"
+                )
+            with col2:
+                bins = st.slider("Number of bins:", min_value=10, max_value=50, value=30, step=5)
+            with col3:
+                hist_opacity = st.slider("Opacity:", 0.3, 0.9, 0.6, 0.1, key="hist_opacity")
+            
+            if st.button("Generate Histograms", key="btn_histogram", type="primary"):
+                if selected_hist_bands:
+                    with st.spinner("Generating interactive histograms..."):
+                        try:
+                            figures = plotter.plot_histogram(
+                                pixel_data, 
+                                bands=selected_hist_bands, 
+                                bins=bins,
+                                opacity=hist_opacity
+                            )
+                            for fig in figures:
+                                st.plotly_chart(fig, use_container_width=True)
+                            st.success("✅ Histograms generated!")
+                            st.info("💡 **Tip:** Click on legend items to show/hide classes.")
+                        except Exception as e:
+                            st.error(f"Error generating histograms: {str(e)}")
+                else:
+                    st.warning("Please select at least one band.")
+        
+        #Tab 2: Box Plots
+        with viz2:
+            st.markdown("### Box Plots - Spectral Value Distribution")
+            st.markdown("Interactive box plots showing median, quartiles, and outliers for each class. " \
+                       "Hover over boxes to see statistical details.")
+            
+            selected_box_bands = st.multiselect(
+                "Select bands to plot:",
+                options=available_bands,
+                default=available_bands[:5] if len(available_bands) >= 5 else available_bands,
+                key="box_bands"
+            )
+            
+            if st.button("Generate Box Plots", key="btn_boxplot", type="primary"):
+                if selected_box_bands:
+                    with st.spinner("Generating interactive box plots..."):
+                        try:
+                            figures = plotter.plot_boxplot(
+                                pixel_data, 
+                                bands=selected_box_bands
+                            )
+                            for fig in figures:
+                                st.plotly_chart(fig, use_container_width=True)
+                            st.success("✅ Box plots generated successfully!")
+                            st.info("💡 **Tip:** Hover over boxes to see min, max, median, and quartile values.")
+                        except Exception as e:
+                            st.error(f"Error generating box plots: {str(e)}")
+                else:
+                    st.warning("Please select at least one band.")
+        
+        # TAB 3: SINGLE SCATTER PLOT
+        with viz3:
+            st.markdown("### Feature Space Scatter Plot")
+            st.markdown("Visualize the relationship between two spectral bands and assess class separability in 2D feature space.")
+            
+            available_bands = [b for b in plotter.band_names if b in pixel_data.columns]
+            
+            if len(available_bands) >= 2:
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    x_band = st.selectbox(
+                        "X-axis band:",
+                        options=available_bands,
+                        index=0 if "RED" not in available_bands else available_bands.index("RED"),
+                        key="scatter_x"
+                    )
+                
+                with col2:
+                    y_band = st.selectbox(
+                        "Y-axis band:",
+                        options=available_bands,
+                        index=1 if "NIR" not in available_bands else available_bands.index("NIR"),
+                        key="scatter_y"
+                    )
+                
+                with col3:
+                    alpha = st.slider("Point transparency:", 0.1, 1.0, 0.6, 0.1)
+                
+                # Additional options
+                col4, col5 = st.columns(2)
+                with col4:
+                    add_ellipse = st.checkbox("Add confidence ellipses", value=False, 
+                                            help="Shows 2-sigma confidence ellipses for each class")
+                with col5:
+                    color_palette = st.selectbox("Color palette:", 
+                                                ["tab10", "Set3", "Paired", "husl", "Accent"], 
+                                                index=0,  help="Preview will update when you change selection")
+                    colors = plt.cm.get_cmap(color_palette)(np.linspace(0, 1, 10))
+                    color_boxes = ""
+                    for i in range(10):
+                        color_hex = '#{:02x}{:02x}{:02x}'.format(
+                            int(colors[i][0]*255), 
+                            int(colors[i][1]*255), 
+                            int(colors[i][2]*255),
+                            int(colors[i][2]*255)
+                        )
+                        color_boxes += f'<span style="display:inline-block; width:20px; height:20px; background-color:{color_hex}; margin:2px; border:1px solid #ddd; border-radius:2px;"></span>'
+                    
+                    st.markdown(color_boxes, unsafe_allow_html=True)
+                
+                if st.button("Generate Scatter Plot", key="btn_scatter"):
+                    with st.spinner("Generating scatter plot..."):
+                        try:
+                            fig = plotter.static_scatter_plot(
+                                pixel_data,
+                                x_band=x_band,
+                                y_band=y_band,
+                                alpha=alpha,
+                                figsize=(12, 8),
+                                color_palette=color_palette,
+                                add_legend=True,
+                                add_ellipse=add_ellipse
+                            )
+                            if fig:
+                                #st.pyplot(fig)
+                                st.success("Scatter plot generated successfully!")
+                                st.pyplot(plt.gcf())
+                                plt.close()
+                                # Add interpretation
+                                st.info("""
+                                **Interpretation Tips:**
+                                - Well-separated clusters indicate good class separability
+                                - Overlapping clusters suggest potential classification confusion
+                                - Ellipses show the spread and correlation of class data
+                                """)
+                        except Exception as e:
+                            st.error(f"Error generating scatter plot: {str(e)}")
+            else:
+                st.warning("Need at least 2 bands for scatter plot visualization.")
+   
+        # TAB 4: MULTI-BAND SCATTER COMBINATIONS
+        with viz4:
+            st.markdown("### 3D Feature Space Exploration")
+            st.markdown("Explore the spectral signatures in 3D space. Rotate, zoom, and pan to understand class relationships in three-band feature space.")
+            
+            if len(available_bands) >= 3:
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    x_band_3d = st.selectbox(
+                        "X-axis band:",
+                        options=available_bands,
+                        index=available_bands.index("RED") if "RED" in available_bands else 0,
+                        key="scatter_3d_x"
+                    )
+                
+                with col2:
+                    y_band_3d = st.selectbox(
+                        "Y-axis band:",
+                        options=available_bands,
+                        index=available_bands.index("GREEN") if "GREEN" in available_bands else (1 if len(available_bands) > 1 else 0),
+                        key="scatter_3d_y"
+                    )
+                
+                with col3:
+                    z_band_3d = st.selectbox(
+                        "Z-axis band:",
+                        options=available_bands,
+                        index=available_bands.index("NIR") if "NIR" in available_bands else (2 if len(available_bands) > 2 else 0),
+                        key="scatter_3d_z"
+                    )
+                
+                col4, col5 = st.columns(2)
+                with col4:
+                    marker_size_3d = st.slider("Point size:", 2, 8, 4, 1, key="marker_3d")
+                with col5:
+                    opacity_3d = st.slider("Point transparency:", 0.2, 1.0, 0.7, 0.1, key="opacity_3d")
+                
+                if st.button("Generate 3D Scatter Plot", key="btn_3d_scatter", type="primary"):
+                    with st.spinner("Generating 3D scatter plot..."):
+                        try:
+                            fig = plotter.scatter_plot_3d(
+                                pixel_data,
+                                x_band=x_band_3d,
+                                y_band=y_band_3d,
+                                z_band=z_band_3d,
+                                marker_size=marker_size_3d,
+                                opacity=opacity_3d
+                            )
+                            if fig:
+                                st.plotly_chart(fig, use_container_width=True)
+                                st.success("✅ 3D scatter plot generated successfully!")
+                                
+                                st.info("""
+                                **💡 Interactive Features:**
+                                - **Rotate**: Click and drag to rotate the 3D view
+                                - **Zoom**: Scroll wheel or pinch to zoom in/out
+                                - **Pan**: Right-click and drag to pan
+                                - **Hover**: See exact values for all three bands
+                                - **Legend**: Click to show/hide classes
+                                - **Reset**: Double-click to reset view
+                                
+                                **Analysis Tips:**
+                                - Look for well-separated clusters in 3D space
+                                - Rotate to find angles that best show class separation
+                                - Classes that overlap in 2D may separate in 3D
+                                - Common combinations: RGB, NIR-RED-GREEN, SWIR-NIR-RED
+                                """)
+                        except Exception as e:
+                            st.error(f"Error generating 3D scatter plot: {str(e)}")
+            else:
+                st.warning("Need at least 3 bands for 3D scatter plot visualization.")
+                st.info("The 3D scatter plot requires at least three spectral bands. " \
+                    "Please ensure your analysis includes sufficient bands.")        
+                st.markdown("---")
+                st.markdown("**Right-click on any plot and select 'Save image as...' to download")
+            
+    except Exception as e:
+                st.error(f"Error initializing visualization plotter: {str(e)}")
+                st.info("Please ensure the separability analysis completed successfully.")
+else:
+    st.info("Please complete the separability analysis first to visualize training data.")
+    st.markdown("""
+    **Available visualizations after analysis:**
+    - **Histograms**: Distribution of spectral values by class
+    - **Box Plots**: Statistical summary of spectral values
+    - **Scatter Plots**: 2D feature space visualization
+    - **3D Scatter Plot**: 3D feature space visualization
+    """)        
 st.divider()
 st.subheader("Module Navigation")
 
@@ -324,21 +588,21 @@ module_2_completed = len(st.session_state.get("classes", [])) > 0
 col1, col2 = st.columns(2)
 
 with col1:
-    # Back to Module 1 button (always available)
-    if st.button("⬅️ Back to Module 2: Classification Scheme", use_container_width=True):
-        st.switch_page("pages/2_Module_2_Classification_scheme.py")
+    # Back to Module 3 button (always available)
+    if st.button("⬅️ Back to Module 3: Generate ROI", use_container_width=True):
+        st.switch_page("pages/3_Module_3_Generate_ROI.py")
 
 with col2:
-    # Forward to Module 3 button (conditional)
+    # Forward to Module 6 button (conditional)
     if module_2_completed:
-        if st.button("➡️ Go to Module 4: Classification", type="primary", use_container_width=True):
-            st.switch_page("pages/3_Module_3_Training_data.py")
+        if st.button("➡️ Go to Module 6: Supervised Classification", type="primary", use_container_width=True):
+            st.switch_page("pages/5_Module_6_Classification_and_LULC_Creation.py")
     else:
-        st.button("🔒 Complete Module 3 First", disabled=True, use_container_width=True, 
-                 help="Please add at least one class to the classification scheme")
+        st.button("🔒 Complete Module 4 First", disabled=True, use_container_width=True, 
+                 help="Analyze the region of interest in order to proceed")
 
 # Optional: Show completion status
 if module_2_completed:
-    st.success(f"✅ Classification scheme completed with {len(st.session_state['classes'])} classes")
+    st.success(f"✅ Analysis Complete")
 else:
-    st.info("Add at least one class to complete this module")
+    st.info("Analyze the region of interest in order to proceed")

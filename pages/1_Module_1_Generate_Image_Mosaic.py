@@ -8,9 +8,8 @@ import zipfile
 import os
 import ee
 import datetime
-ee.Authenticate()
-ee.Initialize()
-
+from epistemx.ee_config import initialize_earth_engine
+initialize_earth_engine()
 #title of the module
 st.title("Search and Generate Landsat Image Mosaic")
 st.divider()

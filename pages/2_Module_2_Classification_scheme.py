@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
 from epistemx.module_2 import LULC_Scheme_Manager
-
+from epistemx.ee_config import initialize_earth_engine
+initialize_earth_engine()
 #Page configuration
 st.set_page_config(
     page_title="Land Cover Classification Scheme",
     page_icon="logos/logo_epistem_crop.png",
     layout="wide"
-)
+) ###
 
 #Initialize the manager from the source code
 @st.cache_resource
@@ -29,7 +30,7 @@ Three methods are supported in this platform:
 """)
 
 st.markdown("---")
-
+##
 # Tab layout for different input methods
 tab1, tab2, tab3 = st.tabs(["➕ Manual Input", "📤 Upload CSV", "📋 Default Scheme"])
 
@@ -307,7 +308,7 @@ def render_navigation():
         if module_completed:
             if st.button("➡️ Go to Module 4: Analyze ROI", 
                         type="primary", width = 'stretch'):
-                st.switch_page("pages/3_Module_4_Analyze_ROI.py")
+                st.switch_page("pages/3_Module_3_Generate_ROI.py")
         else:
             st.button("🔒 Complete Module 2 First", 
                      disabled=True, width = 'stretch',
