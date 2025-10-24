@@ -8,7 +8,7 @@ st.set_page_config(
     page_title="Land Cover Classification Scheme",
     page_icon="logos/logo_epistem_crop.png",
     layout="wide"
-)
+) ###
 
 #Initialize the manager from the source code
 @st.cache_resource
@@ -30,7 +30,7 @@ Three methods are supported in this platform:
 """)
 
 st.markdown("---")
-
+##
 # Tab layout for different input methods
 tab1, tab2, tab3 = st.tabs(["➕ Manual Input", "📤 Upload CSV", "📋 Default Scheme"])
 
