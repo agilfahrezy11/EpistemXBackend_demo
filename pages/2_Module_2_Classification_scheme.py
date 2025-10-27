@@ -101,7 +101,7 @@ def render_manual_input_form():
                 st.error(f"❌ {message}")
     
     with col_btn2:
-        if edit_mode and st.button("❌ Cancel", use_container_width=True):
+        if edit_mode and st.button("❌ Cancel", width='stretch'):
             manager.cancel_edit()
             st.rerun()
 
@@ -186,7 +186,7 @@ with tab2:
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            if st.button("✅ Finalize Scheme", type="primary", use_container_width=True):
+            if st.button("✅ Finalize Scheme", type="primary", width='stretch'):
                 success, message = manager.finalize_csv_upload(color_assignments)
                 if success:
                     # Set ReferenceDataSource to False when CSV upload is used
@@ -197,7 +197,7 @@ with tab2:
                     st.error(f"❌ {message}")
         
         with col2:
-            if st.button("❌ Cancel Upload", use_container_width=True):
+            if st.button("❌ Cancel Upload", width='stretch'):
                 st.session_state.csv_temp_classes = []
                 st.rerun()
 
@@ -217,9 +217,9 @@ with tab3:
     if selected_scheme:
         with st.expander("📋 Preview Classes"):
             preview_df = pd.DataFrame(default_schemes[selected_scheme])
-            st.dataframe(preview_df, use_container_width=True)
+            st.dataframe(preview_df,width='stretch')
     
-    if st.button("📋 Load Default Scheme", type="primary", use_container_width=True):
+    if st.button("📋 Load Default Scheme", type="primary",width='stretch'):
         success, message = manager.load_default_scheme(selected_scheme)
         if success:
             # Set ReferenceDataSource to True when default scheme is loaded
@@ -286,12 +286,12 @@ def render_class_display():
                 file_name="classification_scheme.csv",
                 mime="text/csv",
                 type="primary",
-                use_container_width=True
+               width='stretch'
             )
     
     with col2:
         with st.expander("📋 Preview Data"):
-            st.dataframe(manager.get_dataframe(), use_container_width=True)
+            st.dataframe(manager.get_dataframe(),width='stretch')
 
 # Render the class display
 render_class_display()
@@ -320,17 +320,17 @@ def render_navigation():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("⬅️ Back to Module 1", use_container_width=True):
+        if st.button("⬅️ Back to Module 1",width='stretch'):
             st.switch_page("pages/1_Module_1_Generate_Image_Mosaic.py")
     
     with col2:
         if module_completed:
             if st.button("➡️ Go to Module 3: Generate ROI", 
-                        type="primary", use_container_width=True):
+                        type="primary",width='stretch'):
                 st.switch_page("pages/3_Module_3_Generate_ROI.py")
         else:
             st.button("🔒 Complete Module 2 First", 
-                     disabled=True, use_container_width=True,
+                     disabled=True,width='stretch',
                      help="Add at least one class to proceed")
     
     # Status indicator

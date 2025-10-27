@@ -423,7 +423,7 @@ with tab3:
                 showlegend=False
             )
             
-            st.plotly_chart(fig,  use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         #Display the most importance features
         with col2:
             st.markdown("**Top 5 Most Important Features:**")
@@ -514,7 +514,7 @@ with tab3:
                 "Geometric Mean Score (%)": np.round(np.array(acc["gmean_per_class"]) * 100, 2)
             })
 
-            st.dataframe(df_metrics, use_container_width=True)
+            st.dataframe(df_metrics,width='stretch')
 
             #Plot Confusion Matrix as heatmap
             st.subheader("Confusion Matrix")
@@ -536,7 +536,7 @@ with tab3:
                 height=600
             )
             st.plotly_chart(fig,     
-                use_container_width=True, #got warning to upgrade to use 'use_container_width'
+               width='stretch', #got warning to upgrade to use 'width='stretch'
                 config={
                     "displayModeBar": True,
                     "responsive": True

@@ -121,7 +121,7 @@ def render_validation_upload():
                 
                 # Show data preview
                 with st.expander("📋 Data Preview"):
-                    st.dataframe(gdf_cleaned.head(), use_container_width=True)
+                    st.dataframe(gdf_cleaned.head(),width='stretch')
                 
                 # Show map preview
                 st.markdown("**📍 Validation Points Distribution:**")
@@ -184,7 +184,7 @@ def user_input_for_accuracy_assessment():
         )
 
     # Run assessment
-    if st.button("🎯 Evaluate Map Accuracy", type="primary", use_container_width=True):
+    if st.button("🎯 Evaluate Map Accuracy", type="primary",width='stretch'):
         with st.spinner("Running thematic accuracy assessment..."):
             success, results = manager.run_accuracy_assessment(
                 lcmap=lcmap,
@@ -260,7 +260,7 @@ def render_accuracy_results():
         "F1-Score (%)": [round(v * 100, 2) for v in results["f1_scores"]],
     })
     
-    st.dataframe(df_metrics, use_container_width=True)
+    st.dataframe(df_metrics,width='stretch')
 
     # Confusion matrix visualization
     st.markdown("---")
@@ -290,7 +290,7 @@ def render_accuracy_results():
         yaxis_title="Actual Class"
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig,width='stretch')
 
     # Export results option
     st.markdown("---")
@@ -315,7 +315,7 @@ def render_accuracy_results():
             data=csv_data,
             file_name="accuracy_assessment_results.csv",
             mime="text/csv",
-            use_container_width=True
+           width='stretch'
         )
     
     with col2:
@@ -326,7 +326,7 @@ def render_accuracy_results():
             data=detailed_csv,
             file_name="class_level_accuracy.csv",
             mime="text/csv",
-            use_container_width=True
+           width='stretch'
         )
 
 def render_navigation():
@@ -336,7 +336,7 @@ def render_navigation():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("⬅️ Back to Module 6", use_container_width=True):
+        if st.button("⬅️ Back to Module 6",width='stretch'):
             st.switch_page("pages/5_Module_6_Classification_and_LULC_Creation.py")
     
     with col2:

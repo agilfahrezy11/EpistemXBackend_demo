@@ -81,7 +81,7 @@
                          ├──  def load_default_scheme
                          └──  def get_default_scheme
 
-   ## System Response 2.1c: Download classification scheme
+   ## System Response 2.2: Download classification scheme
       ├── src/epistemx                      
       │      └── module_2.py
       │            └── Class LULC_Scheme_Manager:

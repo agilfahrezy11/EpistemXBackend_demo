@@ -162,7 +162,7 @@ if "training_gdf" in st.session_state:
                                 help="Lower values = faster processing but less representative sampling")
 
 #Single command to complete the analysis
-    if st.button("Run Separability Analysis", type="primary", use_container_width=True):
+    if st.button("Run Separability Analysis", type="primary",width='stretch'):
         if "training_data" not in st.session_state:
             st.error("Please upload a valid ROI shapefile first.")
         else:
@@ -370,7 +370,7 @@ if (st.session_state.get("analysis_complete", False) and
                                 opacity=hist_opacity
                             )
                             for fig in figures:
-                                st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig,width='stretch')
                             st.success("✅ Histograms generated!")
                             st.info("💡 **Tip:** Click on legend items to show/hide classes.")
                         except Exception as e:
@@ -400,7 +400,7 @@ if (st.session_state.get("analysis_complete", False) and
                                 bands=selected_box_bands
                             )
                             for fig in figures:
-                                st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig,width='stretch')
                             st.success("✅ Box plots generated successfully!")
                             st.info("💡 **Tip:** Hover over boxes to see min, max, median, and quartile values.")
                         except Exception as e:
@@ -539,7 +539,7 @@ if (st.session_state.get("analysis_complete", False) and
                                 opacity=opacity_3d
                             )
                             if fig:
-                                st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig,width='stretch')
                                 st.success("✅ 3D scatter plot generated successfully!")
                                 
                                 st.info("""
@@ -589,16 +589,16 @@ col1, col2 = st.columns(2)
 
 with col1:
     # Back to Module 3 button (always available)
-    if st.button("⬅️ Back to Module 3: Generate ROI", use_container_width=True):
+    if st.button("⬅️ Back to Module 3: Generate ROI",width='stretch'):
         st.switch_page("pages/3_Module_3_Generate_ROI.py")
 
 with col2:
     # Forward to Module 6 button (conditional)
     if module_2_completed:
-        if st.button("➡️ Go to Module 6: Supervised Classification", type="primary", use_container_width=True):
+        if st.button("➡️ Go to Module 6: Supervised Classification", type="primary",width='stretch'):
             st.switch_page("pages/5_Module_6_Classification_and_LULC_Creation.py")
     else:
-        st.button("🔒 Complete Module 4 First", disabled=True, use_container_width=True, 
+        st.button("🔒 Complete Module 4 First", disabled=True,width='stretch', 
                  help="Analyze the region of interest in order to proceed")
 
 # Optional: Show completion status

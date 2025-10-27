@@ -232,7 +232,7 @@ if reference_data_source:
                         lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else x
                     )
                 
-                st.dataframe(display_df, use_container_width=True)
+                st.dataframe(display_df,width='stretch')
                 
                 # Show insufficient classes if any
                 if 'insufficient_df_ref' in st.session_state and st.session_state['insufficient_df_ref'] is not None:
@@ -245,7 +245,7 @@ if reference_data_source:
                                 insufficient_display['Percentage'] = insufficient_display['Percentage'].apply(
                                     lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else x
                                 )
-                            st.dataframe(insufficient_display, use_container_width=True)
+                            st.dataframe(insufficient_display,width='stretch')
             
             # Training/Validation Split for Reference Data
             st.divider()
@@ -484,7 +484,7 @@ else:
                             lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else x
                         )
                     
-                    st.dataframe(display_df, use_container_width=True)
+                    st.dataframe(display_df,width='stretch')
                     
                     # Show insufficient classes if any
                     if 'insufficient_df_upload' in st.session_state and st.session_state['insufficient_df_upload'] is not None:
@@ -497,7 +497,7 @@ else:
                                     insufficient_display['Percentage'] = insufficient_display['Percentage'].apply(
                                         lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else x
                                     )
-                                st.dataframe(insufficient_display, use_container_width=True)
+                                st.dataframe(insufficient_display,width='stretch')
                 
                 # Training/Validation Split for Uploaded Data
                 st.divider()
@@ -798,7 +798,7 @@ else:
                                         lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else x
                                     )
                                 
-                                st.dataframe(display_df, use_container_width=True)
+                                st.dataframe(display_df,width='stretch')
                                 
                                 # Show insufficient classes if any
                                 insufficient_df = display_df[display_df['Status'].isin(['Insufficient', 'No Samples'])]
@@ -806,7 +806,7 @@ else:
                                     st.warning(f"⚠️ {len(insufficient_df)} kelas memiliki sampel yang tidak mencukupi (< 20 sampel)")
                                     
                                     with st.expander("Lihat Kelas yang Tidak Mencukupi"):
-                                        st.dataframe(insufficient_df, use_container_width=True)
+                                        st.dataframe(insufficient_df,width='stretch')
                             
                             # Training/Validation Split for Sampling Data
                             st.divider()
@@ -880,7 +880,7 @@ st.subheader("Navigasi Modul")
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("⬅️ Kembali ke Modul 2: Skema Klasifikasi", use_container_width=True):
+    if st.button("⬅️ Kembali ke Modul 2: Skema Klasifikasi",width='stretch'):
         st.switch_page("pages/2_Module_2_Classification_scheme.py")
 
 with col2:
@@ -890,10 +890,10 @@ with col2:
                      st.session_state.get('data_processed_sampling', False))
     
     if training_ready:
-        if st.button("➡️ Lanjut ke Modul 4: Klasifikasi", type="primary", use_container_width=True):
+        if st.button("➡️ Lanjut ke Modul 4: Klasifikasi", type="primary",width='stretch'):
             st.switch_page("pages/4_Module_4_Analyze_ROI.py")
     else:
-        st.button("🔒 Selesaikan Data Training Dulu", disabled=True, use_container_width=True,
+        st.button("🔒 Selesaikan Data Training Dulu", disabled=True,width='stretch',
                  help="Silakan proses data training sebelum melanjutkan")
 
 # Status indicator
