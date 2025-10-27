@@ -17,6 +17,10 @@ def get_lulc_manager():
 
 manager = get_lulc_manager()
 
+# Initialize ReferenceDataSource if not exists
+if 'ReferenceDataSource' not in st.session_state:
+    st.session_state['ReferenceDataSource'] = False
+
 # Page header
 st.title("Determining LULC Classification Schema and Classes")
 st.divider()
@@ -86,16 +90,18 @@ def render_manual_input_form():
     
     with col_btn1:
         button_text = "💾 Update Class" if edit_mode else "➕ Add Class"
-        if st.button(button_text, type="primary", width = 'stretch'):
+        if st.button(button_text, type="primary", use_container_width=True):
             success, message = manager.add_class(class_id, class_name, color_code)
             if success:
+                # Set ReferenceDataSource to False when manual input is used
+                st.session_state['ReferenceDataSource'] = False
                 st.success(f"✅ {message}")
                 st.rerun()
             else:
                 st.error(f"❌ {message}")
     
     with col_btn2:
-        if edit_mode and st.button("❌ Cancel", width = 'stretch'):
+        if edit_mode and st.button("❌ Cancel", use_container_width=True):
             manager.cancel_edit()
             st.rerun()
 
@@ -180,16 +186,18 @@ with tab2:
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            if st.button("✅ Finalize Scheme", type="primary", width = 'stretch'):
+            if st.button("✅ Finalize Scheme", type="primary", use_container_width=True):
                 success, message = manager.finalize_csv_upload(color_assignments)
                 if success:
+                    # Set ReferenceDataSource to False when CSV upload is used
+                    st.session_state['ReferenceDataSource'] = False
                     st.success(f"✅ {message}")
                     st.rerun()
                 else:
                     st.error(f"❌ {message}")
         
         with col2:
-            if st.button("❌ Cancel Upload", width = 'stretch'):
+            if st.button("❌ Cancel Upload", use_container_width=True):
                 st.session_state.csv_temp_classes = []
                 st.rerun()
 
@@ -209,11 +217,13 @@ with tab3:
     if selected_scheme:
         with st.expander("📋 Preview Classes"):
             preview_df = pd.DataFrame(default_schemes[selected_scheme])
-            st.dataframe(preview_df, width = 'stretch')
+            st.dataframe(preview_df, use_container_width=True)
     
-    if st.button("📋 Load Default Scheme", type="primary", width = 'stretch'):
+    if st.button("📋 Load Default Scheme", type="primary", use_container_width=True):
         success, message = manager.load_default_scheme(selected_scheme)
         if success:
+            # Set ReferenceDataSource to True when default scheme is loaded
+            st.session_state['ReferenceDataSource'] = True
             st.success(f"✅ {message}")
             st.rerun()
         else:
@@ -276,12 +286,12 @@ def render_class_display():
                 file_name="classification_scheme.csv",
                 mime="text/csv",
                 type="primary",
-                width = 'stretch'
+                use_container_width=True
             )
     
     with col2:
         with st.expander("📋 Preview Data"):
-            st.dataframe(manager.get_dataframe(), width = 'stretch')
+            st.dataframe(manager.get_dataframe(), use_container_width=True)
 
 # Render the class display
 render_class_display()
@@ -293,6 +303,15 @@ def render_navigation():
     # Store classification data for other modules
     if manager.classes:
         st.session_state['classification_df'] = manager.get_dataframe()
+        # Store classes in the format expected by Module 3
+        st.session_state['classes'] = [
+            {
+                'ID': class_data['ID'],
+                'LULC_Type': class_data['Class Name'],
+                'color_palette': class_data['Color Code']
+            }
+            for class_data in manager.classes
+        ]
     
     # Module completion check
     module_completed = len(manager.classes) > 0
@@ -301,22 +320,23 @@ def render_navigation():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("⬅️ Back to Module 1", width = 'stretch'):
+        if st.button("⬅️ Back to Module 1", use_container_width=True):
             st.switch_page("pages/1_Module_1_Generate_Image_Mosaic.py")
     
     with col2:
         if module_completed:
-            if st.button("➡️ Go to Module 4: Analyze ROI", 
-                        type="primary", width = 'stretch'):
+            if st.button("➡️ Go to Module 3: Generate ROI", 
+                        type="primary", use_container_width=True):
                 st.switch_page("pages/3_Module_3_Generate_ROI.py")
         else:
             st.button("🔒 Complete Module 2 First", 
-                     disabled=True, width = 'stretch',
+                     disabled=True, use_container_width=True,
                      help="Add at least one class to proceed")
     
     # Status indicator
     if module_completed:
-        st.success(f"✅ Module completed with {len(manager.classes)} classes")
+        reference_status = "Default Scheme" if st.session_state.get('ReferenceDataSource', False) else "Custom Scheme"
+        st.success(f"✅ Module completed with {len(manager.classes)} classes ({reference_status})")
     else:
         st.info("💡 Add at least one class to complete this module")
 
