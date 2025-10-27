@@ -144,35 +144,107 @@ class SyncTrainData:
         }
 
 
-    def SetClassField(data_dict, field_name):
+    def SetClassField(data_dict, field_name, standardize_column_name=True):
         """
-        Define which field contains the land cover class
+        Define which field contains the land cover class and optionally standardize the column name
+        to match the classification table structure.
         
         Args:
             data_dict: Dictionary containing training data and validation results
-            field_name: Name of the field containing class information
+            field_name: Name of the field containing class information in the training data
+            standardize_column_name: If True, rename the class field to match the classification table ID column
         """
         training_data = data_dict['training_data']
+        landcover_df = data_dict['landcover_df']
         
         if field_name not in training_data.columns:
             available_fields = list(training_data.columns)
             raise ValueError(f"Field '{field_name}' not found. Available fields: {available_fields}")
         
-        data_dict['class_field'] = field_name
+        # Get the ID column name from the classification table (first column)
+        classification_id_col = landcover_df.columns[0]
+        
+        if standardize_column_name and field_name != classification_id_col:
+            # Rename the training data column to match the classification table ID column
+            training_data = training_data.rename(columns={field_name: classification_id_col})
+            data_dict['training_data'] = training_data
+            data_dict['class_field'] = classification_id_col
+            
+            print(f"INFO: Renamed training data column '{field_name}' to '{classification_id_col}' to match classification table")
+        else:
+            data_dict['class_field'] = field_name
         
         return data_dict
 
-    def ValidClass(data_dict, class_col_index=1):
+    def StandardizeClassColumns(data_dict, class_id_field):
         """
-        Validate numeric training classes and ensure class name is attached
-        from landcover table. If missing, auto-merge from landcover_df.
+        Standardize training data columns to match the classification table structure.
+        This ensures consistency between training data and classification scheme.
+        
+        Args:
+            data_dict: Dictionary containing training data, landcover_df, and validation results
+            class_id_field: Name of the field in training data that contains class IDs
+            
+        Returns:
+            dict: Updated data_dict with standardized column names
+        """
+        training_data = data_dict['training_data']
+        landcover_df = data_dict['landcover_df']
+        
+        # Get column names from classification table
+        classification_id_col = landcover_df.columns[0]    # ID column
+        classification_name_col = landcover_df.columns[1]  # Class name column
+        
+        # Check if the specified class ID field exists
+        if class_id_field not in training_data.columns:
+            available_fields = list(training_data.columns)
+            raise ValueError(f"Class ID field '{class_id_field}' not found. Available fields: {available_fields}")
+        
+        # Rename the class ID column to match classification table
+        if class_id_field != classification_id_col:
+            training_data = training_data.rename(columns={class_id_field: classification_id_col})
+            print(f"INFO: Renamed '{class_id_field}' to '{classification_id_col}' to match classification table")
+        
+        # Create a lookup table for class names
+        class_lookup = dict(zip(landcover_df[classification_id_col], landcover_df[classification_name_col]))
+        
+        # Add or update the class name column
+        training_data[classification_name_col] = training_data[classification_id_col].map(class_lookup)
+        
+        # Handle any unmapped values
+        unmapped_mask = training_data[classification_name_col].isna()
+        if unmapped_mask.any():
+            unmapped_ids = training_data.loc[unmapped_mask, classification_id_col].unique()
+            print(f"WARNING: Found unmapped class IDs: {list(unmapped_ids)}")
+            print("These will be filtered out in the validation step.")
+        
+        # Update the data dictionary
+        data_dict['training_data'] = training_data
+        data_dict['class_field'] = classification_id_col
+        
+        # Ensure proper column order: ID, Name, then other columns
+        other_cols = [col for col in training_data.columns 
+                     if col not in [classification_id_col, classification_name_col]]
+        new_column_order = [classification_id_col, classification_name_col] + other_cols
+        training_data = training_data[new_column_order]
+        data_dict['training_data'] = training_data
+        
+        print(f"INFO: Standardized training data columns to match classification table structure")
+        print(f"      - ID column: '{classification_id_col}'")
+        print(f"      - Name column: '{classification_name_col}'")
+        
+        return data_dict
+
+    def ValidClass(data_dict, use_class_ids=True):
+        """
+        Validate training classes against the classification table and filter invalid entries.
         
         Args:
             data_dict (dict): Contains training_data, landcover_df, class_field, and validation_results
-            class_col_index (int): Column index to use from landcover_df for valid class list (default=1)
+            use_class_ids (bool): If True, validate using class IDs (column 0), if False use class names (column 1)
         
         Returns:
-            dict: updated data_dict
+            dict: updated data_dict with validated training data
         """
 
         training_data = data_dict['training_data']
@@ -180,10 +252,17 @@ class SyncTrainData:
         class_field = data_dict['class_field']
         validation_results = data_dict['validation_results']
 
-        # Get valid classes (from landcover_df by column index) 
-        valid_classes = set(landcover_df.iloc[:, class_col_index].values)
+        # Determine which column to use for validation
+        if use_class_ids:
+            # Use class IDs (first column) for validation
+            valid_classes = set(landcover_df.iloc[:, 0].values)
+            validation_column = "class IDs"
+        else:
+            # Use class names (second column) for validation  
+            valid_classes = set(landcover_df.iloc[:, 1].values)
+            validation_column = "class names"
 
-        # Training data classes 
+        # Get training data classes 
         training_classes = set(training_data[class_field].unique())
 
         # Identify invalid classes
@@ -191,63 +270,61 @@ class SyncTrainData:
 
         # Filter & record invalid classes
         if invalid_classes:
+            print(f"INFO: Found {len(invalid_classes)} invalid {validation_column} in training data")
+            
             for invalid_class in invalid_classes:
                 count = len(training_data[training_data[class_field] == invalid_class])
                 validation_results['invalid_classes'].append({
                     'class': invalid_class,
                     'count': count
                 })
+                print(f"      - Invalid {validation_column[:-1]}: {invalid_class} ({count} points)")
 
             original_count = len(training_data)
             training_data = training_data[training_data[class_field].isin(valid_classes)].copy()
             removed_count = original_count - len(training_data)
 
             validation_results['warnings'].append(
-                f"Removed {removed_count} points with invalid classes not in Module 2 definition"
+                f"Removed {removed_count} points with invalid {validation_column} not in classification table"
             )
+            print(f"INFO: Removed {removed_count} points with invalid {validation_column}")
 
-        # Attach class name / ensure LULC_Type exists
-
+        # Ensure both ID and name columns exist and are properly mapped
         class_id_col = landcover_df.columns[0]
         class_name_col = landcover_df.columns[1]
 
-        # Detect any existing name-like column
-        possible_class_cols = [
-            c for c in training_data.columns
-            if c.lower() in ['lulc_type', 'class_name', 'lulc_class', 'landcover', 'lulc']
-        ]
+        # If we don't have the name column, add it
+        if class_name_col not in training_data.columns:
+            # Create lookup table and add name column
+            class_lookup = dict(zip(landcover_df[class_id_col], landcover_df[class_name_col]))
+            training_data[class_name_col] = training_data[class_field].map(class_lookup)
+            print(f"INFO: Added '{class_name_col}' column to training data")
 
-        if possible_class_cols:
-            # Standardize existing column name
-            training_data.rename(columns={possible_class_cols[0]: "LULC_Type"}, inplace=True)
-        else:
-            # Merge to attach class name column
-            training_data = training_data.merge(
-                landcover_df[[class_id_col, class_name_col]],
-                left_on=class_field,
-                right_on=class_id_col,
-                how="left"
-            ).drop(columns=[class_id_col])
+        # Clean up any duplicate or unnecessary columns
+        cols_to_keep = [class_id_col, class_name_col]
+        other_cols = [col for col in training_data.columns if col not in cols_to_keep]
+        
+        # Remove any columns that might be duplicates of our standardized columns
+        duplicate_patterns = ['lulc_type', 'class_name', 'lulc_class', 'landcover', 'lulc', 'mapped', 'class']
+        for col in other_cols[:]:  # Use slice copy to avoid modification during iteration
+            if any(pattern in col.lower() for pattern in duplicate_patterns) and col != class_field:
+                if col in training_data.columns:
+                    training_data = training_data.drop(columns=[col])
+                    print(f"INFO: Removed duplicate column '{col}'")
+                    other_cols.remove(col)
 
-            training_data.rename(columns={class_name_col: "LULC_Type"}, inplace=True)
-
-        # If any duplicate class mapping fields exist, drop them
-        dupe_cols = [
-            c for c in training_data.columns
-            if ("Mapped" in c or "Class" in c) and c != "LULC_Type"
-        ]
-        for c in dupe_cols:
-            if c != "LULC_Type":
-                training_data.drop(columns=[c], inplace=True)
-
-        # Ensure LULC_Type is second column 
-        first_col = training_data.columns[0]
-        cols = [first_col, "LULC_Type"] + [c for c in training_data.columns if c not in [first_col, "LULC_Type"]]
-        training_data = training_data[cols]
+        # Ensure proper column order: ID, Name, geometry, then other columns
+        geometry_cols = [col for col in other_cols if col == 'geometry']
+        remaining_cols = [col for col in other_cols if col != 'geometry']
+        
+        final_column_order = cols_to_keep + geometry_cols + remaining_cols
+        training_data = training_data[[col for col in final_column_order if col in training_data.columns]]
 
         # Update result dict
         validation_results['points_after_class_filter'] = len(training_data)
         data_dict['training_data'] = training_data
+
+        print(f"INFO: Validation complete. {len(training_data)} valid training points remain.")
 
         return data_dict
 
@@ -265,11 +342,14 @@ class SyncTrainData:
         class_field = data_dict['class_field']
         validation_results = data_dict['validation_results']
         
+        # Get class name column from landcover_df
+        class_name_col = landcover_df.columns[1]  # Use column name instead of iloc
+        
         class_counts = training_data[class_field].value_counts()
         insufficient_classes = []
         
         for idx, row in landcover_df.iterrows():
-            class_name = row.iloc[1]  # Second column for class name
+            class_name = row[class_name_col]  # Use column name instead of iloc[1]
             
             if class_name in class_counts:
                 count = class_counts[class_name]
@@ -292,7 +372,7 @@ class SyncTrainData:
         # Check zero samples
         zero_sample_classes = []
         for idx, row in landcover_df.iterrows():
-            class_name = row.iloc[1]
+            class_name = row[class_name_col]  # Use column name instead of iloc[1]
             if class_name not in class_counts:
                 zero_sample_classes.append(class_name)
         
@@ -424,6 +504,74 @@ class SyncTrainData:
 
         return table_df, total_valid, insufficient_df
 
+    def ProcessTrainingData(landcover_df, aoi_geometry, training_shp_path=None, training_ee_path=None, 
+                           class_id_field=None, batch_size=5000, min_samples=20):
+        """
+        Complete workflow to load, standardize, and validate training data.
+        This is a convenience method that combines all the individual steps.
+        
+        Args:
+            landcover_df: DataFrame from Module 2 with land cover classes
+            aoi_geometry: ee.Geometry or GeoDataFrame representing the AOI
+            training_shp_path: Path to shapefile training data
+            training_ee_path: Earth Engine asset path for training data
+            class_id_field: Name of the field containing class IDs in training data
+            batch_size: Number of features per batch for EE downloads (default 5000)
+            min_samples: Minimum number of samples required per class (default 20)
+            
+        Returns:
+            Dictionary with processed training_data and validation_results
+        """
+        print("=== Starting Complete Training Data Processing Workflow ===")
+        
+        # Step 1: Load training data
+        print("Step 1: Loading training data...")
+        data_dict = SyncTrainData.LoadTrainData(
+            landcover_df=landcover_df,
+            aoi_geometry=aoi_geometry,
+            training_shp_path=training_shp_path,
+            training_ee_path=training_ee_path,
+            batch_size=batch_size
+        )
+        
+        # Step 2: Standardize columns (if class_id_field is provided)
+        if class_id_field:
+            print(f"Step 2: Standardizing columns (class ID field: '{class_id_field}')...")
+            data_dict = SyncTrainData.StandardizeClassColumns(data_dict, class_id_field)
+        else:
+            print("Step 2: Skipping column standardization (no class_id_field provided)")
+            # Set class field to first column if not specified
+            data_dict['class_field'] = data_dict['training_data'].columns[0]
+        
+        # Step 3: Validate classes
+        print("Step 3: Validating classes...")
+        data_dict = SyncTrainData.ValidClass(data_dict, use_class_ids=True)
+        
+        # Step 4: Check sample sufficiency
+        print("Step 4: Checking sample sufficiency...")
+        data_dict = SyncTrainData.CheckSufficiency(data_dict, min_samples=min_samples)
+        
+        # Step 5: Filter by AOI
+        print("Step 5: Filtering by AOI...")
+        data_dict = SyncTrainData.FilterTrainAoi(data_dict)
+        
+        # Step 6: Generate summary
+        print("Step 6: Generating summary...")
+        table_df, total_samples, insufficient_df = SyncTrainData.TrainDataRaw(
+            training_data=data_dict.get('training_data'),
+            landcover_df=data_dict.get('landcover_df'),
+            class_field=data_dict.get('class_field')
+        )
+        
+        # Add summary to results
+        data_dict['summary_table'] = table_df
+        data_dict['total_samples'] = total_samples
+        data_dict['insufficient_classes'] = insufficient_df
+        
+        print("=== Training Data Processing Complete ===")
+        print(f"Final result: {total_samples} valid training samples")
+        
+        return data_dict
     
     def generate_report(self, output_path='modul-3_report.txt'):
         """
@@ -507,18 +655,21 @@ class SplitTrainData:
     """
     """
 
-    def SplitProcess(TrainDataRecap, TrainSplitPct=0.8, random_state=42):
+    def SplitProcess(TrainDataRecap, TrainSplitPct=0.8, random_state=42, class_column=None):
         """
         Split training data into train and validation sets.
         
         Parameters:
         -----------
         TrainDataRecap : GeoDataFrame
-            The input geodataframe containing training data with a 'kelas' column
+            The input geodataframe containing training data
         TrainSplitPct : float, optional (default=0.8)
             Percentage of data to use for training (0.0 to 1.0)
         random_state : int, optional (default=42)
             Random seed for reproducibility
+        class_column : str, optional
+            Name of the column containing class information for stratification.
+            If None, will try to auto-detect from common names.
         
         Returns:
         --------
@@ -527,16 +678,30 @@ class SplitTrainData:
         """
         from sklearn.model_selection import train_test_split
         
+        # Auto-detect class column if not provided
+        if class_column is None:
+            possible_class_cols = ['kelas', 'LULC_Type', 'class', 'Class', 'LULC_ID', 'class_id']
+            for col in possible_class_cols:
+                if col in TrainDataRecap.columns:
+                    class_column = col
+                    break
+            
+            if class_column is None:
+                print("Warning: Could not auto-detect class column. Using random split without stratification.")
+        
         # Perform train-test split with stratification if possible
         try:
-            TrainDataFinal, ValidDataFinal = train_test_split(
-                TrainDataRecap,
-                train_size=TrainSplitPct,
-                stratify=TrainDataRecap['kelas'],
-                random_state=random_state
-            )
-        except ValueError:
-            print("Stratified split not possible, using random split.")
+            if class_column and class_column in TrainDataRecap.columns:
+                TrainDataFinal, ValidDataFinal = train_test_split(
+                    TrainDataRecap,
+                    train_size=TrainSplitPct,
+                    stratify=TrainDataRecap[class_column],
+                    random_state=random_state
+                )
+            else:
+                raise ValueError("Class column not found, using random split")
+        except ValueError as e:
+            print(f"Stratified split not possible ({e}), using random split.")
             TrainDataFinal, ValidDataFinal = train_test_split(
                 TrainDataRecap,
                 train_size=TrainSplitPct,
@@ -703,19 +868,23 @@ class LULCSamplingTool:
     an Earth Engine FeatureCollection (geometry) for AOI restriction.
     """
 
-    def __init__(self, lulc_dataframe: pd.DataFrame, aoi_ee_featurecollection: Optional[Any] = None) -> None:
+    def __init__(self, lulc_dataframe: pd.DataFrame, aoi_ee_featurecollection: Optional[Any] = None, 
+                 id_column: Optional[str] = None, type_column: Optional[str] = None, 
+                 color_column: Optional[str] = None) -> None:
         """
         Initialize the sampling tool.
 
         Parameters:
             lulc_dataframe: pd.DataFrame containing at least ID and class/type and color
             aoi_ee_featurecollection: Optional Earth Engine FeatureCollection/Geometry for AOI
+            id_column: Optional name of the ID column (auto-detected if None)
+            type_column: Optional name of the class/type column (auto-detected if None)
+            color_column: Optional name of the color column (auto-detected if None)
         """
         self.lulc_df = lulc_dataframe
         self.aoi_ee_featurecollection = aoi_ee_featurecollection
         self.aoi_geometry = None
         self.training_data: List[Dict[str, Any]] = []
-        self.TrainDataSampling = pd.DataFrame(columns=['ID', 'LULC_Type', 'Points', 'Coordinates'])
         self.current_class: Optional[Dict[str, Any]] = None
         self.markers: List[Marker] = []
         self.marker_data_map: Dict[Any, Dict[str, Any]] = {}
@@ -724,12 +893,23 @@ class LULCSamplingTool:
         self.edit_mode: bool = False
         self.last_click_time: float = 0.0
 
+        # Set column names (user-provided or auto-detected)
+        self.id_column = id_column
+        self.type_column = type_column
+        self.color_column = color_column
+
+        # Detect column names before using them
+        self._detect_columns()
+
         # Initialize UI and related components
         self.CreateUi()
 
-        # Initialize point counter
+        # Initialize point counter using the detected type column
         for idx, row in self.lulc_df.iterrows():
-            self.point_counter[row['LULC_Type']] = 0
+            self.point_counter[row[self.type_col]] = 0
+        
+        # Initialize TrainDataSampling with dynamic column names
+        self.TrainDataSampling = pd.DataFrame(columns=[self.id_col, self.type_col, 'Points', 'Coordinates'])
 
         # Load AOI if provided
         if self.aoi_ee_featurecollection is not None:
@@ -743,6 +923,45 @@ class LULCSamplingTool:
             self.zoom = 10
 
         self.CreateMap()
+
+    def _detect_columns(self) -> None:
+        """
+        Detect column names for ID, type, and color from the DataFrame.
+        """
+        # Auto-detect ID column
+        if self.id_column is None:
+            for col in self.lulc_df.columns:
+                col_lower = col.lower()
+                if col_lower in ['id', 'class_id', 'lulc_id', 'code']:
+                    self.id_column = col
+                    break
+            if self.id_column is None:
+                self.id_column = self.lulc_df.columns[0]  # Default to first column
+
+        # Auto-detect type/class column
+        if self.type_column is None:
+            for col in self.lulc_df.columns:
+                col_lower = col.lower()
+                if 'type' in col_lower or 'class' in col_lower or 'name' in col_lower:
+                    self.type_column = col
+                    break
+            if self.type_column is None:
+                self.type_column = self.lulc_df.columns[1]  # Default to second column
+
+        # Auto-detect color column
+        if self.color_column is None:
+            for col in self.lulc_df.columns:
+                col_lower = col.lower()
+                if 'color' in col_lower or 'palette' in col_lower or 'hex' in col_lower:
+                    self.color_column = col
+                    break
+            if self.color_column is None:
+                self.color_column = self.lulc_df.columns[2] if len(self.lulc_df.columns) > 2 else self.type_column
+
+        # Set the attributes for backward compatibility
+        self.id_col = self.id_column
+        self.type_col = self.type_column
+        self.color_col = self.color_column
 
     def LoadAoiFromEe(self) -> None:
         """
@@ -1074,25 +1293,7 @@ class LULCSamplingTool:
         """
         Create the user interface widgets and prepare output areas.
         """
-        id_col = 'ID'
-        type_col = None
-        color_col = None
-
-        for col in self.lulc_df.columns:
-            col_lower = col.lower()
-            if 'type' in col_lower or 'class' in col_lower:
-                type_col = col
-            elif 'color' in col_lower or 'palette' in col_lower:
-                color_col = col
-
-        if type_col is None:
-            type_col = self.lulc_df.columns[1]
-        if color_col is None:
-            color_col = self.lulc_df.columns[2] if len(self.lulc_df.columns) > 2 else self.lulc_df.columns[1]
-
-        self.id_col = id_col
-        self.type_col = type_col
-        self.color_col = color_col
+        # Use already detected column names
 
         class_options = [(f"{row[self.id_col]}: {row[self.type_col]}", idx)
                          for idx, row in self.lulc_df.iterrows()]

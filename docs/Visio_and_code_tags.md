@@ -90,9 +90,50 @@
              └── 2_Module_2_Classification_scheme.py
                          └── st.download_button (line 265 - 285)
 
-# Module 3: Region of Interest (sample)
+# Module 3: Generate Region of Interest
+  ## System Response 3.1 Prerequisite Check
+      └── src/epistemx                      
+            └── module_3.py
+                  └── Class input_check
+                         └──  def validateVariable   
 
-
+  ## System Response 3.2 ROI Upload and content Verification
+      └── src/epistemx                      
+            └── module_3.py
+                  └── Class input_check
+                         ├──  def LoadTrainData
+                         ├──  def SetClassField
+                         ├──  def ValidClass
+                         ├──  def CheckSufficiency
+                         ├──  def FilterTrainAoi
+                         ├──  def TrainDataRaw
+                         ├──  def generate_report
+                         ├──  def get_valid_training_data
+  ## System Response 3.3 On-screen Sampling 
+      └── src/epistemx                      
+            └── module_3.py 
+                  └── Class LULCSamplingTool          
+                         ├──  def __init__
+                         ├──  def  LoadAoiFromEe
+                         ├──  def  CreateMap
+                         ├──  def  CheckSufficiency
+                         ├──  def  AddCrosshairCursor
+                         ├──  def  AddAoiLayer
+                         ├──  def  IsPointInAoi
+                         ├──  def  _HandleMove
+                         ├──  def  _HandleClick
+                         ├──  def  RemovePoint
+                         ├──  def  ToggleEditMode
+                         ├──  def  CreateUi
+                         ├──  def  OnClassSelect
+                         ├──  def  SaveTrainingData
+                         ├──  def  UpdateTrainDataSampling
+                         ├──  def  ClearData
+                         ├──  def  UpdateStatistics
+                         ├──  def  UpdateTableDisplay
+                         ├──  def  ExportToShapefile
+                         └──  def  Display
+                         
 # Module 4: Region of Interest Separability Analysis
 
    ## System Response 4.1 Separability Analysis
