@@ -6,6 +6,8 @@ from .ee_config import ensure_ee_initialized
 # Ensure Earth Engine is initialized
 ensure_ee_initialized()
 
+# Module 6: Land Cover Classification
+## System Response 6.2 Classification
 class FeatureExtraction:
     """
     Perform feature extraction as one of the input for land cover classification. Three types of split is presented here:
@@ -237,6 +239,7 @@ class Generate_LULC:
         return stacked
         ############################# Feature importance ###########################
         #feature importance that can be used by hard or soft classification
+    ## System Response 6.3 Model Evaluation
     def get_feature_importance(self, trained_model):
         """
         Extract feature importance from a trained Random Forest model
@@ -263,6 +266,7 @@ class Generate_LULC:
         # Reset index
         importance_df = importance_df.reset_index(drop=True)
         return importance_df 
+    
     def evaluate_model(self, trained_model, test_data, class_property):
         """
         Perform model evaluation based on confusion matrix. This approach is similar to standard Remote Sensing accuracy assessment, but applied for trained model (ee.classifier)

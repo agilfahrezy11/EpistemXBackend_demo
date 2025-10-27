@@ -85,7 +85,7 @@ class LULC_Scheme_Manager:
             Number of classes currently defined
         """
         return len(self.classes)
-
+    ## System Response 2.1b: Manual Scheme Definition
     def validate_class_input(self, class_id: Any, class_name: str) -> Tuple[bool, Optional[str]]:
         """
         Validate class input parameters.
@@ -286,6 +286,8 @@ class LULC_Scheme_Manager:
 
     #adapted from line 266 - 320
     #Change so that csv is more tolaratable 
+# Module 2: Classification Scheme Definition
+## System Response 2.1a: Upload Classification Scheme
     def process_csv_upload(self, df: pd.DataFrame, id_col: str, name_col: str, 
                           color_col: Optional[str] = None) -> Tuple[bool, str]:
         """
@@ -359,7 +361,7 @@ class LULC_Scheme_Manager:
 
         except Exception as e:
             return False, f"Error processing CSV: {str(e)}"
-    
+
     def finalize_csv_upload(self, color_assignments: Optional[List[str]] = None) -> Tuple[bool, str]:
         """
         Finalize CSV upload with user-assigned colors.
@@ -392,6 +394,7 @@ class LULC_Scheme_Manager:
             
         except Exception as e:
             return False, f"Error finalizing CSV upload: {str(e)}"
+    ## System Response 2.1c: Download classification scheme
     def get_csv_data(self) -> Optional[bytes]:
         """
         Generate CSV data for download.
@@ -440,7 +443,9 @@ class LULC_Scheme_Manager:
         available_columns = [col for col in expected_columns if col in df.columns]
         
         return df[available_columns]
-
+    
+    # Module 2: Classification Scheme Definition
+    ## System Response 2.1c: Template Classification Scheme
     #Adapted from line 407
     def load_default_scheme(self, scheme_name: str) -> Tuple[bool, str]:
         """

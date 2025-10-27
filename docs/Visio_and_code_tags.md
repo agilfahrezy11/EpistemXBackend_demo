@@ -5,22 +5,22 @@
 
 # Module 1: Cloudless Image Mosaic
    ## System Response 1.1: Area of Interest Definition
-   └── src/epistemx                      
-          └── shapefile_utils.py
-               ├── class shapefile_validator
-               │      ├── def validate_and_fix_geometry
-               │      ├── def _fix_crs
-               │      ├── def _clean_geometries
-               │      ├── def _validate_points
-               │      ├── def _validate_polygons
-               │      ├── def _is_valid_coordinate
-               │      ├── def _count_vertices
-               │      └── def _final_validation
-               └── class EE_converter
-                      ├── def __init__
-                      ├── def log  
-                      ├── def convert_aoi_gdf        
-                      └── def convert_roi_gdf        
+      └── src/epistemx                      
+            └── shapefile_utils.py
+                  ├── class shapefile_validator
+                  │      ├── def validate_and_fix_geometry
+                  │      ├── def _fix_crs
+                  │      ├── def _clean_geometries
+                  │      ├── def _validate_points
+                  │      ├── def _validate_polygons
+                  │      ├── def _is_valid_coordinate
+                  │      ├── def _count_vertices
+                  │      └── def _final_validation
+                  └── class EE_converter
+                        ├── def __init__
+                        ├── def log  
+                        ├── def convert_aoi_gdf        
+                        └── def convert_roi_gdf        
 
    ## System Response 1.2: Search and Filter Imagery
       └── src/epistemx                    

@@ -11,6 +11,8 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+# Module 1: Cloudless Image Mosaic
+## System Response 1.2: Search and Filter Imagery
 class Reflectance_Data:
     """Class for fetching and pre-processing Landsat image collection from Google Earth Engine API."""
     #Define the optical datasets. The band reflectances used is from Collection 2 Surface Reflectancce Data

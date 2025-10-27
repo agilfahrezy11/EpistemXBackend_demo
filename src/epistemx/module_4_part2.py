@@ -9,6 +9,8 @@ from .ee_config import ensure_ee_initialized
 # Ensure Earth Engine is initialized
 ensure_ee_initialized()
 
+# Module 4: Region of Interest Separability Analysis
+## System Response 4.2 Sample Visualization
 #Class container for plotting Region of Interest 
 class spectral_plotter:
     """

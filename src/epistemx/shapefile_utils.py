@@ -13,7 +13,8 @@ from shapely.geometry import MultiPoint
 
 #Based on early experiments, shapefile with complex geometry often cause issues in GEE
 #The following functions are used to handle the common geometry issues
-
+# Module 1: Cloudless Image Mosaic
+   ## System Response 1.1: Area of Interest Definition
 class shapefile_validator:
     """
     Handle shapefile validation

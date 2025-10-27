@@ -5,7 +5,8 @@ from .ee_config import ensure_ee_initialized
 
 # Ensure Earth Engine is initialized
 ensure_ee_initialized()
-
+# Module 4: Region of Interest Separability Analysis
+## System Response 4.1 Separability Analysis
 class sample_quality:
     """
     class which contain several functions used to conduct training data/sample analysis 

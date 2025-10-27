@@ -12,6 +12,8 @@ ensure_ee_initialized()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Module 7: Thematic Accuracy Assessment
+## System Response 7.2 Ground Reference Verification
 #Create a class for thematic assesment
 class Thematic_Accuracy_Assessment:
     """
