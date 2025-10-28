@@ -394,7 +394,20 @@ def render_navigation():
     # Sync manager state and store classification data for other modules
     sync_manager_from_session()
     if manager.classes:
+        # Store both the formatted DataFrame and raw classes for other modules
         st.session_state['classification_df'] = manager.get_dataframe()
+        st.session_state['lulc_classes_final'] = manager.classes.copy()
+        
+        # Also store in the format expected by Module 3
+        # Convert manager classes to the format Module 3 expects
+        classes_for_module3 = []
+        for cls in manager.classes:
+            classes_for_module3.append({
+                'ID': cls.get('ID', cls.get('Class ID', '')),
+                'LULC_Type': cls.get('Class Name', cls.get('Land Cover Class', '')),
+                'color_palette': cls.get('Color Code', cls.get('Color Palette', cls.get('Color', '#2e8540')))
+            })
+        st.session_state['classes'] = classes_for_module3
     
     # Module completion check
     module_completed = manager.has_classes()

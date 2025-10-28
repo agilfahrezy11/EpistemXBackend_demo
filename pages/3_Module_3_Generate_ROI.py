@@ -44,10 +44,24 @@ with col1:
         aoi_available = False
 
 with col2:
-    # Check classification scheme
-    if 'classes' in st.session_state and len(st.session_state['classes']) > 0:
+    # Check classification scheme - check for both possible data sources
+    classification_available = (
+        ('classification_df' in st.session_state and not st.session_state['classification_df'].empty) or
+        ('lulc_classes_final' in st.session_state and len(st.session_state['lulc_classes_final']) > 0) or
+        ('classes' in st.session_state and len(st.session_state['classes']) > 0)
+    )
+    
+    if classification_available:
+        # Determine scheme type and class count
+        if 'classification_df' in st.session_state and not st.session_state['classification_df'].empty:
+            class_count = len(st.session_state['classification_df'])
+        elif 'lulc_classes_final' in st.session_state:
+            class_count = len(st.session_state['lulc_classes_final'])
+        else:
+            class_count = len(st.session_state.get('classes', []))
+            
         scheme_type = "Default Scheme" if st.session_state.get('ReferenceDataSource', False) else "Custom Scheme"
-        st.success(f"✅ Data skema klasifikasi dari modul 2 tersedia ({scheme_type})")
+        st.success(f"✅ Data skema klasifikasi dari modul 2 tersedia ({scheme_type}) - {class_count} kelas")
         scheme_available = True
     else:
         st.error("❌ Data skema klasifikasi belum tersedia, silakan kunjungi modul 2.")
@@ -59,24 +73,58 @@ if not (aoi_available and scheme_available):
 # Get data from previous modules
 AOI = st.session_state.get('AOI')  # From Module 1 (EE object)
 AOI_GDF = st.session_state.get('gdf')  # From Module 1 (GeoDataFrame)
-LULCTable = pd.DataFrame(st.session_state.get('classes', []))  # From Module 2
+
+# Get classification data from Module 2 - try multiple sources for compatibility
+if 'classification_df' in st.session_state and not st.session_state['classification_df'].empty:
+    # Use the formatted DataFrame from Module 2
+    LULCTable = st.session_state['classification_df'].copy()
+    # Ensure consistent column names for Module 3
+    if 'Land Cover Class' in LULCTable.columns:
+        LULCTable = LULCTable.rename(columns={'Land Cover Class': 'LULC_Type'})
+elif 'lulc_classes_final' in st.session_state and len(st.session_state['lulc_classes_final']) > 0:
+    # Convert from manager classes format
+    classes_data = []
+    for cls in st.session_state['lulc_classes_final']:
+        classes_data.append({
+            'ID': cls.get('ID', cls.get('Class ID', '')),
+            'LULC_Type': cls.get('Class Name', cls.get('Land Cover Class', '')),
+            'Color Palette': cls.get('Color Code', cls.get('Color Palette', cls.get('Color', '#2e8540')))
+        })
+    LULCTable = pd.DataFrame(classes_data)
+elif 'classes' in st.session_state and len(st.session_state['classes']) > 0:
+    # Fallback to legacy format
+    LULCTable = pd.DataFrame(st.session_state['classes'])
+else:
+    # No classification data available
+    LULCTable = pd.DataFrame()
+
+# Additional validation for LULCTable
+if LULCTable.empty:
+    st.error("❌ Data klasifikasi tidak dapat dimuat dengan benar. Silakan kembali ke Modul 2 dan pastikan skema klasifikasi telah disimpan.")
+    st.stop()
 
 # Check ReferenceDataSource from Module 2
 reference_data_source = st.session_state.get('ReferenceDataSource', False)
 
-# # Debug information
+# Debug information - uncomment to troubleshoot
 # with st.expander("🔧 Debug Information"):
 #     st.write(f"ReferenceDataSource: {st.session_state.get('ReferenceDataSource', 'Not set')}")
-#     st.write(f"Available classes: {len(st.session_state.get('classes', []))}")
-#     if st.session_state.get('classes'):
-#         st.write("Classes:", [c.get('LULC_Type', 'Unknown') for c in st.session_state['classes']])
+#     st.write(f"Classification DF available: {'classification_df' in st.session_state}")
+#     st.write(f"LULC Classes Final available: {'lulc_classes_final' in st.session_state}")
+#     st.write(f"Legacy classes available: {'classes' in st.session_state}")
+#     if not LULCTable.empty:
+#         st.write(f"LULCTable shape: {LULCTable.shape}")
+#         st.write(f"LULCTable columns: {list(LULCTable.columns)}")
+#         st.dataframe(LULCTable.head())
+#     else:
+#         st.write("LULCTable is empty!")
 #     st.write(f"AOI type: {type(AOI)}")
 #     st.write(f"AOI_GDF type: {type(AOI_GDF)}")
 #     if AOI_GDF is not None:
 #         st.write(f"AOI_GDF CRS: {AOI_GDF.crs}")
 #         st.write(f"AOI_GDF shape: {AOI_GDF.shape}")
 
-# st.divider()
+st.divider()
 
 # Initialize variables
 TrainField = 'LULC_Type'  # Default field name
@@ -156,7 +204,7 @@ if reference_data_source:
                 # Validate classes
                 status_text.text("Langkah 2/5: Memvalidasi kelas...")
                 if TrainDataDict.get('training_data') is not None:
-                    TrainDataDict = SyncTrainData.ValidClass(TrainDataDict, class_col_index=0)
+                    TrainDataDict = SyncTrainData.ValidClass(TrainDataDict, use_class_ids=True)
                 progress.progress(40)
                 
                 # Check sufficiency
@@ -408,7 +456,7 @@ else:
                     # Validate classes
                     status_text.text("Langkah 2/5: Memvalidasi kelas...")
                     if TrainDataDict.get('training_data') is not None:
-                        TrainDataDict = SyncTrainData.ValidClass(TrainDataDict, class_col_index=1)
+                        TrainDataDict = SyncTrainData.ValidClass(TrainDataDict, use_class_ids=False)
                     progress.progress(40)
                     
                     # Check sufficiency
@@ -566,14 +614,20 @@ else:
         if 'current_sampling_class' not in st.session_state:
             st.session_state['current_sampling_class'] = None
         
-        # Class selection for sampling
-        classes_df = pd.DataFrame(st.session_state.get('classes', []))
+        # Class selection for sampling - use the same LULCTable as the rest of the module
+        classes_df = LULCTable.copy()
         
         if not classes_df.empty:
-            # Use column positions from Module 2 structure
-            id_col = classes_df.columns[0]  # First column (ID)
-            type_col = classes_df.columns[1]  # Second column (LULC_Type)
-            color_col = classes_df.columns[2] if len(classes_df.columns) > 2 else None  # Third column (color_palette)
+            # Ensure consistent column names
+            if 'Land Cover Class' in classes_df.columns:
+                classes_df = classes_df.rename(columns={'Land Cover Class': 'LULC_Type'})
+            if 'Color Palette' in classes_df.columns:
+                classes_df = classes_df.rename(columns={'Color Palette': 'color_palette'})
+            
+            # Use column positions - ensure we have the required columns
+            id_col = 'ID' if 'ID' in classes_df.columns else classes_df.columns[0]
+            type_col = 'LULC_Type' if 'LULC_Type' in classes_df.columns else classes_df.columns[1] if len(classes_df.columns) > 1 else classes_df.columns[0]
+            color_col = 'color_palette' if 'color_palette' in classes_df.columns else (classes_df.columns[2] if len(classes_df.columns) > 2 else None)
             
             col1, col2 = st.columns([2, 1])
             
@@ -581,18 +635,18 @@ else:
                 selected_class_idx = st.selectbox(
                     "Pilih kelas untuk sampling:",
                     options=range(len(classes_df)),
-                    format_func=lambda x: f"{classes_df.iloc[x].iloc[0]}: {classes_df.iloc[x].iloc[1]}",
+                    format_func=lambda x: f"{classes_df.iloc[x][id_col]}: {classes_df.iloc[x][type_col]}",
                     key="sampling_class_selector"
                 )
                 
                 if selected_class_idx is not None:
                     selected_class = classes_df.iloc[selected_class_idx]
                     st.session_state['current_sampling_class'] = {
-                        'ID': selected_class.iloc[0],
-                        'LULC_Type': selected_class.iloc[1],
-                        'color_palette': selected_class.iloc[2] if len(selected_class) > 2 else '#FF0000'
+                        'ID': selected_class[id_col],
+                        'LULC_Type': selected_class[type_col],
+                        'color_palette': selected_class[color_col] if color_col and color_col in selected_class else '#FF0000'
                     }
-                    st.info(f"Kelas aktif: {selected_class.iloc[0]} - {selected_class.iloc[1]}")
+                    st.info(f"Kelas aktif: {selected_class[id_col]} - {selected_class[type_col]}")
             
             with col2:
                 if st.button("Hapus Semua Titik", type="secondary"):
@@ -745,11 +799,11 @@ else:
                                 # Create summary table
                                 summary_data = []
                                 for _, class_row in classes_df.iterrows():
-                                    class_points = [p for p in st.session_state['sampling_data'] if p['class_id'] == class_row.iloc[0]]
+                                    class_points = [p for p in st.session_state['sampling_data'] if p['class_id'] == class_row[id_col]]
                                     
                                     summary_data.append({
-                                        'ID': class_row.iloc[0],
-                                        'LULC_class': class_row.iloc[1],
+                                        'ID': class_row[id_col],
+                                        'LULC_class': class_row[type_col],
                                         'Sample_Count': len(class_points),
                                         'Percentage': (len(class_points) / len(st.session_state['sampling_data']) * 100) if st.session_state['sampling_data'] else 0,
                                         'Status': 'Sufficient' if len(class_points) >= 20 else 'Insufficient' if len(class_points) > 0 else 'No Samples'

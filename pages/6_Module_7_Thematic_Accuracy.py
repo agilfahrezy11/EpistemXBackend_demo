@@ -1,7 +1,7 @@
 import streamlit as st
-from src.module_helpers import init_gee, shapefile_validator, EE_converter
-init_gee()
-from src.src_modul_7 import Thematic_Accuracy_Assessment
+
+from epistemx.shapefile_utils import shapefile_validator, EE_converter
+from epistemx.module_7 import Thematic_Accuracy_Assessment
 import pandas as pd
 import geemap.foliumap as geemap
 import tempfile
@@ -9,6 +9,8 @@ import zipfile
 import os
 import geopandas as gpd
 import plotly.express as px
+from epistemx.ee_config import initialize_earth_engine
+initialize_earth_engine()
 
 #Page configuration
 st.set_page_config(
