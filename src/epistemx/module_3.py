@@ -342,14 +342,12 @@ class SyncTrainData:
         class_field = data_dict['class_field']
         validation_results = data_dict['validation_results']
         
-        # Get class name column from landcover_df
-        class_name_col = landcover_df.columns[1]  # Use column name instead of iloc
-        
+        # Get class counts from training data
         class_counts = training_data[class_field].value_counts()
         insufficient_classes = []
         
         for idx, row in landcover_df.iterrows():
-            class_name = row[class_name_col]  # Use column name instead of iloc[1]
+            class_name = row.iloc[1]  # Use iloc to get second column value
             
             if class_name in class_counts:
                 count = class_counts[class_name]
@@ -372,7 +370,7 @@ class SyncTrainData:
         # Check zero samples
         zero_sample_classes = []
         for idx, row in landcover_df.iterrows():
-            class_name = row[class_name_col]  # Use column name instead of iloc[1]
+            class_name = row.iloc[1]  # Use iloc to get second column value
             if class_name not in class_counts:
                 zero_sample_classes.append(class_name)
         

@@ -484,16 +484,23 @@ class LULC_Scheme_Manager:
         """
         return {
             "RESTORE+ Project": [
-                {'ID': 1, 'Class Name': 'Natural Forest', 'Color Code': "#0E6D0E"},
-                {'ID': 2, 'Class Name': 'Agroforestry', 'Color Code': "#F08306"},
-                {'ID': 3, 'Class Name': 'Monoculture Plantation', 'Color Code': "#38E638"},
-                {'ID': 4, 'Class Name': 'Grassland or Savanna', 'Color Code': "#80DD80"},
-                {'ID': 5, 'Class Name': 'Shrub', 'Color Code': "#5F972A"},
-                {'ID': 6, 'Class Name': 'Paddy Field', 'Color Code': "#777907"},
-                {'ID': 7, 'Class Name': 'Cropland (Palawija, Horticulture)', 'Color Code': "#E8F800"},
-                {'ID': 8, 'Class Name': 'Settlement', 'Color Code': "#F81D00"},
-                {'ID': 9, 'Class Name': 'Cleared Land', 'Color Code': "#E9B970"},
-                {'ID': 10, 'Class Name': 'Waterbody', 'Color Code': "#1512F3"},
+                {'ID': 1, 'Class Name': 'Undisturbed dry-land forest', 'Color Code': '#006400'},
+                {'ID': 2, 'Class Name': 'Logged-over dry-land forest', 'Color Code': '#228B22'},
+                {'ID': 3, 'Class Name': 'Undisturbed mangrove', 'Color Code': '#4169E1'},
+                {'ID': 4, 'Class Name': 'Logged-over mangrove', 'Color Code': '#87CEEB'},
+                {'ID': 5, 'Class Name': 'Undisturbed swamp forest', 'Color Code': '#2E8B57'},
+                {'ID': 6, 'Class Name': 'Logged-over swamp forest', 'Color Code': '#8FBC8F'},
+                {'ID': 7, 'Class Name': 'Agroforestry', 'Color Code': '#9ACD32'},
+                {'ID': 8, 'Class Name': 'Plantation forest', 'Color Code': '#32CD32'},
+                {'ID': 9, 'Class Name': 'Rubber monoculture', 'Color Code': '#8B4513'},
+                {'ID': 10, 'Class Name': 'Oil palm monoculture', 'Color Code': '#FF8C00'},
+                {'ID': 11, 'Class Name': 'Other monoculture', 'Color Code': '#DAA520'},
+                {'ID': 12, 'Class Name': 'Grass/savanna', 'Color Code': '#ADFF2F'},
+                {'ID': 13, 'Class Name': 'Shrub', 'Color Code': '#90EE90'},
+                {'ID': 14, 'Class Name': 'Cropland', 'Color Code': '#FFFF00'},
+                {'ID': 15, 'Class Name': 'Settlement', 'Color Code': '#FF0000'},
+                {'ID': 16, 'Class Name': 'Cleared land', 'Color Code': '#D2B48C'},
+                {'ID': 17, 'Class Name': 'Waterbody', 'Color Code': '#0000FF'},
             ]
         }
     
