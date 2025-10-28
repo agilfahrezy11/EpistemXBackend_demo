@@ -130,25 +130,9 @@ st.markdown("""
 8. Landsat 9 Operational Land Imager-2/OLI-2 (2021 - present)
 """)
 
-#create a selection box for sensor type
-sensor_dict = {
-    "Landsat 1 MSS": "L1_RAW",
-    "Landsat 2 MSS": "L2_RAW",
-    "Landsat 3 MSS": "L3_RAW",
-    "Landsat 4 TM": "L4_SR",
-    "Landsat 5 TM": "L5_SR",
-    "Landsat 7 ETM+": "L7_SR",
-    "Landsat 8 OLI": "L8_SR",
-    "Landsat 9 OLI-2": "L9_SR"
-}
-sensor_names = list(sensor_dict.keys())
-#user define parameters for the search
-selected_sensor_name = st.selectbox("Select Landsat Sensor:", sensor_names, index=6)
-optical_data = sensor_dict[selected_sensor_name]  #passing to backend process
-#Date selection
-#Year only
+#Date selection first - this will filter available sensors
 st.subheader("Select Time Period")
-st.markdown("If 'select by year' is choosen, the system automatically search imagery from January 1 untill December 31 ")
+st.markdown("If 'select by year' is chosen, the system automatically searches imagery from January 1 until December 31")
 date_mode = st.radio(
     "Choose date selection mode:",
     ["Select by year", "Custom date range"],
@@ -163,6 +147,7 @@ if date_mode == "Select by year":
     year = st.selectbox("Select Year", years, index=years.index(2020))
     start_date = str(year)
     end_date = str(year)
+    selected_year = year
 #Full date
 else:
     # Full date inputs
@@ -172,6 +157,45 @@ else:
     end_date_dt = st.date_input("End Date:", default_end)
     start_date = start_date_dt.strftime("%Y-%m-%d")
     end_date = end_date_dt.strftime("%Y-%m-%d")
+    selected_year = start_date_dt.year
+
+# Filter sensors based on selected year/date range
+sensor_dict = {
+    "Landsat 1 MSS": {"code": "L1_RAW", "start_year": 1972, "end_year": 1978},
+    "Landsat 2 MSS": {"code": "L2_RAW", "start_year": 1975, "end_year": 1982},
+    "Landsat 3 MSS": {"code": "L3_RAW", "start_year": 1978, "end_year": 1983},
+    "Landsat 4 TM": {"code": "L4_SR", "start_year": 1982, "end_year": 1993},
+    "Landsat 5 TM": {"code": "L5_SR", "start_year": 1984, "end_year": 2012},
+    "Landsat 7 ETM+": {"code": "L7_SR", "start_year": 1999, "end_year": 2021},
+    "Landsat 8 OLI": {"code": "L8_SR", "start_year": 2013, "end_year": datetime.datetime.now().year},
+    "Landsat 9 OLI-2": {"code": "L9_SR", "start_year": 2021, "end_year": datetime.datetime.now().year}
+}
+
+# Filter available sensors based on selected year
+available_sensors = {}
+for sensor_name, sensor_info in sensor_dict.items():
+    if sensor_info["start_year"] <= selected_year <= sensor_info["end_year"]:
+        available_sensors[sensor_name] = sensor_info["code"]
+
+if not available_sensors:
+    st.warning(f"No Landsat sensors were operational in {selected_year}. Please select a different year.")
+    st.stop()
+
+# Create sensor selection based on filtered options
+sensor_names = list(available_sensors.keys())
+default_index = 0
+# Try to set a reasonable default (prefer newer sensors)
+if "Landsat 8 OLI" in sensor_names:
+    default_index = sensor_names.index("Landsat 8 OLI")
+elif "Landsat 7 ETM+" in sensor_names:
+    default_index = sensor_names.index("Landsat 7 ETM+")
+
+selected_sensor_name = st.selectbox(
+    f"Select Landsat Sensor (Available for {selected_year}):", 
+    sensor_names, 
+    index=default_index
+)
+optical_data = available_sensors[selected_sensor_name]  #passing to backend process
 
 #cloud cover slider
 cloud_cover = st.slider("Maximum Scene Cloud Cover (%):", 0, 100, 30)
