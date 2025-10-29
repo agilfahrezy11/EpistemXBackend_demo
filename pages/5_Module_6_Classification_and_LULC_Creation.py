@@ -31,7 +31,7 @@ st.sidebar.image(logo)
 # Check prerequisites from previous modules. The module cannot open if the previous modules is not complete.
 st.subheader("Prerequisites Check")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 #Check for image composite from Module 1
 with col1:
@@ -52,35 +52,8 @@ with col1:
         st.warning("Please complete Module 1 first to generate an image composite")
         image = None
 
-#Check for classification scheme from Module 2
-with col2:
-    if 'lulc_classes_final' in st.session_state and st.session_state.lulc_classes_final:
-        st.success("✅ Classification Scheme Available (Module 2)")
-        lulc_scheme = st.session_state['lulc_classes_final']
-        
-        # Display scheme info
-        with st.expander("Classification Scheme Details"):
-            st.write(f"**Total Classes:** {len(lulc_scheme)}")
-            for cls in lulc_scheme:
-                class_id = cls.get('ID', cls.get('Class ID'))
-                class_name = cls.get('Class Name', cls.get('Land Cover Class'))
-                color_code = cls.get('Color Code', cls.get('Color Palette', cls.get('Color', '#228B22')))
-                st.markdown(
-                    f"""<div style='display: flex; align-items: center; margin-bottom: 4px;'>
-                        <div style='background-color: {color_code}; 
-                                    width: 20px; height: 15px; border: 1px solid #ccc; 
-                                    margin-right: 8px; border-radius: 2px;'></div>
-                        <span>ID {class_id}: {class_name}</span>
-                    </div>""",
-                    unsafe_allow_html=True
-                )
-    else:
-        st.error("❌ Classification Scheme Not Found")
-        st.warning("Please complete Module 2 first to define your classification scheme")
-        lulc_scheme = None
-
 #Check for training data from Module 3/4
-with col3:
+with col2:
     if 'training_data' in st.session_state and st.session_state.training_data is not None:
         st.success("✅ Training Data Available")
         roi = st.session_state['training_data']
@@ -107,16 +80,14 @@ with col3:
         roi = None
 
 # Stop if prerequisites are not met
-if image is None or roi is None or ('lulc_classes_final' not in st.session_state or not st.session_state.lulc_classes_final):
+if image is None or roi is None:
     st.divider()
     st.info("⚠️ Please complete the previous modules before proceeding with classification")
     st.markdown("""
     **Required Steps:**
     1. **Module 1:** Generate image composite
-    2. **Module 2:** Define classification scheme
-    3. **Module 3:** Upload and analyze training data (ROI)
-    4. **Module 4:** Analyze ROI separability
-    5. **Return here** to perform classification
+    2. **Module 3:** Upload and analyze training data (ROI)
+    3. **Module 4:** Return here to perform classification
     """)
     st.stop()
 
@@ -442,31 +413,28 @@ with tab3:
                 title='Variable Importance Ranking',
                 color='Importance',
                 color_continuous_scale='Viridis',
-                text='Importance (%)'
+                text='Importance'
             )
             
-            fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+            fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
             fig.update_layout(
                 yaxis={'categoryorder': 'total ascending'},
                 height=max(400, len(importance_df) * 30),
                 showlegend=False
             )
             
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig,  use_container_width=True)
         #Display the most importance features
         with col2:
             st.markdown("**Top 5 Most Important Features:**")
             for i, row in importance_df.head(5).iterrows():
-                st.metric(
-                    f"{i+1}. {row['Band']}", 
-                    f"{row['Importance (%)']:.1f}%"
-                )
+                st.write(f"{i+1}. {row['Band']}")
             
             # Show full table
             with st.expander("Complete Importance Table"):
                 st.dataframe(
                     importance_df.style.background_gradient(
-                        subset=['Importance (%)'],
+                        subset=['Importance'],
                         cmap='YlGn'
                     ),
                     width='stretch',
@@ -533,63 +501,24 @@ with tab3:
             st.markdown("---")
             st.subheader("Class-level Metrics")
 
-            # Build class-level metrics table with class names from Module 2
-            class_ids = list(range(len(acc["precision"])))
-            class_names = []
-            
-            # Get class names from Module 2 classification scheme if available
-            if 'lulc_classes_final' in st.session_state and st.session_state.lulc_classes_final:
-                lulc_classes = st.session_state['lulc_classes_final']
-                # Create mapping from class ID to class name
-                id_to_name = {}
-                for cls in lulc_classes:
-                    class_id = cls.get('ID', cls.get('Class ID'))
-                    class_name = cls.get('Class Name', cls.get('Land Cover Class', f'Class {class_id}'))
-                    id_to_name[class_id] = class_name
-                
-                # Map class IDs to names (assuming class IDs start from 1 or match the order)
-                for i, class_id in enumerate(class_ids):
-                    # Try to match by actual class ID first, then by index
-                    if (i + 1) in id_to_name:
-                        class_names.append(id_to_name[i + 1])
-                    elif class_id in id_to_name:
-                        class_names.append(id_to_name[class_id])
-                    else:
-                        class_names.append(f"Class {i + 1}")
-            else:
-                # Fallback to generic class names
-                class_names = [f"Class {i + 1}" for i in class_ids]
-            
-            # Build metrics DataFrame with class names
+            #Convert Producer (Recall) and Consumer (Precision) Accuracies into a DataFrame
+            # Build class-level metrics table in percentage form
             df_metrics = pd.DataFrame({
-                "Class ID": [i + 1 for i in class_ids],  # Start from 1 instead of 0
-                "Class Name": class_names,
+                "Class ID": range(len(acc["precision"])),
                 "Producer's Accuracy (Recall) (%)": np.round(np.array(acc["recall"]) * 100, 2),
                 "User's Accuracy (Precision) (%)": np.round(np.array(acc["precision"]) * 100, 2),
                 "F1-score (%)": np.round(np.array(acc["f1_scores"]) * 100, 2),
                 "Geometric Mean Score (%)": np.round(np.array(acc["gmean_per_class"]) * 100, 2)
             })
 
-            st.dataframe(df_metrics, width='stretch')
+            st.dataframe(df_metrics, use_container_width=True)
 
             #Plot Confusion Matrix as heatmap
             st.subheader("Confusion Matrix")
-            
-            # Use class names for confusion matrix labels if available
-            matrix_size = len(acc["confusion_matrix"])
-            if len(class_names) == matrix_size:
-                # Use class names for labels
-                pred_labels = [f"Pred: {name}" for name in class_names]
-                actual_labels = [f"Actual: {name}" for name in class_names]
-            else:
-                # Fallback to generic labels
-                pred_labels = [f"Pred_{i+1}" for i in range(matrix_size)]
-                actual_labels = [f"Actual_{i+1}" for i in range(matrix_size)]
-            
             cm = pd.DataFrame(
                 acc["confusion_matrix"],
-                columns=pred_labels,
-                index=actual_labels
+                columns=[f"Pred_{i}" for i in range(len(acc["confusion_matrix"]))],
+                index=[f"Actual_{i}" for i in range(len(acc["confusion_matrix"]))]
             )
             #Show the heatmap and customized it if needed
             fig = px.imshow(
@@ -604,7 +533,7 @@ with tab3:
                 height=600
             )
             st.plotly_chart(fig,     
-               width='stretch', #got warning to upgrade to use 'width='stretch'
+                use_container_width=True, #got warning to upgrade to use 'use_container_width'
                 config={
                     "displayModeBar": True,
                     "responsive": True
@@ -636,105 +565,31 @@ with tab4:
                             st.warning("No final classification map found. Showing first probability band.")
                             classiifcation_map = classiifcation_map.select(0)
                 
-                # Use classification scheme from Module 2 if available
-                vis_params = {}
-                
-                # Check if Module 2 classification scheme is available
-                if 'lulc_classes_final' in st.session_state and st.session_state.lulc_classes_final:
-                    st.subheader("Classification Legend")
-                    st.info("Using classification scheme and colors defined in Module 2")
-                    
-                    # Get classification scheme from Module 2
-                    lulc_classes = st.session_state['lulc_classes_final']
-                    
-                    # Create mapping from class ID to colors and names
-                    class_colors = {}
-                    class_names = {}
-                    class_ids = []
-                    
-                    for cls in lulc_classes:
-                        class_id = cls.get('ID', cls.get('Class ID'))
-                        class_name = cls.get('Class Name', cls.get('Land Cover Class', f'Class {class_id}'))
-                        color_code = cls.get('Color Code', cls.get('Color Palette', cls.get('Color', '#228B22')))
-                        
-                        class_ids.append(class_id)
-                        class_colors[class_id] = color_code
-                        class_names[class_id] = class_name
-                    
-                    # Sort class IDs for consistent ordering
-                    class_ids = sorted(class_ids)
-                    
-                    # Display legend
-                    with st.expander("📋 Classification Legend", expanded=True):
-                        cols = st.columns(3)
-                        for idx, class_id in enumerate(class_ids):
-                            with cols[idx % 3]:
-                                color = class_colors[class_id]
-                                name = class_names[class_id]
-                                st.markdown(
-                                    f"""<div style='display: flex; align-items: center; margin-bottom: 8px;'>
-                                        <div style='background-color: {color}; 
-                                                    width: 30px; height: 20px; border: 1px solid #ccc; 
-                                                    margin-right: 8px; border-radius: 3px;'></div>
-                                        <span><strong>ID {class_id}:</strong> {name}</span>
-                                    </div>""",
-                                    unsafe_allow_html=True
-                                )
-                    
-                    # Build palette for visualization
-                    palette = [class_colors[cls_id] for cls_id in class_ids]
-                    
-                    vis_params = {
-                        'min': min(class_ids),
-                        'max': max(class_ids),
-                        'palette': palette
-                    }
-                    
-                    # Option to customize colors if needed
-                    with st.expander("🎨 Customize Colors (Optional)", expanded=False):
-                        st.markdown("Modify colors for this visualization only (won't affect Module 2 scheme):")
-                        
-                        custom_colors = {}
-                        cols = st.columns(3)
-                        for idx, class_id in enumerate(class_ids):
-                            with cols[idx % 3]:
-                                name = class_names[class_id]
-                                default_color = class_colors[class_id]
-                                
-                                custom_colors[class_id] = st.color_picker(
-                                    f"ID {class_id}: {name}",
-                                    value=default_color,
-                                    key=f"custom_color_{class_id}"
-                                )
-                        
-                        if st.button("🔄 Apply Custom Colors"):
-                            # Update palette with custom colors
-                            palette = [custom_colors[cls_id] for cls_id in class_ids]
-                            vis_params['palette'] = palette
-                            st.success("✅ Custom colors applied!")
-                            st.rerun()
-                
-                # Fallback: Use training data colors if Module 2 scheme not available
-                elif 'training_gdf' in st.session_state and 'selected_class_property' in st.session_state:
-                    st.warning("⚠️ Module 2 classification scheme not found. Using fallback color scheme.")
-                    
+                # Create color palette based on number of classes
+                # Create custom color palette with user input
+                if 'training_gdf' in st.session_state and 'selected_class_property' in st.session_state:
                     class_prop = st.session_state['selected_class_property']
                     class_name_prop = st.session_state.get('selected_class_name_property', None)
                     gdf = st.session_state['training_gdf']
                     unique_classes = sorted(gdf[class_prop].unique())
                     
-                    # Create fallback color mapping
-                    if 'fallback_class_colors' not in st.session_state:
-                        default_colors = ['#228B22', '#0000FF', '#FF0000', '#FFFF00', '#8B4513', 
-                                        '#808080', '#FFA500', '#00FFFF', '#FF00FF', '#90EE90']
-                        st.session_state.fallback_class_colors = {
-                            cls: default_colors[i % len(default_colors)] 
-                            for i, cls in enumerate(unique_classes)
-                        }
+                    # Allow user to customize colors
+                    st.subheader("Customize Map Colors")
                     
                     with st.expander("Define Class Colors", expanded=False):
                         st.markdown("Assign colors to each land cover class:")
                         
+                        # Create color mapping dictionary
+                        if 'class_colors' not in st.session_state:
+                            # Initialize with default colors
+                            default_colors = ['#228B22', '#0000FF', '#FF0000', '#FFFF00', '#8B4513', 
+                                            '#808080', '#FFA500', '#00FFFF', '#FF00FF', '#90EE90']
+                            st.session_state.class_colors = {
+                                cls: default_colors[i % len(default_colors)] 
+                                for i, cls in enumerate(unique_classes)
+                            }
+                        
+                        # Create color pickers for each class
                         cols = st.columns(3)
                         for idx, class_id in enumerate(unique_classes):
                             with cols[idx % 3]:
@@ -745,14 +600,25 @@ with tab4:
                                 else:
                                     label = f"Class {class_id}"
                                 
-                                st.session_state.fallback_class_colors[class_id] = st.color_picker(
+                                # Color picker
+                                st.session_state.class_colors[class_id] = st.color_picker(
                                     label,
-                                    value=st.session_state.fallback_class_colors.get(class_id, '#228B22'),
-                                    key=f"fallback_color_{class_id}"
+                                    value=st.session_state.class_colors.get(class_id, '#228B22'),
+                                    key=f"color_{class_id}"
                                 )
+                        
+                        # Reset to default colors button
+                        if st.button("🔄 Reset to Default Colors"):
+                            default_colors = ['#228B22', '#0000FF', '#FF0000', '#FFFF00', '#8B4513', 
+                                            '#808080', '#FFA500', '#00FFFF', '#FF00FF', '#90EE90']
+                            st.session_state.class_colors = {
+                                cls: default_colors[i % len(default_colors)] 
+                                for i, cls in enumerate(unique_classes)
+                            }
+                            st.rerun()
                     
-                    # Build palette from fallback colors
-                    palette = [st.session_state.fallback_class_colors[cls] for cls in unique_classes]
+                    # Build palette from user selections
+                    palette = [st.session_state.class_colors[cls] for cls in unique_classes]
                     
                     vis_params = {
                         'min': min(unique_classes),
@@ -791,7 +657,7 @@ st.subheader("Module Navigation")
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("⬅️ Back to Module 4: Analyze ROI", width='stretch'):
+    if st.button("⬅️ Back to Module 3: Analyze ROI", width='stretch'):
         st.switch_page("pages/4_Module_4_Analyze_ROI.py")
 
 with col2:

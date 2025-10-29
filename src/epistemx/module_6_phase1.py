@@ -246,7 +246,7 @@ class Generate_LULC:
         Parameters:
             trained_model: ee.Classifier - Trained Random Forest model (classification model must be enable)
         Returns:
-            pandas.DataFrame containing model's feature importance
+            pandas.DataFrame containing model's feature importance (unitless values)
         """
         #Get model explanation from the trained model
         model_explanation = trained_model.explain().getInfo()
@@ -259,10 +259,6 @@ class Generate_LULC:
                 {'Band': band, 'Importance': importance}
                 for band, importance in importance_dict.items()
             ]).sort_values('Importance', ascending=False)
-            # Normalize the value to percentage
-        total_importance = importance_df['Importance'].sum()
-        #get feature importance in the form of dataframe
-        importance_df['Importance (%)'] = (importance_df['Importance'] / total_importance * 100).round(2)    
         # Reset index
         importance_df = importance_df.reset_index(drop=True)
         return importance_df 
@@ -287,6 +283,12 @@ class Generate_LULC:
             actual=class_property,
             predicted='classification'
         )
+        
+        # Get the actual class IDs that appear in the confusion matrix
+        # These are the classes that were actually present in the test data and predicted by the model
+        actual_class_ids = test_data.aggregate_array(class_property).distinct().sort().getInfo()
+        predicted_class_ids = test_classified.aggregate_array('classification').distinct().sort().getInfo()
+        
         #Get accuracy metrics
         #Producer accuracy / Recall (sensitivity)
         #User accuracy / Precision 
@@ -343,6 +345,8 @@ class Generate_LULC:
             'precision': consumers_accuracy,
             'recall': producers_accuracy,
             'confusion_matrix': confusion_matrix_array,
+            'actual_class_ids': actual_class_ids,
+            'predicted_class_ids': predicted_class_ids,
             'f1_scores': f1_scores,
             'gmean_per_class': gmean_per_class,
             'overall_gmean': overall_gmean
