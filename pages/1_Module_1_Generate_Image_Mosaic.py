@@ -118,7 +118,7 @@ st.markdown("""
 Enter the acquisition date range, cloud cover percentage, and Landsat mission type. 
 Current platform support Landsat 1-3 at sensor radiance and Landsat 4-9 Collection 2 Surface Reflectance Analysis Ready Data (ARD), excluding the thermal bands.
 Spatial resolution for Landsat 1-3 is 60 m, while the rest of them have the spatial resolution of 30 m.
-Landsat mission avaliability is as follows:""")
+Landsat operational period is as follows:""")
 st.markdown("""
 1. Landsat 1 Multispectral Scanner/MSS (1972 - 1978)
 2. Landsat 2 Multispectral Scanner/MSS (1978 - 1982)
@@ -350,7 +350,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
         #Create and image composite/mosaic for thermal bands
         thermal_median = thermal_collection.median().clip(aoi)
         #composite for multispectral data
-        composite = collection.median().clip(aoi).addBands(thermal_median)
+        composite = collection.median().clip(aoi).addBands(thermal_median).toFloat()
         # Store in session state for use in other modules
         st.session_state['composite'] = composite
         st.session_state['Image_metadata'] = detailed_stats

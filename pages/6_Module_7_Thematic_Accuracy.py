@@ -1,5 +1,4 @@
 import streamlit as st
-
 from epistemx.shapefile_utils import shapefile_validator, EE_converter
 from epistemx.module_7 import Thematic_Accuracy_Assessment
 import pandas as pd

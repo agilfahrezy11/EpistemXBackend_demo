@@ -246,7 +246,7 @@ class Generate_LULC:
         Parameters:
             trained_model: ee.Classifier - Trained Random Forest model (classification model must be enable)
         Returns:
-            pandas.DataFrame containing model's feature importance
+            pandas.DataFrame containing model's feature importance (unitless values)
         """
         #Get model explanation from the trained model
         model_explanation = trained_model.explain().getInfo()
@@ -254,15 +254,11 @@ class Generate_LULC:
         if 'importance' not in model_explanation:
             raise ValueError("Feature importance not available in model explanation")
         importance_dict = model_explanation['importance']
-        # Create DataFrame containing the importance
+        # Create DataFrame containing the importance (unitless values)
         importance_df = pd.DataFrame([
                 {'Band': band, 'Importance': importance}
                 for band, importance in importance_dict.items()
             ]).sort_values('Importance', ascending=False)
-            # Normalize the value to percentage
-        total_importance = importance_df['Importance'].sum()
-        #get feature importance in the form of dataframe
-        importance_df['Importance (%)'] = (importance_df['Importance'] / total_importance * 100).round(2)    
         # Reset index
         importance_df = importance_df.reset_index(drop=True)
         return importance_df 

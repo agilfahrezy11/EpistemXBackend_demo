@@ -346,10 +346,20 @@ class sample_quality:
         pairs = []
         class_mapping = self.class_renaming()
         metric_name = "JM_Distance" if method == 'JM' else "TD_Distance"
+        processed_pairs = set()  # Track processed pairs to avoid duplicates
 
         for class1_id, class1_data in separability.items():
             for class2_id, value in class1_data.items():
                 if value > 0:
+                    # Create a sorted tuple to ensure unique pairs regardless of order
+                    pair_key = tuple(sorted([class1_id, class2_id]))
+                    
+                    # Skip if this pair has already been processed
+                    if pair_key in processed_pairs:
+                        continue
+                    
+                    processed_pairs.add(pair_key)
+                    
                     # Use consistent key type for mapping
                     try:
                         class1_key = int(class1_id)

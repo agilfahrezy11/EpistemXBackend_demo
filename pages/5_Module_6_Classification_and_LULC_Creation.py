@@ -413,10 +413,10 @@ with tab3:
                 title='Variable Importance Ranking',
                 color='Importance',
                 color_continuous_scale='Viridis',
-                text='Importance (%)'
+                text='Importance'
             )
             
-            fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+            fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
             fig.update_layout(
                 yaxis={'categoryorder': 'total ascending'},
                 height=max(400, len(importance_df) * 30),
@@ -430,14 +430,14 @@ with tab3:
             for i, row in importance_df.head(5).iterrows():
                 st.metric(
                     f"{i+1}. {row['Band']}", 
-                    f"{row['Importance (%)']:.1f}%"
+                    f"{row['Importance']:.3f}"
                 )
             
             # Show full table
             with st.expander("Complete Importance Table"):
                 st.dataframe(
                     importance_df.style.background_gradient(
-                        subset=['Importance (%)'],
+                        subset=['Importance'],
                         cmap='YlGn'
                     ),
                     width='stretch',
