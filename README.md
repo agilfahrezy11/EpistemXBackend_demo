@@ -93,7 +93,6 @@ _Best for quick experimentation without local installation, or when working on d
    - The required environment and package setup are already configured in Codespaces
    - Work through the notebook for step-by-step examples and module testing
 
-
 **Codespaces Tips:**
 
 - Notebooks run directly in VS Code's built-in notebook editor
@@ -102,16 +101,7 @@ _Best for quick experimentation without local installation, or when working on d
 - Use the VS Code terminal (Ctrl+\`) for additional commands if needed
 - Codespaces automatically save your work; you can return to the same Codespace later
 
-### 3. Clone the Repository (Options A & B only)
 
-**Note:** Skip this step if you're using GitHub Codespaces (Option C), as the repository is already cloned.
-
-With the environment ready, clone the project and move into the repository:
-
-```bash
-git clone https://github.com/epistem-io/EpistemXBackend.git
-cd \path\to\EpistemXBackend
-```
 
 ### 4. Usage
 
