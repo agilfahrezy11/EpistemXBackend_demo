@@ -1,3 +1,14 @@
+"""
+Module 6: Supervised Classification
+
+This module facilitate the user to perform supervised classification using random forest classifier
+
+Architecture:
+- Backend (module_6_phase1.py): Pure backend process without UI dependencies
+- Frontend (this file): Streamlit UI with session state management
+- State synchronization ensures data persistence across page interactions
+"""
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,7 +20,7 @@ import traceback
 #Page configuration
 st.set_page_config(
     page_title="Supervised Classification",
-    page_icon="logos\logo_epistem_crop.png",
+    page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
 #Set the page title (for the canvas)
@@ -25,7 +36,7 @@ This module performs land cover land use classification using Random Forest clas
 #Sidebar info
 st.sidebar.title("About")
 st.sidebar.info("Module for generating a classification map based on Statistical Machine Intellegence and Learning (SMILE) Random Forest classifier")
-logo = "logos\logo_epistem.png"
+logo = "logos/logo_epistem.png"
 st.sidebar.image(logo)
 
 #Check prerequisites from previous modules. The module cannot open if the previous modules is not complete.

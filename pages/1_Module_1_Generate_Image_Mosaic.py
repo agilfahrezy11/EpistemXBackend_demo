@@ -1,3 +1,13 @@
+"""
+Module 1: Acquisition of Near cloud free satellite imagery
+
+This module provides a user interface for fetching satellite imagery from google earth engine python API
+
+Architecture:
+- Backend (module_2.py): Pure earth engine process without UI dependencies
+- Frontend (this file): Streamlit UI with session state management
+- State synchronization ensures data persistence across page interactions
+"""
 import streamlit as st
 import geemap.foliumap as geemap
 import geopandas as gpd
@@ -14,7 +24,7 @@ initialize_earth_engine()
 # Page configuration
 st.set_page_config(
     page_title="Search Imagery Composite",
-    page_icon="logos\logo_epistem_crop.png",
+    page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
 
@@ -29,7 +39,7 @@ This module allows users to search and generate a Landsat image mosaic for a spe
 #set page layout and side info
 st.sidebar.title("About")
 st.sidebar.info(markdown)
-logo = "logos\logo_epistem.png"
+logo = "logos/logo_epistem.png"
 st.sidebar.image(logo)
 #Initialize session state for storing collection, composite, aoi, AOI that has been converted to gdf, and export task
 #similar to a python dict, we fill it later

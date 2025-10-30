@@ -1,3 +1,14 @@
+"""
+Module 4: Spectral Separability Analysis
+
+This module facilitate the user to perform spectral separability analysis for their training data
+
+Architecture:
+- Backend (module_4.py and module_4_part2.py): Pure backend process without UI dependencies
+- Frontend (this file): Streamlit UI with session state management
+- State synchronization ensures data persistence across page interactions
+"""
+
 import streamlit as st
 from epistemx.shapefile_utils import shapefile_validator, EE_converter
 from epistemx.module_4 import sample_quality
@@ -14,7 +25,7 @@ import os
 #Page configuration
 st.set_page_config(
     page_title="Perform ROI Analysis", #visible in the browser
-    page_icon="logos\logo_epistem_crop.png",
+    page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
 #title of the module
@@ -33,7 +44,7 @@ markdown = """
 This module is designed to perform separability analysis of the training data.
 """
 st.sidebar.info(markdown)
-logo = "logos\logo_epistem.png"
+logo = "logos/logo_epistem.png"
 st.sidebar.image(logo)
 
 st.markdown("Availability of landsat data from module 1")

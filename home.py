@@ -11,7 +11,7 @@ An working example module 1 and 3 of Epistem land cover mapping platform. Adapte
 
 st.sidebar.title("About")
 st.sidebar.info(markdown)
-logo = "logos\logo_epistem.png"
+logo = "logos/logo_epistem.png"
 st.sidebar.image(logo)
 
 # Customize page title
