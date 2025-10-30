@@ -28,7 +28,8 @@ st.sidebar.info("Module for generating a classification map based on Statistical
 logo = "logos\logo_epistem.png"
 st.sidebar.image(logo)
 
-# Check prerequisites from previous modules. The module cannot open if the previous modules is not complete.
+#Check prerequisites from previous modules. The module cannot open if the previous modules is not complete.
+#add module 2 check and module 3 (for training data not analysis)
 st.subheader("Prerequisites Check")
 
 col1, col2 = st.columns(2)
@@ -79,7 +80,7 @@ with col2:
         st.warning("Please complete Module 3 and 4 to create and analyze the Region of Interest (ROI)")
         roi = None
 
-# Stop if prerequisites are not met
+#Stop if prerequisites are not met
 if image is None or roi is None:
     st.divider()
     st.info("⚠️ Please complete the previous modules before proceeding with classification")
@@ -111,6 +112,7 @@ tab1, tab2, tab3, tab4 = st.tabs(["Feature Extraction", "Model Training", "Model
 
 # ==================== Tab 1: Feature Extraction ====================
 #Option to either use all of the training data for classification, or split them into train and test data
+#This section can be change to module 3 (?)
 with tab1:
     st.header("Feature Extraction Configuration")
     markdown = """ 
@@ -152,9 +154,9 @@ with tab1:
     #Second column, prepared the extraction parameters 
     with col2:
         st.subheader("Extraction Parameters")
-        # Get class property from previous module if available. What the user choose for separability analysis, will be used here
+        #Get class property from previous module if available. What the user choose for separability analysis, will be used here
         default_class_prop = st.session_state.get('selected_class_property', 'class')
-        # Class property name
+        #Class property name
         class_property = st.text_input(
             "Class ID",
             value=default_class_prop,
@@ -192,13 +194,12 @@ with tab1:
                     st.session_state.extracted_testing_data = testing_data
                     st.session_state.class_property = class_property
                     
-                    st.success("✅ Feature extraction completed using Stratified Random Split!")
-                    
                     col1, col2 = st.columns(2)
                     with col1:
                         st.metric("Training Samples", training_data.size().getInfo())
                     with col2:
                         st.metric("Testing Samples", testing_data.size().getInfo())
+                    st.success("✅ Feature extraction complete!")
                 else:
                     #Extract all features without splitting
                     training_data = image.sampleRegions(
@@ -210,8 +211,6 @@ with tab1:
                     st.session_state.extracted_training_data = training_data
                     st.session_state.extracted_testing_data = None
                     st.session_state.class_property = class_property
-                    
-                    st.success("✅ Feature extraction completed!")
                     st.info("ℹ️ All ROI data has been used for training. No test set created.")
             #error log if something fail    
             except Exception as e:
@@ -221,133 +220,251 @@ with tab1:
 
 # ==================== Tab 2: Model Learning ====================
 with tab2:
-    st.header("Classification Configuration")
-    st.markdown("The algoritm use for conducting the classification is Random Forest. You need to specified the value of three main Random Forest parameters:")
-    st.markdown("1. Number of Trees: Control the number of decision tree in the model. Ideal value vary, but most remote sensing application utilize >300 tree")
-    st.markdown("2. Variables Per Split: Number of variable selected for conducting a split. You can also used the default value, which is the square root of the number of variables used")
-    st.markdown("3. Minimum Leaf Population: Number of minimum sample selected for splitting a leaf node")
+    st.header("Membuat Model Klasifikasi")
+    
+    #introduction
+    st.markdown("""
+    Di bagian ini, dilakukan proses klasifikasi digital untuk mengelompokkan pola penutup lahan pada citra satelit.
+    Bayangkan anda menyuruh komputer untuk mengenali pola - pola, selayaknya anda melihat pola penutup lahan yang berbeda secara visual.
+    """)
+    
+    #Algorithm explanation with visual
+    with st.expander("🤔 Bagaimana Model Random Forest Mengenali Pola? (Click to learn more)", expanded=False):
+        st.markdown("""
+        **Random Forest:** Bayangkan model ini sebagai sekelompok ilmuwan ('pohon') 
+        yang memberikan suara (voting) terkait jenis piksel pada citra satelit. 
+        Proses pengelompokan nilai piksel menjadi kelas penutup lahan adalah sebagai berikut:
+        
+        🌲 **Setiap "Pohon"** mempertimbangkan kombinasi nilai piksel yang berbeda pada setiap kanal spektral
+        🗳️ **Pengambilan Keputusan** Pohon ini kemudian menentukan tipe penutup lahan yang diwakili oleh setiap nilai piksel
+        📊 **Keputusan Akhir** ditetapkan melalui pengambilan suara terbanyak, apapun yang disetujui oleh sebagian besar pohon akan menjadi keputusan terakhir
+        
+        **Fun fact: Random Forest menjadi salah satu algoritma yang banyak digunakan dalam kajian penginderaan jauh**
+        - Dapat diandalkan karena proses penentuan kelas dilakukan melalui kumpulan 'pendapat ahli'
+        - Dapat menghadapi berbagai jenis kondisi data (tidak seimbang, atau penuh dengan noise)
+        """)
     
     #Check if training data is available
     if st.session_state.extracted_training_data is None:
-        st.warning("Please extract features first in the 'Feature Extraction' tab")
+        st.warning("⚠️ Lakukan ekstraksi nilai piksel melalui 'feature extraction'")
     else:
-        col1, col2 = st.columns([1, 1])
-        #First column, choosing hard or soft classification (could be remove later)
-        with col1:
-            st.subheader("Classification Approach")
-            
-            # Classification mode selection
-            classification_mode = st.radio(
-                "Select Classification Mode",
-                ["Hard Classification (Multiclass)", "Soft Classification (One-vs-Rest)"],
-                help="Hard: Standard multiclass classification\nSoft: Probability-based with confidence layers"
-            )
-        #column for hyperparameter value
-        with col2:
-            st.subheader("Random Forest Hyperparameter")
-            #Number of trees
-            ntrees = st.number_input(
-                "Number of Trees",
-                min_value=10,
-                max_value=500,
-                value=100,
-                step=10,
-                help="More trees = better accuracy but slower computation"
-            )
-           #Variables per split
-           #default value of variable per split, the sqrt of number of bands 
-            use_auto_vsplit = st.checkbox(
-                "Use default value of Variables Per Split",
-                value=True,
-                help="Automatically set to sqrt(number of bands)"
-            )
-            #User can define their own variable per split value
-            if not use_auto_vsplit:
-                v_split = st.number_input(
-                    "Variables Per Split",
-                    min_value=1,
-                    max_value=50,
-                    value=5,
-                    help="Number of variables to try at each split"
-                )
-            else:
-                v_split = None
-            # Minimum leaf population
-            min_leaf = st.number_input(
-                "Minimum Leaf Population",
-                min_value=1,
-                max_value=100,
-                value=1,
-                help="Minimum number of samples required in a leaf node"
-            )
-            
-            # Soft classification specific parameters
-            if classification_mode == "Soft Classification (One-vs-Rest)":
-                st.markdown("---")
-                st.subheader("Soft Classification Options")
-                
-                include_final_map = st.checkbox(
-                    "Include Final Classification Map",
-                    value=True,
-                    help="Generate final map using argmax on probability layers"
-                )
-        st.markdown("---")
+        st.success("✅ Proses ekstraksi nilai piksel tersedia. Proses klasifikasi dapat dilakukan")
         
-        # Classify button
-        if st.button("Run Classification", type="primary", width='content'):
-            with st.spinner("Running classification...."):
-                try:
-                    #Initialze the generate lulc class from module 6
-                    lulc = Generate_LULC()
-                    #Get the class property used during extraction. Its define as parameters since it will be used again for visualization
-                    clf_class_property = st.session_state.get('class_property', class_property)
-                    #Run the module 6 LULC hard classification
-                    if classification_mode == "Hard Classification (Multiclass)":
-                        classification_result, trained_model = lulc.hard_classification(
-                            training_data=st.session_state.extracted_training_data,
-                            class_property=clf_class_property,
-                            image=image,
-                            ntrees=ntrees,
-                            v_split=v_split,
-                            min_leaf=min_leaf,
-                            return_model=True
-                        )
-                        #Store the result for visualization
-                        st.session_state.classification_mode = "Hard Classification"
-                        st.session_state.trained_model = trained_model
-                        st.session_state.classification_result = classification_result
-                    #Soft Classification
-                    #At this point, the soft classification is not modified, since in order to evaluate them, it required cross entropy loss metric
-                    else:  
-                        classification_result = lulc.soft_classification(
-                            training_data=st.session_state.extracted_training_data,
-                            class_property=clf_class_property,
-                            image=image,
-                            include_final_map=include_final_map,
-                            ntrees=ntrees,
-                            v_split=v_split,
-                            min_leaf=min_leaf,
-                        )
-                        #Store the result for visualization
-                        st.session_state.classification_mode = "Soft Classification"
-                        st.session_state.include_final_map = include_final_map
-                    
-                    st.session_state.classification_result = classification_result
-                    st.session_state.classification_params = {
-                        'mode': classification_mode,
-                        'ntrees': ntrees,
-                        'v_split': v_split,
-                        'min_leaf': min_leaf,
-                        'class_property': clf_class_property
+        #Model Config with explanations
+        st.subheader("Pengaturan Model Klasifikasi")
+        with st.expander("Kenapa Model klasifikasi perlu diatur?", expanded = False):
+            st.markdown(""" 
+            Setiap model machine learning memiliki beberapa parameter yang mengendalikan bagaimana mesin
+            mempelajari hubungan antara variabel dan pola data yang diberikan. Oleh karena itu, 
+            pengaturean parameter ini dapat mempengaruhi kualitas model dan klasifikasi yang dihasilkan.
+            
+            """
 
-                    }
-                    
-                    st.success("✅ Classification completed successfully!")
-                    
-                except Exception as e:
-                    st.error(f"Error during classification: {e}")
+
+            )
+
+        st.markdown("Anda dapat memilih opsi untuk menggunakan pengaturan model yang telah disediakan atau mengatur dengan sendiri")
+        
+        #Create tabs for preset value, or manuall setting
+        config_tab1, config_tab2 = st.tabs(["Setelan Umum", "⚙️ Pengaturan Lebih Lanjut"])
+        #Preset parameter value
+        with config_tab1:
+            st.markdown("Pengaturan - pengaturan umumnya.")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("### 🌲 Number of Trees")
+                st.markdown("*How many 'expert opinions' should we get?*")
+                
+                # Preset options for beginners
+                tree_preset = st.radio(
+                    "Choose a preset:",
+                    ["Fast (50 trees) - Quick results", 
+                     "Balanced (100 trees) - Good balance ⭐", 
+                     "Accurate (200 trees) - Best results"],
+                    index=1,
+                    help="More trees = better accuracy but takes longer to run"
+                )
+                
+                if "Fast" in tree_preset:
+                    ntrees = 50
+                elif "Balanced" in tree_preset:
+                    ntrees = 100
+                else:
+                    ntrees = 200
+                
+                st.info(f"Using **{ntrees} trees** - {tree_preset.split(' - ')[1]}")
+            
+            with col2:
+                st.markdown("### 🎯 Other Settings")
+                st.markdown("*We'll use the best default values*")
+                
+                use_auto_vsplit = True
+                v_split = None
+                min_leaf = 1
+                
+                st.success("✅ **Variables per split:** Automatic (recommended)")
+                st.success("✅ **Minimum samples:** 1 (standard)")
+                st.info("💡 These defaults work great for most projects!")
+        
+        with config_tab2:
+            st.markdown("**For users who want full control over the model parameters.**")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("### 🌲 Number of Trees")
+                ntrees = st.number_input(
+                    "Number of Trees",
+                    min_value=10,
+                    max_value=500,
+                    value=100,
+                    step=10,
+                    help="More trees generally improve accuracy but increase computation time. 50-200 is usually sufficient."
+                )
+                
+                # Visual feedback
+                if ntrees < 50:
+                    st.warning("⚡ Fast but may be less accurate")
+                elif ntrees <= 150:
+                    st.success("⚖️ Good balance of speed and accuracy")
+                else:
+                    st.info("🎯 High accuracy but slower processing")
+            
+            with col2:
+                st.markdown("### 🔀 Variables per Split")
+                use_auto_vsplit = st.checkbox(
+                    "Use automatic selection (recommended)",
+                    value=True,
+                    help="Automatically chooses the optimal number based on your data"
+                )
+                
+                if not use_auto_vsplit:
+                    v_split = st.number_input(
+                        "Variables Per Split",
+                        min_value=1,
+                        max_value=50,
+                        value=5,
+                        help="How many variables each tree considers at each split. Lower values add more randomness."
+                    )
+                else:
+                    v_split = None
+                    st.success("✅ Will use √(number of bands)")
+            
+            with col3:
+                st.markdown("### 🍃 Minimum Leaf Size")
+                min_leaf = st.number_input(
+                    "Minimum Samples per Leaf",
+                    min_value=1,
+                    max_value=100,
+                    value=1,
+                    help="Minimum number of samples required in each leaf node. Higher values prevent overfitting."
+                )
+                
+                if min_leaf == 1:
+                    st.info("📊 Standard setting")
+                elif min_leaf <= 5:
+                    st.success("🛡️ Good for preventing overfitting")
+                else:
+                    st.warning("⚠️ May be too restrictive")
+        
+        # Ready to train section
+        st.markdown("---")
+        st.subheader("🚀 Ready to Train Your Model?")
+        
+        # Show current configuration summary
+        with st.expander("📋 Current Configuration Summary", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("🌲 Number of Trees", ntrees)
+            with col2:
+                if v_split is None:
+                    st.metric("🔀 Variables per Split", "Auto")
+                else:
+                    st.metric("🔀 Variables per Split", v_split)
+            with col3:
+                st.metric("🍃 Min Samples per Leaf", min_leaf)
+        
+        # Estimated time warning
+        if ntrees >= 200:
+            st.warning("⏱️ **Heads up!** With 200+ trees, this might take a few minutes. Perfect time for a coffee break! ☕")
+        elif ntrees >= 100:
+            st.info("⏱️ **Estimated time:** 1-3 minutes depending on your data size.")
+        else:
+            st.success("⏱️ **Estimated time:** Less than 1 minute - nice and quick!")
+        
+        # The big classification button
+        if st.button("🎯 Train Classification Model", type="primary", width='stretch'):
+            # Progress tracking
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            status_text.text("🔄 Initializing Random Forest model...")
+            progress_bar.progress(10)
+            
+            try:
+                #Initialize the generate lulc class from module 6
+                lulc = Generate_LULC()
+                #Get the class property used during extraction
+                clf_class_property = st.session_state.get('class_property')
+                
+                status_text.text(f"🌱 Training {ntrees} decision trees...")
+                progress_bar.progress(30)
+                
+                #Run the hard classification
+                classification_result, trained_model = lulc.hard_classification(
+                    training_data=st.session_state.extracted_training_data,
+                    class_property=clf_class_property,
+                    image=image,
+                    ntrees=ntrees,
+                    v_split=v_split,
+                    min_leaf=min_leaf,
+                    return_model=True
+                )
+                
+                status_text.text("💾 Saving results...")
+                progress_bar.progress(80)
+                
+                #Store the results for visualization and evaluation
+                st.session_state.classification_mode = "Hard Classification"
+                st.session_state.trained_model = trained_model
+                st.session_state.classification_result = classification_result
+                st.session_state.classification_params = {
+                    'mode': 'Hard Classification',
+                    'ntrees': ntrees,
+                    'v_split': v_split,
+                    'min_leaf': min_leaf,
+                    'class_property': clf_class_property
+                }
+                
+                progress_bar.progress(100)
+                status_text.text("🎉 Training completed!")
+                
+                # Success message with next steps
+                st.success("🎉 **Congratulations!** Your classification model has been trained successfully!")
+                st.info("👉 **What's next?** Go to the 'Model Summary and Evaluation' tab to see how well your model performed!")
+                
+                # Show a quick preview of what was accomplished
+                st.markdown("### ✅ What we just accomplished:")
+                st.markdown(f"- ✅ Trained a Random Forest model with **{ntrees} decision trees**")
+                st.markdown(f"- ✅ Model learned to recognize **{len(st.session_state.get('lulc_classes_final', []))} different land cover types**")
+                st.markdown("- ✅ Ready to classify your entire study area!")
+                
+            except Exception as e:
+                progress_bar.progress(0)
+                status_text.text("")
+                st.error("❌ **Oops! Something went wrong during training.**")
+                st.error("**Error details:** " + str(e))
+                
+                with st.expander("🔧 Technical Details (for troubleshooting)"):
                     import traceback
                     st.code(traceback.format_exc())
+                
+                st.markdown("### 💡 **Possible solutions:**")
+                st.markdown("- Check that your training data has valid class labels")
+                st.markdown("- Try reducing the number of trees if you're running out of memory")
+                st.markdown("- Make sure your satellite imagery and training data overlap geographically")
 
 # ==================== TAB 3 Summary Result ====================
 #Main concern. user still able to get summary report without the model accuaracy
@@ -552,18 +669,7 @@ with tab4:
         if st.checkbox("Show Classification Map", value=True):
             try:
                 # Prepare visualization
-                classiifcation_map = st.session_state.classification_result
-                
-                # If soft classification, show the final classification band
-                if st.session_state.get('classification_mode') == "Soft Classification":
-                    if st.session_state.get('include_final_map', False):
-                        # Select the classification band
-                        band_names = classiifcation_map.bandNames().getInfo()
-                        if 'classification' in band_names:
-                            classiifcation_map = classiifcation_map.select('classification')
-                        else:
-                            st.warning("No final classification map found. Showing first probability band.")
-                            classiifcation_map = classiifcation_map.select(0)
+                classification_map = st.session_state.classification_result
                 
                 # Create color palette based on number of classes
                 # Create custom color palette with user input
@@ -635,7 +741,7 @@ with tab4:
                     Map = geemap.Map()
                 
                 # Add layers
-                Map.addLayer(classiifcation_map, vis_params, 'Random Forest Classification', True)
+                Map.addLayer(classification_map, vis_params, 'Random Forest Classification', True)
                 Map.addLayer(image, st.session_state.get('visualization', {}), 'Image Composite', False)
                 
                 #if 'training_gdf' in st.session_state:

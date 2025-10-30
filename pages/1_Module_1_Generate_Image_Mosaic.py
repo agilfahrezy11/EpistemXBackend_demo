@@ -349,7 +349,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
         }
         #Create and image composite/mosaic for thermal bands
         thermal_median = thermal_collection.median().clip(aoi)
-        #composite for multispectral data
+        #composite for multispectral data and stacked them with thermal bands. Also convert to float()
         composite = collection.median().clip(aoi).addBands(thermal_median).toFloat()
         # Store in session state for use in other modules
         st.session_state['composite'] = composite
