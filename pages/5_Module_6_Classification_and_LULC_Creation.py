@@ -236,7 +236,9 @@ with tab2:
         Proses pengelompokan nilai piksel menjadi kelas penutup lahan adalah sebagai berikut:
         
         🌲 **Setiap "Pohon"** mempertimbangkan kombinasi nilai piksel yang berbeda pada setiap kanal spektral
+        
         🗳️ **Pengambilan Keputusan** Pohon ini kemudian menentukan tipe penutup lahan yang diwakili oleh setiap nilai piksel
+        
         📊 **Keputusan Akhir** ditetapkan melalui pengambilan suara terbanyak, apapun yang disetujui oleh sebagian besar pohon akan menjadi keputusan terakhir
         
         **Fun fact: Random Forest menjadi salah satu algoritma yang banyak digunakan dalam kajian penginderaan jauh**
@@ -251,65 +253,62 @@ with tab2:
         st.success("✅ Proses ekstraksi nilai piksel tersedia. Proses klasifikasi dapat dilakukan")
         
         #Model Config with explanations
-        st.subheader("Pengaturan Model Klasifikasi")
+        st.subheader("⚙️ Pengaturan Model Klasifikasi")
         with st.expander("Kenapa Model klasifikasi perlu diatur?", expanded = False):
             st.markdown(""" 
             Setiap model machine learning memiliki beberapa parameter yang mengendalikan bagaimana mesin
             mempelajari hubungan antara variabel dan pola data yang diberikan. Oleh karena itu, 
             pengaturean parameter ini dapat mempengaruhi kualitas model dan klasifikasi yang dihasilkan.
-            
             """
-
-
             )
-
+            st.markdown("Algoritma Random Forest memiliki beberapa parameter utama yang mempengaruhi kemampuannya untuk mempelajari pola")
+            st.markdown("1. Jumlah Pohon Keputusan (number of trees)")
+            st.markdown("2. Jumlah variabel yang dipertimbangkan saat pengambilan keputusan (variable_per_split)")
+            st.markdown("3. Jumlah sampel yang dipertmbangkan untuk memecah sebuah daun dalam pohon keputusan (min leaf population)")
         st.markdown("Anda dapat memilih opsi untuk menggunakan pengaturan model yang telah disediakan atau mengatur dengan sendiri")
         
         #Create tabs for preset value, or manuall setting
-        config_tab1, config_tab2 = st.tabs(["Setelan Umum", "⚙️ Pengaturan Lebih Lanjut"])
+        config_tab1, config_tab2 = st.tabs(["Pengaturan Umum", "⚙️ Pengaturan Lebih Lanjut"])
         #Preset parameter value
         with config_tab1:
-            st.markdown("Pengaturan - pengaturan umumnya.")
-            
+            st.markdown("Pengaturan Umum yang diterapkan untuk kajian penginderaan jauh")
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown("### 🌲 Number of Trees")
-                st.markdown("*How many 'expert opinions' should we get?*")
+                st.markdown("### Jumlah Pohon Keputusan")
+                st.markdown("*Berapa banyak 'pendapat ahli' diperlukan?*")
                 
-                # Preset options for beginners
+                #Predefined preset (?)
                 tree_preset = st.radio(
-                    "Choose a preset:",
-                    ["Fast (50 trees) - Quick results", 
-                     "Balanced (100 trees) - Good balance ⭐", 
-                     "Accurate (200 trees) - Best results"],
+                    "Preset:",
+                    ["Stable: 50 trees (Ideal untuk klasifikasi penutup lahan dengan kompleksitas rendah)", 
+                     "Balanced: 150 trees (Ideal untuk klasifikasi penutup lahan dengan kompleksitas menengah)", 
+                     "Complex: 300 trees (Ideal untuk klasifikasi penutup lahan dengan kompleksitas tinggi) "],
                     index=1,
-                    help="More trees = better accuracy but takes longer to run"
+                    help="Semakin banyak jumlah pohon, akurasi dapat meningkat, namun beban komputasi yang semakin tinggi"
                 )
-                
-                if "Fast" in tree_preset:
-                    ntrees = 50
+                #translate the preset to the machine requirement
+                if "Stable" in tree_preset:
+                    ntrees = 50                    
                 elif "Balanced" in tree_preset:
-                    ntrees = 100
+                    ntrees = 150                   
                 else:
-                    ntrees = 200
-                
-                st.info(f"Using **{ntrees} trees** - {tree_preset.split(' - ')[1]}")
+                    ntrees = 300
             
             with col2:
-                st.markdown("### 🎯 Other Settings")
-                st.markdown("*We'll use the best default values*")
+                st.markdown("### Pengaturan lainnya")
+                st.markdown("*Parameter lainnya menggunakan nilai bawaan (default*")
                 
                 use_auto_vsplit = True
                 v_split = None
                 min_leaf = 1
                 
-                st.success("✅ **Variables per split:** Automatic (recommended)")
-                st.success("✅ **Minimum samples:** 1 (standard)")
-                st.info("💡 These defaults work great for most projects!")
+                st.success("✅ *Variables per split*: default (akar dari jumlah total variabel)")
+                st.success("✅ *Minimum samples*: 1 (default)")
+                st.info("💡 Nilai ini umumnya dapat menghasilkan model yang bagus")
         
         with config_tab2:
-            st.markdown("**For users who want full control over the model parameters.**")
+            st.markdown("**Jika ingin menyesuaikan parameter secara bebas**")
             
             col1, col2, col3 = st.columns(3)
             
@@ -318,26 +317,18 @@ with tab2:
                 ntrees = st.number_input(
                     "Number of Trees",
                     min_value=10,
-                    max_value=500,
+                    max_value=900,
                     value=100,
                     step=10,
-                    help="More trees generally improve accuracy but increase computation time. 50-200 is usually sufficient."
+                    help="Semakin banyak jumlah pohon, akurasi dapat meningkat, namun beban komputasi yang semakin tinggi"
                 )
                 
-                # Visual feedback
-                if ntrees < 50:
-                    st.warning("⚡ Fast but may be less accurate")
-                elif ntrees <= 150:
-                    st.success("⚖️ Good balance of speed and accuracy")
-                else:
-                    st.info("🎯 High accuracy but slower processing")
-            
             with col2:
-                st.markdown("### 🔀 Variables per Split")
+                st.markdown("###  Variables per Split")
                 use_auto_vsplit = st.checkbox(
-                    "Use automatic selection (recommended)",
+                    "Menggunakan nilai bawaan",
                     value=True,
-                    help="Automatically chooses the optimal number based on your data"
+                    help="Menggunakan nilai bawaan berdasarkan data yang digunakan"
                 )
                 
                 if not use_auto_vsplit:
@@ -346,56 +337,41 @@ with tab2:
                         min_value=1,
                         max_value=50,
                         value=5,
-                        help="How many variables each tree considers at each split. Lower values add more randomness."
+                        help="Berapa banyak variabel yang dipertimbangkan saat pengambilan keputusan (split)"
                     )
                 else:
                     v_split = None
-                    st.success("✅ Will use √(number of bands)")
+                    st.success("✅ Menggunakna √(dari jumlah variabel/prediktor)")
             
             with col3:
-                st.markdown("### 🍃 Minimum Leaf Size")
+                st.markdown("### Minimum Leaf Size")
                 min_leaf = st.number_input(
                     "Minimum Samples per Leaf",
                     min_value=1,
                     max_value=100,
                     value=1,
-                    help="Minimum number of samples required in each leaf node. Higher values prevent overfitting."
+
+                    help= "Jumlah minimal sampel yang dibutuhkan untuk leaf node"
                 )
                 
-                if min_leaf == 1:
-                    st.info("📊 Standard setting")
-                elif min_leaf <= 5:
-                    st.success("🛡️ Good for preventing overfitting")
-                else:
-                    st.warning("⚠️ May be too restrictive")
-        
         # Ready to train section
         st.markdown("---")
-        st.subheader("🚀 Ready to Train Your Model?")
         
         # Show current configuration summary
-        with st.expander("📋 Current Configuration Summary", expanded=True):
+        with st.expander("📋 Konfigurasi Model", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("🌲 Number of Trees", ntrees)
+                st.metric("🌲 Jumlah Pohon", ntrees)
             with col2:
                 if v_split is None:
-                    st.metric("🔀 Variables per Split", "Auto")
+                    st.metric("🔀 Variables per Split", "Default")
                 else:
                     st.metric("🔀 Variables per Split", v_split)
             with col3:
                 st.metric("🍃 Min Samples per Leaf", min_leaf)
         
-        # Estimated time warning
-        if ntrees >= 200:
-            st.warning("⏱️ **Heads up!** With 200+ trees, this might take a few minutes. Perfect time for a coffee break! ☕")
-        elif ntrees >= 100:
-            st.info("⏱️ **Estimated time:** 1-3 minutes depending on your data size.")
-        else:
-            st.success("⏱️ **Estimated time:** Less than 1 minute - nice and quick!")
-        
         # The big classification button
-        if st.button("🎯 Train Classification Model", type="primary", width='stretch'):
+        if st.button(" Latih Model Klasifikasi", type="primary", width='stretch'):
             # Progress tracking
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -423,7 +399,7 @@ with tab2:
                     return_model=True
                 )
                 
-                status_text.text("💾 Saving results...")
+                status_text.text("Saving results...")
                 progress_bar.progress(80)
                 
                 #Store the results for visualization and evaluation
@@ -439,17 +415,15 @@ with tab2:
                 }
                 
                 progress_bar.progress(100)
-                status_text.text("🎉 Training completed!")
                 
                 # Success message with next steps
-                st.success("🎉 **Congratulations!** Your classification model has been trained successfully!")
-                st.info("👉 **What's next?** Go to the 'Model Summary and Evaluation' tab to see how well your model performed!")
+                st.success("🎉 **Selamat!** Model klasifikasi telah berhasil dilatih!")
+                st.info("👉 **Apa selanjutnya?** pergi ke sub-bagian  'Evaluasi Model' untuk melihat performa model klasifikasi!")
                 
                 # Show a quick preview of what was accomplished
-                st.markdown("### ✅ What we just accomplished:")
-                st.markdown(f"- ✅ Trained a Random Forest model with **{ntrees} decision trees**")
-                st.markdown(f"- ✅ Model learned to recognize **{len(st.session_state.get('lulc_classes_final', []))} different land cover types**")
-                st.markdown("- ✅ Ready to classify your entire study area!")
+                st.markdown("### ✅ Yang telah dilakukan:")
+                st.markdown(f"- ✅ Melatih model Random Forest dengan **{ntrees} pohon keputusan**")
+                st.markdown(f"- ✅ Model berusaha untuk mengenali **{len(st.session_state.get('lulc_classes_final', []))} pola penutup lahan yang unik**")
                 
             except Exception as e:
                 progress_bar.progress(0)
@@ -460,74 +434,85 @@ with tab2:
                 with st.expander("🔧 Technical Details (for troubleshooting)"):
                     import traceback
                     st.code(traceback.format_exc())
-                
-                st.markdown("### 💡 **Possible solutions:**")
-                st.markdown("- Check that your training data has valid class labels")
-                st.markdown("- Try reducing the number of trees if you're running out of memory")
-                st.markdown("- Make sure your satellite imagery and training data overlap geographically")
-
 # ==================== TAB 3 Summary Result ====================
-#Main concern. user still able to get summary report without the model accuaracy
 with tab3:
-    st.header("Model Summary and Evaluation")
-    st.markdown("This section shows model parameters, feature importance analysis, and accuracy of the model (if test data avaliable). This is one of the advantage of non-parametric machine learning classifier." \
-    "It allows the analysis of the classification/model performance prior to generating a categorical data. The subsection of this tabs is as follows:")
-    st.markdown("1. Model Parameters: Recap on the parameters used for the classification")
-    st.markdown("2. Feature Importance Analysis: How each covariates benefits the model")
-    st.markdown("3. Model Evaluation: Evaluate the accuracy of the model based on a seperate hold up test. This option is only avaliable if you decide to split the data in feature extraction tab")
+    #Lets dump some exposition for this tab
+    st.header("Ulasan Model Klasifikasi")
+    st.markdown("Platform EPISTEM mendukung dua alat untuk mengulas kemampuan pembelajaran mesin:")
+    st.markdown("1. Feature Importance: Kanal mana yang paling penting untuk pembelajaran model?")
+    st.markdown("2. Akurasi Model: Bagaimana model menghadapi data yang baru?")
     
-    #Check the avaliability classification model
-    if st.session_state.classification_result is None:
-        st.warning("Complete the model learning tab to show the summary")
-        st.stop()
-    #Check the trained model, if not avaliable do not run
-    if 'trained_model' not in st.session_state:
-        st.error("Trained model is not found. Please re-run classification.")
-        st.stop()
-    #If avaliable 
-    else:
-        st.success("Testing data avaliable for model accuracy")
-    st.divider()
-    # ==== Model Information =====
-    st.subheader("Model Parameters")
-    #Get the classification parameter
-    params = st.session_state.get('classification_params', {})
-    col1, col2, col3 = st.columns(3)
-    #column 1 for decision tree
+    #Column for feature importance and Model accuracy explanation
+    col1, col2 = st.columns(2)
     with col1:
-        st.metric("Number of Decision Tree", params.get('ntrees', 'N/A'))
-    #column 2 for variable split
+        st.markdown("**📊 Feature Importance**")
+        with st.expander("🤔 Apa itu Feature Importance?", expanded=False):
+            st.markdown("""
+             Analisis tingkat kepentingan fitur merupakan salah satu umpan balik model
+             yang bertujuan untuk memberikan informasi kontribusi setiap fitur (dalam konteks ini adalah kanal citra satelit)
+             terhadap pembelajaran mesin. Kanal yang memberikan kontribusi paling kecil terhadap model dapat dihilangkan sehingga
+             kemampuan pembelajaran model dapat meningkat
+            """
+                )
     with col2:
-        v_split = params.get('v_split', 'Default')
-        st.metric("Variable selected at split", v_split if v_split else 'Default')
-    #column 3 for minimum leaf population
-    with col3:
-        st.metric("minimum leaf population", params.get('min_leaf', 'N/A'))
+        st.markdown("**🎯 Akurasi Model**") 
+        with st.expander("🤔 Apa itu evaluasi model?", expanded=False):
+            st.markdown("""
+            Salah satu kelebihan klasifikasi berbasis pembelajaran mesin adalah kemampuan untuk 
+            melakukan evaluasi proses pembelajaran sebelum menghasilkan klasifikasi untuk seluruh citra.
+            Evaluasi ini bertujuan untuk melihat bagaimana model melakukan klasifikasi terhadap data yang baru.
+            Pendekatan evaluasi ini mirip dengan pengujian akurasi pada peta, namun hal yang membedakan adalah 
+            objek yang diuji. Dalam konteks evaluasi model, objek yang diuji adalah prediksi statistik. 
+            Jika model belum menghasilkan akurasi yang memuaskan, maka dapat dilakukan pelatihan ulang terhadap model 
+            
+            """
+                )
+    
+    # Check if classification model is available
+    if st.session_state.classification_result is None:
+        st.warning("Selesaikan proses pembelajaran model terlebih dahulu!")
+        st.stop()
+    
+    # Check if trained model exists
+    if 'trained_model' not in st.session_state:
+        st.error("Trained model not found. Please re-run classification.")
+        st.stop()
+    
     st.divider()
+    
     # ==== Feature Importance ====
-    st.subheader("Feature Importance Analysis")
-    st.markdown("Feature importance analysis indicate how each covariates benefits the classification." \
-    "The higher value indicate higher importance which shows that model benefits from that covairates, and vice versa.")
-    #Feature importance analysis located source code of module 6
+    st.subheader("📊 Feature Importance Analysis")
+    
+    with st.expander("Apa yang ditunjukan grafik ini?", expanded=False):
+        st.markdown("""
+        Grafik ini menunjukan kanal mana yang sangat berguna untuk identifikasi kelas penutup lahan 
+        
+        - **Nilai yang tinggi** = Lebih penting untuk klasifikasi 
+        - **Nilai yang rendah** = Kurang penting untuk proses klasifikasi
+        """)
+    
     try:
         lulc = Generate_LULC()
-        #Get the feature importance using the source code
+        # Get additional parameters for fallback method
+        training_data = st.session_state.get('extracted_training_data')
+        class_property = st.session_state.get('class_property')
+        
         importance_df = lulc.get_feature_importance(
-            st.session_state.trained_model
+            st.session_state.trained_model,
+            training_data=training_data,
+            class_property=class_property
         )
-        #Store for later use
         st.session_state.importance_df = importance_df
-        #visualize the feature importance
+        
         col1, col2 = st.columns([2, 1])
-        #first collumn, display as bar chart
+        
         with col1:
-            #Use the plotly for interactive visualization
             fig = px.bar(
                 importance_df,
                 x='Importance',
                 y='Band',
                 orientation='h',
-                title='Variable Importance Ranking',
+                title='Kanal mana yang paling penting?',
                 color='Importance',
                 color_continuous_scale='Viridis',
                 text='Importance'
@@ -540,121 +525,155 @@ with tab3:
                 showlegend=False
             )
             
-            st.plotly_chart(fig,  use_container_width=True)
-        #Display the most importance features
+            st.plotly_chart(fig, use_container_width=True)
+        
         with col2:
-            st.markdown("**Top 5 Most Important Features:**")
+            st.markdown("**Kanal yang paling penting:**")
             for i, row in importance_df.head(5).iterrows():
                 st.write(f"{i+1}. {row['Band']}")
             
-            # Show full table
-            with st.expander("Complete Importance Table"):
+            with st.expander("View All Bands"):
                 st.dataframe(
                     importance_df.style.background_gradient(
                         subset=['Importance'],
                         cmap='YlGn'
                     ),
-                    width='stretch',
+                    use_container_width=True,
                     hide_index=True
                 )
     except Exception as e:
-        st.error(f"Error retrieving feature importance: {e}")
+        st.error(f"Could not analyze feature importance: {e}")
+    
     st.divider()
+    
     # ==== Model Evaluation ====
-    st.subheader("Model Evaluation")
-    st.markdown("This section allows you to evaluate the quality of the model based on the test data not used during the model learning. Therefore, quality of the model is tested on a subset of data that have not seen by the model itself." \
-    " However, You can only do this if you split the data on feature extraction tab. If you decide not to split the data, you can only evaluate the thematic accuracy in module 7")
-    st.markdown("Model evaluation procedure follows the same way as thematic accuracy assessment, using a confusion or matrix. Several accuracy metrics are used to evaluate the model. " \
-    "Additionally, you can also evaluate the accuracy for each class, as well as inspect the resulting cofusion matrix")
-    st.markdown("1. Overall Accuracy")
-    st.markdown("2. Kappa Coefficient")
-    st.markdown("3. Mean F1-score")
-    #check the testing data
-    have_test_data = st.session_state.extracted_testing_data is not None
-    if not have_test_data:
-        st.warning(" No testing data available. Cannot evaluate the model, use the freature extraction tab to split the ROI into training and testing data ")
-        st.info("""
-        **To perform Model evaluation:**
-        1. Go to the 'Feature Extraction' tab
-        2. Enable 'Split data into Training and Testing sets'
-        3. Re-run feature extraction and classification
-        4. Return here to evaluate the model
+    st.subheader("🎯 Model Accuracy Assessment")
+    
+    with st.expander("Bagaimana model diuji?", expanded=False):
+        st.markdown("""
+        Pengujian model dilakukan dengan menerapkan model kepada data yang tidak digunakan dalam proses pembelajaran
+        sehingga kualitas pembelajaran model dapat diketahui. 
+        
+        **Metric Akurasi:**
+        - **Akurasi Keseluruhan/Overall Accuracy**: Persentasi piksels yang diklasifikasikan secara benar
+        - **Koefisien Kappa**: Tingkat kesepakatan antara model dan data penguji
+        - **F1-Score**: Tingkat rata - rata harmonik antara metrik presisi (precision) dan sensitivitas (sensitivity)
         """)
-        #show model information without its accuracy
+    #check the model test data avaliability
+    have_test_data = st.session_state.extracted_testing_data is not None
+    #if its not there
+    #user still able to visualize the map
+    if not have_test_data:
+        st.info("💡 No test data available for accuracy assessment")
+        st.markdown("""
+        **To evaluate model accuracy:**
+        1. Go back to 'Feature Extraction' tab
+        2. Check 'Split data into training and testing subsets'
+        3. Re-run feature extraction and model training
+        4. Return here to see accuracy results
+        """)
+    #If there's data, capability to calculate model accuracy
     else:
-        # Button to compute accuracy
-        if st.button("Evaluate model accuracy", type="primary", width='content'):
-            with st.spinner("Evaluating the model..."):
+        if st.button("Hitung Akurasi Model", type="primary"):
+            with st.spinner("menguji model..."):
                 try:
                     lulc = Generate_LULC()
                     class_prop = st.session_state.get('classification_params', {}).get('class_property')
-                    #st.session_state['selected_class_property']
-                    #Use the functions in the source code to perform model evaluation
+                    
                     model_quality = lulc.evaluate_model(
                         trained_model=st.session_state.trained_model,
                         test_data=st.session_state.extracted_testing_data,
                         class_property=class_prop
                     )
-                    #Store in session state
-                    st.session_state.model_quality = model_quality
                     
-                    st.success("✅ Model Evaluation Complete!")
+                    st.session_state.model_quality = model_quality
+                    st.success("✅ Accuracy assessment complete!")
+                    
                 except Exception as e:
-                    st.error(f"Error during model evaluation: {e}")
+                    st.error(f"Error during evaluation: {e}")
                     st.code(traceback.format_exc())
-            #Shows the result if complete
+        
+        # Show results if available
         if "model_quality" in st.session_state:
-            st.subheader("Model Accuracy Report")
-            #the metrics for overall model quality
+            st.subheader("📈 Hasil Akurasi Model")
+            
             acc = st.session_state.model_quality
+            
+            # Overall metrics
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Overall Accuracy", f"{acc['overall_accuracy']*100:.2f}%")
-            col2.metric("Kappa Coefficient", f"{acc['kappa']:.3f}")
-            mean_f1 = sum(acc['f1_scores']) / len(acc['f1_scores'])
-            col3.metric("Mean F1-score", f"{mean_f1:.3f}")
-            overall_gmean = acc.get('overall_gmean', 0)
-            col4.metric("Overall G-Mean", f"{overall_gmean:.3f}")
-
+            
+            with col1:
+                oa = acc['overall_accuracy'] * 100
+                st.metric("Overall Accuracy", f"{oa:.1f}%")
+            
+            with col2:
+                kappa = acc['kappa']
+                st.metric("Kappa Coefficient", f"{kappa:.3f}")
+            
+            with col3:
+                mean_f1 = sum(acc['f1_scores']) / len(acc['f1_scores'])
+                st.metric("Average F1-Score", f"{mean_f1:.3f}")
+            
+            with col4:
+                overall_gmean = acc.get('overall_gmean', 0)
+                st.metric("G-Mean Score", f"{overall_gmean:.3f}")
+            
+            # Interpretation guidelines
+            with st.expander("📖 Panduan Interpretasi Hasil", expanded=False):
+                st.markdown("""
+                **Overall Accuracy (Akurasi Keseluruhan):**
+                - **≥ 85%**: Akurasi yang baik untuk sebagian besar aplikasi
+                - **70-84%**: Akurasi sedang, mungkin perlu perbaikan
+                - **< 70%**: Akurasi rendah, disarankan untuk melatih ulang model
+                
+                **Kappa Coefficient:**
+                - **≥ 0.8**: Kesepakatan yang kuat antara model dan data referensi
+                - **0.6-0.79**: Kesepakatan sedang
+                - **< 0.6**: Kesepakatan lemah
+                
+                **F1-Score & G-Mean:**
+                - **Nilai mendekati 1.0**: Performa yang baik
+                - **Nilai mendekati 0.5**: Performa sedang
+                - **Nilai mendekati 0.0**: Performa rendah
+                
+                💡 **Catatan:** Interpretasi ini bersifat umum. Standar akurasi dapat bervariasi tergantung pada aplikasi dan kompleksitas area studi.
+                """)
+            
             st.markdown("---")
-            st.subheader("Class-level Metrics")
-
-            #Convert Producer (Recall) and Consumer (Precision) Accuracies into a DataFrame
-            # Build class-level metrics table in percentage form
+            
+            # Class-level results
+            st.subheader("📋 Results by Land Cover Class")
+            
             df_metrics = pd.DataFrame({
                 "Class ID": range(len(acc["precision"])),
-                "Producer's Accuracy (Recall) (%)": np.round(np.array(acc["recall"]) * 100, 2),
-                "User's Accuracy (Precision) (%)": np.round(np.array(acc["precision"]) * 100, 2),
-                "F1-score (%)": np.round(np.array(acc["f1_scores"]) * 100, 2),
-                "Geometric Mean Score (%)": np.round(np.array(acc["gmean_per_class"]) * 100, 2)
+                "Producer's Accuracy (%)": np.round(np.array(acc["recall"]) * 100, 1),
+                "User's Accuracy (%)": np.round(np.array(acc["precision"]) * 100, 1),
+                "F1-Score (%)": np.round(np.array(acc["f1_scores"]) * 100, 1),
+                "G-Mean Score (%)": np.round(np.array(acc["gmean_per_class"]) * 100, 1)
             })
-
+            
             st.dataframe(df_metrics, use_container_width=True)
-
-            #Plot Confusion Matrix as heatmap
-            st.subheader("Confusion Matrix")
+            
+            # Confusion Matrix
+            st.subheader("🔍 Confusion Matrix")
+            st.markdown("Shows how often each class was correctly identified vs confused with other classes")
+            
             cm = pd.DataFrame(
                 acc["confusion_matrix"],
-                columns=[f"Pred_{i}" for i in range(len(acc["confusion_matrix"]))],
-                index=[f"Actual_{i}" for i in range(len(acc["confusion_matrix"]))]
+                columns=[f"Predicted {i}" for i in range(len(acc["confusion_matrix"]))],
+                index=[f"Actual {i}" for i in range(len(acc["confusion_matrix"]))]
             )
-            #Show the heatmap and customized it if needed
+            
             fig = px.imshow(
                 cm,
                 text_auto=True,
                 aspect="auto",
                 color_continuous_scale="Blues",
-                #title="Confusion Matrix"
+                title="Confusion Matrix: Actual vs Predicted Classes"
             )
-            fig.update_layout(
-                autosize=True,
-                height=600
-            )
-            st.plotly_chart(fig,     
-                use_container_width=True, #got warning to upgrade to use 'use_container_width'
-                config={
-                    "displayModeBar": True,
-                    "responsive": True
-                 })
+            fig.update_layout(height=500)
+            
+            st.plotly_chart(fig, use_container_width=True)
 
 # ==================== TAB 4 Visualization ====================
 with tab4:
