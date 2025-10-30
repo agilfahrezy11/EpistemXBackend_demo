@@ -28,6 +28,8 @@ git --version
 conda --version
 ```
 
+**Warning for Windows Users: Do not add Python or Conda to your system PATH.** This causes conflicts and prevents the epistemx environment from working correctly. For details, see [FAQ- Should I add Anaconda to the Windows PATH?](https://www.anaconda.com/docs/getting-started/working-with-conda/reference/faq#should-i-add-anaconda-to-the-windows-path).
+
 ### 2. Set Up the Python Environment
 
 Choose one of the following setup methods based on your needs:
