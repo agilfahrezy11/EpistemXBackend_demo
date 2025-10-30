@@ -1,6 +1,6 @@
 import streamlit as st
-from src.utils_shapefile_validation_conversion import shapefile_validator, EE_converter
-from src.src_modul_3 import sample_quality
+from epistemx.shapefile_utils import shapefile_validator, EE_converter
+from epistemx.module_4 import sample_quality
 import geemap.foliumap as geemap
 import geopandas as gpd
 import ee
@@ -334,7 +334,7 @@ with col2:
         if st.button("➡️ Go to Module 4: Classification", type="primary", use_container_width=True):
             st.switch_page("pages/3_Module_3_Training_data.py")
     else:
-        st.button("🔒 Complete Module 2 First", disabled=True, use_container_width=True, 
+        st.button("🔒 Complete Module 3 First", disabled=True, use_container_width=True, 
                  help="Please add at least one class to the classification scheme")
 
 # Optional: Show completion status
