@@ -3,8 +3,7 @@ import pandas as pd
 import numpy as np
 from .ee_config import ensure_ee_initialized
 
-# Ensure Earth Engine is initialized
-ensure_ee_initialized()
+# Do not initialize Earth Engine at import time. Initialize when classes are instantiated.
 # Module 4: Region of Interest Separability Analysis
 ## System Response 4.1 Separability Analysis
 class sample_quality:
@@ -15,6 +14,7 @@ class sample_quality:
     def __init__(self, training_data, image, class_property, region, class_name_property=None):
         """
         Initialize the tools for conducting the analysis
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
         Args:
             training_data: ee.FeatureCollection - Training polygons/points
             image: ee.Image - The image to extract spectral values
@@ -22,6 +22,9 @@ class sample_quality:
             region: ee.Geometry - Optional region to limit analysis
             class_name_property: str - Property/column containing class name
         """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
+        
         self.training_data = training_data
         self.image = image
         self.class_property = class_property

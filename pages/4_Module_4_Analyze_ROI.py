@@ -173,7 +173,7 @@ if "training_gdf" in st.session_state:
                                 help="Lower values = faster processing but less representative sampling")
 
 #Single command to complete the analysis
-    if st.button("Run Separability Analysis", type="primary",width='stretch'):
+    if st.button("Run Separability Analysis", type="primary", use_container_width=True):
         if "training_data" not in st.session_state:
             st.error("Please upload a valid ROI shapefile first.")
         else:
@@ -282,19 +282,19 @@ if st.session_state.get("analysis_complete", False):
     #ROI Stats
     with st.expander("ROI Statistics", expanded=False):
         if "sample_stats" in st.session_state:
-            st.dataframe(st.session_state["sample_stats"], width='stretch')
+            st.dataframe(st.session_state["sample_stats"], use_container_width=True)
         else:
             st.write("No sample statistics available")
     #Pixel stats
     with st.expander("Pixel Statistics", expanded=True):  
         if "pixel_stats" in st.session_state:
-            st.dataframe(st.session_state["pixel_stats"], width='stretch')
+            st.dataframe(st.session_state["pixel_stats"], use_container_width=True)
         else:
             st.write("No pixel statistics available")
     #Separability summary
     with st.expander("Separability Summary", expanded=True):
         if "separability_summary" in st.session_state:
-            st.dataframe(st.session_state["separability_summary"], width='stretch')
+            st.dataframe(st.session_state["separability_summary"], use_container_width=True)
             
             # Add interpretation
             summary = st.session_state["separability_summary"].iloc[0]
@@ -316,14 +316,14 @@ if st.session_state.get("analysis_complete", False):
     # Detailed Separability Results
     with st.expander("Detailed Separability Results", expanded=False):
         if "separability_results" in st.session_state:
-            st.dataframe(st.session_state["separability_results"], width='stretch')
+            st.dataframe(st.session_state["separability_results"], use_container_width=True)
         else:
             st.write("No detailed separability results available")
     # Most Problematic Class Pairs
     with st.expander("Most Problematic Class Pairs", expanded=True):
         if "lowest_separability" in st.session_state:
             st.markdown("*These class pairs have the lowest separability and may cause classification confusion:*")
-            st.dataframe(st.session_state["lowest_separability"], width='stretch')
+            st.dataframe(st.session_state["lowest_separability"], use_container_width=True)
         else:
             st.write("No problematic pairs data available")            
 
@@ -600,13 +600,13 @@ col1, col2 = st.columns(2)
 
 with col1:
     # Back to Module 3 button (always available)
-    if st.button("⬅️ Back to Module 3: Generate ROI",width='stretch'):
+    if st.button("⬅️ Back to Module 3: Generate ROI", use_container_width=True):
         st.switch_page("pages/3_Module_3_Generate_ROI.py")
 
 with col2:
     # Forward to Module 6 button (conditional)
     if module_2_completed:
-        if st.button("➡️ Go to Module 6: Supervised Classification", type="primary",width='stretch'):
+        if st.button("➡️ Go to Module 6: Supervised Classification", type="primary", use_container_width=True):
             st.switch_page("pages/5_Module_6_Classification_and_LULC_Creation.py")
     else:
         st.button("🔒 Complete Module 4 First", disabled=True,width='stretch', 

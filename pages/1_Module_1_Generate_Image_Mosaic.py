@@ -308,7 +308,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             #Display the table with formatting
             st.dataframe(
                 scene_df,
-                width='stretch',
+                use_container_width=True,
                 hide_index=True,
                 column_config={
                     '#': st.column_config.NumberColumn('#', width='small'),

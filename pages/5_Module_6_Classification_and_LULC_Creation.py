@@ -85,7 +85,7 @@ with col2:
                         class_counts = gdf[class_prop].value_counts()
                         class_name = gdf[class_name].unique()
                         st.write("**Class Distribution:**")
-                        st.dataframe(class_counts, width='stretch')
+                        st.dataframe(class_counts, use_container_width=True)
     else:
         st.error("❌ Training Data Not Found")
         st.warning("Please complete Module 3 and 4 to create and analyze the Region of Interest (ROI)")
@@ -184,7 +184,7 @@ with tab1:
     st.markdown("---")
     
     #Extract Features button
-    if st.button("Extract Features", type="primary", width='stretch'):
+    if st.button("Extract Features", type="primary", use_container_width=True):
         #Spinner to show progress
         with st.spinner("Extracting features from imagery..."):
             try:
@@ -382,7 +382,7 @@ with tab2:
                 st.metric("🍃 Min Samples per Leaf", min_leaf)
         
         # The big classification button
-        if st.button(" Latih Model Klasifikasi", type="primary", width='stretch'):
+        if st.button(" Latih Model Klasifikasi", type="primary", use_container_width=True):
             # Progress tracking
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -793,16 +793,16 @@ st.subheader("Module Navigation")
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("⬅️ Back to Module 3: Analyze ROI", width='stretch'):
+    if st.button("⬅️ Back to Module 3: Analyze ROI", use_container_width=True):
         st.switch_page("pages/4_Module_4_Analyze_ROI.py")
 
 with col2:
     if st.session_state.classification_result is not None:
-        if st.button("➡️ Go to Module 7: Thematic Accuracy Assessment", width='stretch'):
+        if st.button("➡️ Go to Module 7: Thematic Accuracy Assessment", use_container_width=True):
             st.switch_page("pages/6_Module_7_Thematic_Accuracy.py")
             st.info("Accuracy assessment module coming soon!")
     else:
-        st.button("🔒 Complete Classification First", disabled=True, width='stretch')
+        st.button("🔒 Complete Classification First", disabled=True, use_container_width=True)
 
 # Show completion status
 if st.session_state.classification_result is not None:

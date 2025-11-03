@@ -1,7 +1,21 @@
 import streamlit as st
 import leafmap.foliumap as leafmap
+from epistemx import auto_initialize
 
 st.set_page_config(layout="wide")
+
+# Initialize Earth Engine once when the app starts
+if 'ee_initialized' not in st.session_state:
+    try:
+        result = auto_initialize()
+        st.session_state.ee_initialized = result
+        if result:
+            st.success("Earth Engine initialized successfully!")
+        else:
+            st.error("Failed to initialize Earth Engine. Please check your authentication.")
+    except Exception as e:
+        st.error(f"Earth Engine initialization error: {e}")
+        st.session_state.ee_initialized = False
 
 # Customize the sidebar
 markdown = """
