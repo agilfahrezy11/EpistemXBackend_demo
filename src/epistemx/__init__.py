@@ -19,6 +19,9 @@ from .ee_config import (
 import os
 import warnings
 
+service_account_path = r'auth/gpoogleServiceAccountKey.json'  # adjust path if needed
+success = initialize_with_service_account(service_account_path)
+
 # Check for service account file in environment or common locations
 def _find_service_account_file():
     """Look for service account file in common locations."""
