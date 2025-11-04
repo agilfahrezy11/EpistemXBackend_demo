@@ -7,7 +7,12 @@ from epistemx.ee_config import initialize_earth_engine
 
 # Initialize Earth Engine
 initialize_earth_engine()
-
+#set page configuration
+st.set_page_config(
+    page_title="Sample Creation",
+    page_icon="logos/logo_epistem_crop.png",
+    layout="wide"
+)
 # Module title and description
 st.title("Penentuan Data Sampel Klasifikasi Tutupan/penggunaan lahan")
 st.divider()

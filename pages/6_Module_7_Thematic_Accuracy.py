@@ -8,8 +8,6 @@ import zipfile
 import os
 import geopandas as gpd
 import plotly.express as px
-from epistemx.ee_config import initialize_earth_engine
-initialize_earth_engine()
 
 #Page configuration
 st.set_page_config(
@@ -185,7 +183,7 @@ def user_input_for_accuracy_assessment():
         )
 
     # Run assessment
-    if st.button("🎯 Evaluate Map Accuracy", type="primary", use_container_width=True):
+    if st.button("Evaluate Map Accuracy", type="primary", use_container_width=True):
         with st.spinner("Running thematic accuracy assessment..."):
             success, results = manager.run_accuracy_assessment(
                 lcmap=lcmap,
