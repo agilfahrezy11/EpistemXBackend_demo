@@ -19,8 +19,7 @@ import os
 import ee
 import datetime
 import pandas as pd
-from epistemx.ee_config import initialize_earth_engine
-initialize_earth_engine("auth/ee-donyindiarto-44198b511607.json")
+
 # Page configuration
 st.set_page_config(
     page_title="Search Imagery Composite",
