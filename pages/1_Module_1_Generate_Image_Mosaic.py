@@ -20,7 +20,7 @@ import ee
 import datetime
 import pandas as pd
 from epistemx.ee_config import initialize_earth_engine
-initialize_earth_engine()
+initialize_earth_engine("auth/ee-donyindiarto-44198b511607.json")
 # Page configuration
 st.set_page_config(
     page_title="Search Imagery Composite",
@@ -308,7 +308,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             #Display the table with formatting
             st.dataframe(
                 scene_df,
-                width='stretch',
+                use_container_width=True,
                 hide_index=True,
                 column_config={
                     '#': st.column_config.NumberColumn('#', width='small'),

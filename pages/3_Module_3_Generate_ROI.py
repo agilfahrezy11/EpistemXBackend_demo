@@ -26,7 +26,7 @@ Modul ini dibuat untuk menentukan data sampel training.
 # Set page layout and side info
 st.sidebar.title("About")
 st.sidebar.info(markdown)
-logo = "logos\logo_epistem.png"
+logo = "logos/logo_epistem.png"
 st.sidebar.image(logo)
 
 st.markdown("Ketersediaan keluaran hasil modul 1 dan 2")

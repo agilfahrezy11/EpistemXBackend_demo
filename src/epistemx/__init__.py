@@ -19,6 +19,9 @@ from .ee_config import (
 import os
 import warnings
 
+# Do not automatically initialize Earth Engine at import time
+# Users should call setup_earth_engine() or ensure_ee_initialized() when needed
+
 # Check for service account file in environment or common locations
 def _find_service_account_file():
     """Look for service account file in common locations."""
@@ -26,6 +29,28 @@ def _find_service_account_file():
     env_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
     if env_file and os.path.exists(env_file):
         return env_file
+    
+    # Check auth/ directory first (project-specific location)
+    # Use absolute path to ensure it works regardless of working directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(current_dir))  # Go up from src/epistemx to project root
+    auth_dir = os.path.join(project_root, 'auth')
+    
+    if os.path.exists(auth_dir):
+        for file in os.listdir(auth_dir):
+            if file.endswith('.json'):
+                auth_file = os.path.join(auth_dir, file)
+                if os.path.exists(auth_file):
+                    return auth_file
+    
+    # Also check relative auth/ directory (fallback)
+    auth_dir_relative = 'auth'
+    if os.path.exists(auth_dir_relative):
+        for file in os.listdir(auth_dir_relative):
+            if file.endswith('.json'):
+                auth_file = os.path.join(auth_dir_relative, file)
+                if os.path.exists(auth_file):
+                    return auth_file
     
     # Check common file names in current directory
     common_names = [
@@ -41,8 +66,8 @@ def _find_service_account_file():
     
     return None
 
-# Automatically initialize Earth Engine when package is imported
-def _auto_initialize():
+# Helper function for manual initialization (can be called by users)
+def auto_initialize():
     """Attempt automatic initialization with fallback options."""
     try:
         # First, try to find and use service account
@@ -67,9 +92,6 @@ def _auto_initialize():
         )
         return False
 
-# Attempt auto-initialization
-_auto_initialize()
-
 __version__ = "0.1.0"
 __author__ = "EpistemX Team"
 
@@ -83,5 +105,6 @@ __all__ = [
     'get_auth_status',
     'print_auth_instructions',
     'setup_earth_engine',
-    'reset_ee_initialization'
+    'reset_ee_initialization',
+    'auto_initialize'
 ]

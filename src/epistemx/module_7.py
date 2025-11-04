@@ -5,8 +5,7 @@ from typing import Dict, List, Tuple, Any, Optional
 import logging
 from .ee_config import ensure_ee_initialized
 
-# Ensure Earth Engine is initialized
-ensure_ee_initialized()
+# Do not initialize Earth Engine at import time. Initialize when classes are instantiated.
 
 #Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +21,13 @@ class Thematic_Accuracy_Assessment:
     """
     
     def __init__(self):
-        """Initialize the accuracy assessment manager"""
+        """
+        Initialize the accuracy assessment manager
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
+        """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
+        
         self.supported_metrics = [
             'overall_accuracy', 'kappa', 'producer_accuracy', 
             'user_accuracy', 'f1_scores', 'confusion_matrix'

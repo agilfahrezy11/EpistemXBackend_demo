@@ -3,8 +3,7 @@ from datetime import datetime
 import logging
 from .ee_config import ensure_ee_initialized
 
-# Ensure Earth Engine is initialized
-ensure_ee_initialized()
+# Do not initialize Earth Engine at import time. Initialize when an instance is created.
 
 #Configure root for global functions
 logging.basicConfig(
@@ -117,7 +116,11 @@ class Reflectance_Data:
     def __init__(self, log_level=logging.INFO):
         """
         Initialize the ReflectanceData object and set up a class-specific logger.
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
         """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
+        
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(log_level)
 
@@ -472,7 +475,11 @@ class Reflectance_Stats:
     def __init__(self, log_level=logging.INFO):
         """
         Initialize the ReflectanceStats object and set up a class-specific logger.
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
         """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
+        
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(log_level)
 

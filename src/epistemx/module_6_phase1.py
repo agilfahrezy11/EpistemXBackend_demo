@@ -3,8 +3,7 @@ import numpy as np
 import ee
 from .ee_config import ensure_ee_initialized
 
-# Ensure Earth Engine is initialized
-ensure_ee_initialized()
+# Do not initialize Earth Engine at import time. Initialize when classes are instantiated.
 
 # Module 6: Land Cover Classification
 ## System Response 6.2 Classification
@@ -16,7 +15,10 @@ class FeatureExtraction:
     def __init__(self):
         """
         Initializing the class function for feature extraction
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
         """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
     ############################# 1. Single Random Split ###########################
     #extract pixel value for the labeled region of interest and partitioned them into training and testing data
     #This can be used if the training/reference data is balanced across class and required more fast result
