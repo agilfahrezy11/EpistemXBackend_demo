@@ -434,10 +434,11 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                 help="The output will be saved as GeoTIFF (.tif)"
             )
         #Hardcoded folder location so that the export is in one location
-
-        drive_folder = "Epistem_EE_Exports"  
-        drive_url = "https://drive.google.com/drive/folders/1MMflDbN3vuPbCoxsrIVYkkVGd7kSHXWx?usp=sharing"
-        st.info(f"Files will be exported to [Epistem Earth Engine Export folder]({drive_url})")
+        #Located in My Drive/EPISTEM/EPISTEMX_Landsat_Export folder structure
+        drive_folder = "EPISTEM/EPISTEMX_Landsat_Export"  
+        drive_url = "https://drive.google.com/drive/folders/1JKwqv3q3JyQnkIEuIqTQ2hlwPmM-FQaF?usp=sharing"
+       
+        st.info(f"Files will be exported to [EPISTEM/EPISTEMX_Landsat_Export folder]({drive_url})")
         #Coordinate Reference System (CRS)
         #User can define their own CRS using EPSG code, if not, used WGS 1984 as default option    
         crs_options = {
@@ -531,7 +532,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     st.info(f"Task ID: {task.id}")
                     st.markdown(f"""
                     **Export Details:**
-                    - File location: Google Drive/{drive_folder}/{export_name}.tif
+                    - File location: My Drive/{drive_folder}/{export_name}.tif
                     - CRS: {export_crs}
                     - Resolution: {scale}m
                     
@@ -726,8 +727,8 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     # Show completion details
                     if state == 'COMPLETED':
                         st.success("✅ Export completed successfully!")
-                        drive_url = "https://drive.google.com/drive/folders/1MMflDbN3vuPbCoxsrIVYkkVGd7kSHXWx?usp=sharing"
-                        st.success(f"File saved to: [Epistem Earth Engine Export Folder]({drive_url})")
+                        drive_url = "https://drive.google.com/drive/folders/1JKwqv3q3JyQnkIEuIqTQ2hlwPmM-FQaF?usp=sharing"
+                        st.success(f"File saved to: [EPISTEM/EPISTEMX_Landsat_Export Folder]({drive_url})")
                         
                         #Option to remove completed task from monitor
                         if st.button(f"Remove from monitor", key=f"remove_{i}"):
