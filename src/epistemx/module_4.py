@@ -294,10 +294,10 @@ class sample_quality:
         return result_df
     #Calculate class separability using jeffries matusita distance
     #Note: This approach is not ideal for machine learning classifier, since JM distance works best with gaussian distribution
-    def check_class_separability(self, df, method='JM'):
+    def check_class_separability(self, df, method='TD'):
         """
-        Calculate class separability.
-        Available methods: 'JM' (Jeffries-Matusita), 'TD' (Transformed Divergence)
+        Calculate class separability using Transformed Divergence.
+        Method: 'TD' (Transformed Divergence) - hardcoded for consistency
         """
         spectral_bands = [col for col in df.columns if col != self.class_property and col in self.band_names]
         classes = df[self.class_property].unique()
@@ -320,12 +320,8 @@ class sample_quality:
                             separability_matrix[str(class1)][str(class2)] = 0.0
                             continue
 
-                        if method == 'JM':
-                            sep = self._jeffries_matusita_distance(data1, data2)
-                        elif method == 'TD':
-                            sep = self.transform_divergence(data1, data2)
-                        else:
-                            raise ValueError("Unsupported method. Choose 'JM' or 'TD'.")
+                        # Always use Transformed Divergence
+                        sep = self.transform_divergence(data1, data2)
 
                         separability_matrix[str(class1)][str(class2)] = float(sep)
 
@@ -337,10 +333,10 @@ class sample_quality:
 
         return separability_matrix
 
-    def get_separability_df(self, df, method='JM'):
+    def get_separability_df(self, df, method='TD'):
         """
         Get separability results as a DataFrame.
-        method: 'JM' (Jeffries-Matusita) or 'TD' (Transformed Divergence)
+        method: 'TD' (Transformed Divergence) - hardcoded for consistency
         """
         separability = self.check_class_separability(df, method=method)
         if not separability:
@@ -348,11 +344,21 @@ class sample_quality:
 
         pairs = []
         class_mapping = self.class_renaming()
-        metric_name = "JM_Distance" if method == 'JM' else "TD_Distance"
+        metric_name = "TD_Distance"  # Always use Transformed Divergence
+        processed_pairs = set()  # Track processed pairs to avoid duplicates
 
         for class1_id, class1_data in separability.items():
             for class2_id, value in class1_data.items():
                 if value > 0:
+                    # Create a sorted tuple to ensure unique pairs (avoid Class1-Class2 and Class2-Class1)
+                    pair_key = tuple(sorted([class1_id, class2_id]))
+                    
+                    # Skip if we've already processed this pair
+                    if pair_key in processed_pairs:
+                        continue
+                    
+                    processed_pairs.add(pair_key)
+                    
                     # Use consistent key type for mapping
                     try:
                         class1_key = int(class1_id)
@@ -379,42 +385,42 @@ class sample_quality:
             pairs_df = pairs_df.sort_values(metric_name).reset_index(drop=True)
         return pairs_df
 
-    def lowest_separability(self, df, top_n=10, method='JM'):
+    def lowest_separability(self, df, top_n=10, method='TD'):
         """
         Get the class pairs with the lowest separability value.
         Args:
             df: DataFrame with spectral values
             top_n: Number of lowest pairs to return
-            method: 'JM' or 'TD'
+            method: 'TD' (Transformed Divergence) - hardcoded
         Returns:
-            DataFrame of lowest separability pairs
+            DataFrame of lowest separability pairs with interpretation
         """
         separability_df = self.get_separability_df(df, method=method)
         if separability_df.empty:
             return pd.DataFrame()
-        metric_name = "JM_Distance" if method == 'JM' else "TD_Distance"
+        metric_name = "TD_Distance"  # Always use Transformed Divergence
         lowest_pairs = separability_df.head(top_n).copy()
         lowest_pairs['Interpretation'] = lowest_pairs[metric_name].apply(
             lambda x: self.separability_level(x, method=method)
         )
         return lowest_pairs
 
-    def separability_level(self, value, method='JM'):
+    def separability_level(self, value, method='TD'):
         """
-        Categorize separability value for JM or TD distance.
+        Categorize separability value for TD (Transformed Divergence) distance.
         Args:
             value: Separability metric value
-            method: 'JM' or 'TD'
+            method: 'TD' (Transformed Divergence) - now hardcoded
         Returns:
-            String interpretation
+            String interpretation with detailed explanation
         """
-        # Thresholds are for JM/TD (range 0–2)
+        # Thresholds for TD (range 0–2)
         if value >= 1.8:
-            return "Good Separability"
+            return "🟢 Good Separability (TD ≥ 1.8)"
         elif 1.0 <= value < 1.8:
-            return "Weak/marginal Separability"
+            return "🟡 Weak/Marginal Separability (1.0 ≤ TD < 1.8)"
         else:
-            return "Class confusions"
+            return "🔴 Class Confusion (TD < 1.0)"
 
     def sum_separability(self, df):
         """
@@ -494,7 +500,20 @@ class sample_quality:
             return 0.0
         
     def transform_divergence(self, class1_data, class2_data):
-        """Calculate Transform Divergence between two classes"""
+        """
+        Calculate Transformed Divergence between two classes.
+        
+        Transformed Divergence (TD) is a statistical measure that quantifies the separability
+        between two spectral classes by analyzing differences in their mean values and 
+        covariance structures. It ranges from 0 to 2, where:
+        
+        - TD ≥ 1.8: Good separability (classes are well-separated)
+        - 1.0 ≤ TD < 1.8: Weak/marginal separability (some overlap exists)
+        - TD < 1.0: Class confusion (significant overlap, high misclassification risk)
+        
+        The method considers both the distance between class centers and the spread
+        (variance) of each class in multidimensional spectral space.
+        """
         try:
             #Compute mean and covariance
             mean1 = np.mean(class1_data, axis=0)
