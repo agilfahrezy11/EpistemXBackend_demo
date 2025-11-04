@@ -17,10 +17,12 @@ import tempfile
 import zipfile
 import os
 import ee
+import time
 import datetime
 import pandas as pd
 from epistemx.ee_config import initialize_earth_engine
-initialize_earth_engine("auth/ee-donyindiarto-44198b511607.json")
+initialize_earth_engine()
+#"auth/ee-donyindiarto-44198b511607.json"
 # Page configuration
 st.set_page_config(
     page_title="Search Imagery Composite",
@@ -395,7 +397,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
             #Folder location
             drive_folder = st.text_input(
                 "Google Drive Folder:",
-                value="EarthEngine_Exports",
+                value="Epistem_EE_Exports",
                 help="Google Drive folder to store the result"
             )
         #Coordinate Reference System (CRS)
@@ -442,8 +444,6 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     
                     #Get the AOI from geometry
                     aoi_obj = st.session_state.aoi
-                    #try convert the AOI so that it is compatible with export requirement, several option avaliable if one failed
-                    #Convert to geometry based on type
 
                     if isinstance(aoi_obj, ee.FeatureCollection):
                         export_region = aoi_obj.geometry()
@@ -452,7 +452,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     elif isinstance(aoi_obj, ee.Geometry):
                         export_region = aoi_obj
                     else:
-                        # If all else fails, try to get bounds
+                        #If all else fails, try to get bounds
                         try:
                             export_region = aoi_obj.geometry()
                         except:
@@ -461,7 +461,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     #Summarize the export parameter from user input
                     export_params = {
                         "image": export_image,
-                        "description": export_name.replace(" ", "_"),  # Remove spaces from description
+                        "description": export_name.replace(" ", "_"),  #Remove spaces from description
                         "folder": drive_folder,
                         "fileNamePrefix": export_name,
                         "scale": scale,
@@ -476,7 +476,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     task = ee.batch.Export.image.toDrive(**export_params)
                     task.start()
                     
-                    # Store task info in session state for monitoring
+                    #Store task info in session state for monitoring
                     task_info = {
                         'id': task.id,
                         'name': export_name,
@@ -487,8 +487,9 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                         'last_progress': 0,
                         'last_update': datetime.datetime.now()
                     }
+                    #Append to export tasks list
                     st.session_state.export_tasks.append(task_info)
-                    
+                    #note, here the task is submitted, but not yet done
                     st.success(f"✅ Export task '{export_name}' submitted successfully!")
                     st.info(f"Task ID: {task.id}")
                     st.markdown(f"""
@@ -506,7 +507,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                 st.write(f"AOI type: {type(st.session_state.aoi)}")
                 st.write(f"Composite exists: {st.session_state.composite is not None}")
 
-    # Task monitoring section
+    #Earth Engine Export Task Monitor
     if st.session_state.export_tasks:
         st.subheader("Export Task Monitor")
         
@@ -520,7 +521,6 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
         
         # Auto-refresh logic
         if auto_refresh:
-            import time
             time.sleep(30)
             st.rerun()
         
@@ -587,27 +587,36 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                         current_time = datetime.datetime.now()
                         
                         if state == 'RUNNING' and progress > 0:
-                            # Update progress tracking
-                            if progress != task_info.get('last_progress', 0):
+                            # Only update timing calculations if progress has changed
+                            progress_changed = progress != task_info.get('last_progress', 0)
+                            
+                            if progress_changed:
                                 task_info['last_progress'] = progress
                                 task_info['last_update'] = current_time
-                            
-                            # Calculate time estimates
-                            elapsed_time = current_time - task_info['start_time']
-                            elapsed_minutes = elapsed_time.total_seconds() / 60
-                            
-                            if progress > 5:  # Only show estimates after 5% to avoid wild estimates
-                                estimated_total_time = elapsed_minutes * (100 / progress)
-                                remaining_time = estimated_total_time - elapsed_minutes
+                                #Calculate the progress ETA if only session state is changed
+                                elapsed_time = current_time - task_info['start_time']
+                                elapsed_minutes = elapsed_time.total_seconds() / 60
                                 
-                                # Progress bar with custom styling
-                                progress_bar = st.progress(progress / 100.0)
-                                
-                                # Time information
-                                col_a, col_b = st.columns(2)
-                                with col_a:
-                                    st.write(f"**Progress:** {progress:.1f}%")
+                                if progress > 0:
+                                    rate = progress / elapsed_minutes
+                                    task_info['current_rate'] = rate
+                                    if progress > 5:  # Only calculate ETA after 5% progress
+                                        estimated_total_time = elapsed_minutes * (100 / progress)
+                                        remaining_time = estimated_total_time - elapsed_minutes
+                                        task_info['remaining_time'] = remaining_time
+                                        task_info['elapsed_minutes'] = elapsed_minutes
+                            
+                            # Use cached calculations for display
+                            progress_bar = st.progress(progress / 100.0)
+                            
+                            # Time information
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.write(f"**Progress:** {progress:.1f}%")
+                            
+                            if progress > 5:
                                 with col_b:
+                                    remaining_time = task_info.get('remaining_time', 0)
                                     if remaining_time > 60:
                                         st.write(f"**ETA:** ~{remaining_time/60:.0f}h {remaining_time%60:.0f}m")
                                     elif remaining_time > 1:
@@ -615,13 +624,15 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                                     else:
                                         st.write("**ETA:** <1 min")
                                 
-                                # Additional timing info
-                                st.caption(f"Elapsed: {elapsed_minutes:.0f} min | Rate: {progress/elapsed_minutes:.1f}%/min")
+                                # Additional timing info using cached values
+                                elapsed_minutes = task_info.get('elapsed_minutes', 0)
+                                rate = task_info.get('current_rate', 0)
+                                st.caption(f"Elapsed: {elapsed_minutes:.0f} min | Rate: {rate:.1f}%/min")
                             else:
                                 # Basic progress for early stages
                                 st.progress(progress / 100.0)
                                 st.write(f"**Progress:** {progress:.1f}% (calculating ETA...)")
-                                st.caption(f"Elapsed: {elapsed_minutes:.0f} min")
+                                st.caption(f"Elapsed: {task_info.get('elapsed_minutes', 0):.0f} min")
                         
                         elif state == 'RUNNING':
                             # Task is running but no progress reported yet
