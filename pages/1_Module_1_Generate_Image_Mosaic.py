@@ -382,48 +382,45 @@ else:
 #=========5. Exporting the image collection===========
 #check if the session state is not empty
 if st.session_state.composite is not None and st.session_state.aoi is not None:
-    st.subheader("Export Mosaic to Google Drive")
+    st.subheader("Export Imagery to Google Drive")
     #Create an export setting for the user to filled
     with st.expander("Export Settings", expanded=True):
-        col1, col2 = st.columns(2)
+        col1 = st.columns(1)
         #File Naming
-        with col1:
-            default_name = f"Landsat_{st.session_state.search_metadata.get('sensor', 'unknown')}_{st.session_state.search_metadata.get('start_date', '')}_{st.session_state.search_metadata.get('end_date', '')}_mosaic"
-            export_name = st.text_input(
+        default_name = f"Landsat_{st.session_state.search_metadata.get('sensor', 'unknown')}_{st.session_state.search_metadata.get('start_date', '')}_{st.session_state.search_metadata.get('end_date', '')}_mosaic"
+        export_name = st.text_input(
                 "Export Filename:",
                 value=default_name,
                 help="The output will be saved as GeoTIFF (.tif)"
             )
-            #Folder location
-            drive_folder = st.text_input(
-                "Google Drive Folder:",
-                value="Epistem_EE_Exports",
-                help="Google Drive folder to store the result"
-            )
+        #Hardcoded folder location so that the export is in one location
+
+        drive_folder = "Epistem_EE_Exports"  
+        drive_url = "https://drive.google.com/drive/folders/1MMflDbN3vuPbCoxsrIVYkkVGd7kSHXWx?usp=sharing"
+        st.info(f"Files will be exported to [Epistem Earth Engine Export folder]({drive_url})")
         #Coordinate Reference System (CRS)
         #User can define their own CRS using EPSG code, if not, used WGS 1984 as default option    
-        with col2:
-            crs_options = {
+        crs_options = {
                 "WGS 84 (EPSG:4326)": "EPSG:4326",
                 "Custom EPSG": "CUSTOM"
             }
-            crs_choice = st.selectbox(
+        crs_choice = st.selectbox(
                 "Coordinate Reference System:",
                 options=list(crs_options.keys()),
                 index=0
             )
             
-            if crs_choice == 'Custom EPSG':
-                custom_epsg = st.text_input(
-                    "Enter EPSG Code:",
-                    value="4326",
-                    help="Example: 32648 (UTM Zone 48N)"
+        if crs_choice == 'Custom EPSG':
+            custom_epsg = st.text_input(
+                "Enter EPSG Code:",
+                value="4326",
+                help="Example: 32648 (UTM Zone 48N)"
                 )
-                export_crs = f"EPSG:{custom_epsg}"
-            else:
-                export_crs = crs_options[crs_choice]
+            export_crs = f"EPSG:{custom_epsg}"
+        else:
+            export_crs = crs_options[crs_choice]
             #Define the scale/spatial resolution of the imagery
-            scale = st.number_input(
+        scale = st.number_input(
                 "Pixel Size (meters):",
                 min_value=10,
                 max_value=1000,
@@ -509,7 +506,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
 
     #Earth Engine Export Task Monitor
     if st.session_state.export_tasks:
-        st.subheader("Export Task Monitor")
+        st.subheader("Earth Engine Export Monitor")
         
         # Auto-refresh and manual refresh options
         col_refresh1, col_refresh2 = st.columns([1, 3])
@@ -542,17 +539,6 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
             except:
                 pass
         
-        # Task summary metrics
-        if len(st.session_state.export_tasks) > 1:
-            col_sum1, col_sum2, col_sum3, col_sum4 = st.columns(4)
-            with col_sum1:
-                st.metric("Total Tasks", len(st.session_state.export_tasks))
-            with col_sum2:
-                st.metric("Running", running_tasks)
-            with col_sum3:
-                st.metric("Completed", completed_tasks_count)
-            with col_sum4:
-                st.metric("Failed", failed_tasks)
         
         # Display task status for each task
         for i, task_info in enumerate(st.session_state.export_tasks):
@@ -679,9 +665,10 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     # Show completion details
                     if state == 'COMPLETED':
                         st.success("✅ Export completed successfully!")
-                        st.info(f"File saved to: Google Drive/{task_info['folder']}/{task_info['name']}.tif")
+                        drive_url = "https://drive.google.com/drive/folders/1MMflDbN3vuPbCoxsrIVYkkVGd7kSHXWx?usp=sharing"
+                        st.success(f"File saved to: [Epistem Earth Engine Export Folder]({drive_url})")
                         
-                        # Option to remove completed task from monitor
+                        #Option to remove completed task from monitor
                         if st.button(f"Remove from monitor", key=f"remove_{i}"):
                             st.session_state.export_tasks.pop(i)
                             st.rerun()
