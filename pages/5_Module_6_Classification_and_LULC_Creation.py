@@ -16,6 +16,8 @@ import geemap.foliumap as geemap
 from epistemx.module_6_phase1 import FeatureExtraction, Generate_LULC
 import numpy as np
 import traceback
+import ee
+import datetime
 
 #Page configuration
 st.set_page_config(
@@ -28,9 +30,9 @@ st.title("Land Cover Classification")
 st.divider()
 st.markdown("""
 This module performs land cover land use classification using Random Forest classifier. Random Forest is a non-parametric machine learning classifiers widely used in remote sensing community.
-            In order to use this module, you must complete module 1 - 4. Module 1 generates satellite imagery mosaic which serves as predictor variable used to generate the final classification. 
-            Module 2 allows you to define the classification scheme which aims to list the class of the final map. Module 3 define the ROI or training data which used to trained the model 
-            Module 4 allows you to analyze the quality of the training data using separability analysis and various plots
+In order to use this module, you must complete module 1 - 4. Module 1 generates satellite imagery mosaic which serves as predictor variable used to generate the final classification. 
+Module 2 allows you to define the classification scheme which aims to list the class of the final map. Module 3 define the ROI or training data which used to trained the model 
+Module 4 allows you to analyze the quality of the training data using separability analysis and various plots
 """)
 
 #Sidebar info
@@ -116,10 +118,55 @@ if 'extracted_testing_data' not in st.session_state:
 if 'classification_result' not in st.session_state:
     st.session_state.classification_result = None
 
+# Initialize session state for export tasks (reuse from Module 1)
+if 'export_tasks' not in st.session_state:
+    st.session_state.export_tasks = []
+
+# Task status caching to reduce API calls
+if 'task_cache' not in st.session_state:
+    st.session_state.task_cache = {}
+if 'last_cache_update' not in st.session_state:
+    st.session_state.last_cache_update = {}
+
+# Cache task status with time to live to reduce API calls
+def get_cached_task_status(task_id, cache_ttl=30):
+    """Get task status with caching to reduce API calls"""
+    now = datetime.datetime.now()
+    
+    # Check if we have cached data that's still fresh
+    if (task_id in st.session_state.task_cache and 
+        task_id in st.session_state.last_cache_update):
+        
+        last_update = st.session_state.last_cache_update[task_id]
+        if (now - last_update).seconds < cache_ttl:
+            return st.session_state.task_cache[task_id]
+    
+    # Fetch fresh data
+    try:
+        status = ee.data.getTaskStatus(task_id)[0]
+        st.session_state.task_cache[task_id] = status
+        st.session_state.last_cache_update[task_id] = now
+        return status
+    except Exception as e:
+        return None
+
+def get_active_tasks():
+    """Return only tasks that need monitoring"""
+    active_tasks = []
+    for task_info in st.session_state.export_tasks:
+        # Skip if we know it's completed/failed from cache
+        cached_status = st.session_state.task_cache.get(task_info['id'])
+        if cached_status:
+            state = cached_status.get('state', 'UNKNOWN')
+            if state in ['COMPLETED', 'FAILED', 'CANCELLED']:
+                continue
+        active_tasks.append(task_info)
+    return active_tasks
+
 st.divider()
 
 #Main content tabs
-tab1, tab2, tab3, tab4 = st.tabs(["Feature Extraction", "Model Training", "Model Summary and Evaluation", "Visualization"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Feature Extraction", "Model Training", "Model Summary and Evaluation", "Visualization", "Export Classification"])
 #write each the content for each tab
 
 # ==================== Tab 1: Feature Extraction ====================
@@ -793,6 +840,282 @@ with tab4:
                 st.code(traceback.format_exc())
         
         st.markdown("---")
+
+# ==================== TAB 5 Export Classification ====================
+#REUSE THE LOGIC FROM MODULE 1
+with tab5:
+    st.header("Simpan Hasil Klasifikasi")
+    #check if the classification result is complete
+    if st.session_state.classification_result is None:
+        st.info("ℹ️ Klasifikasi belum tersedia, silahkan jalankan klasifikasi terlebih dahulu")
+    else:
+        st.success("✅ Classification completed!")
+        
+        # Export section
+        st.subheader("Export Classification to Google Drive")
+        
+        # Create export settings
+        with st.expander("Export Settings", expanded=True):
+            #Classification Naming
+            classification_params = st.session_state.get('classification_params', {})
+            sensor = st.session_state.get('search_metadata', {}).get('sensor', 'unknown')
+            start_date = st.session_state.get('search_metadata', {}).get('start_date', '')
+            end_date = st.session_state.get('search_metadata', {}).get('end_date', '')
+            #Default classification name
+            default_name = f"LULC_{sensor}_{start_date}_{end_date}"
+            export_name = st.text_input(
+                "Export Filename:",
+                value=default_name,
+                help="The output will be saved as GeoTIFF (.tif)"
+            )
+            
+            #Hardcoded folder location for classification exports
+            #PROBLEM: EXPORT AUTOMATICALLY STORED IN ACCOUNT IN WHICH GOOGLE EARTH ENGINE ACCOUNT IS INTIALIZED
+            drive_folder = "EPISTEM/EPISTEMX_Classification_Export"
+            drive_url = "https://drive.google.com/drive/folders/1ccYCLEy4_T-GEtZIvWw9LFeCPr_afkrd?usp=drive_link"
+            
+            st.info(f"Files will be exported to [EPISTEM/EPISTEMX_Classification_Export folder]({drive_url})")
+            
+            #Coordinate Reference System (CRS)
+            crs_options = {
+                "WGS 84 (EPSG:4326)": "EPSG:4326",
+                "Custom EPSG": "CUSTOM"
+            }
+            crs_choice = st.selectbox(
+                "Coordinate Reference System:",
+                options=list(crs_options.keys()),
+                index=0
+            )
+            
+            if crs_choice == 'Custom EPSG':
+                custom_epsg = st.text_input(
+                    "Enter EPSG Code:",
+                    value="4326",
+                    help="Example: 32648 (UTM Zone 48N)"
+                )
+                export_crs = f"EPSG:{custom_epsg}"
+            else:
+                export_crs = crs_options[crs_choice]
+            
+            #Define the spatial resolution
+            scale = st.number_input(
+                "Pixel Size (meters):",
+                min_value=10,
+                max_value=1000,
+                value=30,
+                step=10
+            )
+            
+            #Export format, hardcoded for classification formar
+            export_format = "GeoTIFF (Integer)"
+            st.info("📄 Export format: GeoTIFF (Integer)")
+            
+            # Button to start export
+            if st.button("Start Export Classification to Google Drive", type="primary"):
+                try:
+                    with st.spinner("Preparing classification export task..."):
+                        #Use the classification result from session state
+                        export_image = st.session_state.classification_result
+                        
+                        #Convert to integer format for classification maps
+                        export_image = export_image.toInt()
+                        
+                        #Get the AOI from session state
+                        aoi_obj = st.session_state.get('AOI') or st.session_state.get('aoi')
+                        
+                        if isinstance(aoi_obj, ee.FeatureCollection):
+                            export_region = aoi_obj.geometry()
+                        elif isinstance(aoi_obj, ee.Feature):
+                            export_region = aoi_obj.geometry()
+                        elif isinstance(aoi_obj, ee.Geometry):
+                            export_region = aoi_obj
+                        else:
+                            # If all else fails, try to get bounds
+                            try:
+                                export_region = aoi_obj.geometry()
+                            except:
+                                raise ValueError(f"Cannot extract geometry from AOI object of type: {type(aoi_obj)}")
+                        
+                        #Set format options for integer classification maps
+                        format_options = {"cloudOptimized": True, "noData": 0}
+                        
+                        #Summarize the export parameters
+                        export_params = {
+                            "image": export_image,
+                            "description": export_name.replace(" ", "_"),  
+                            "folder": drive_folder,
+                            "fileNamePrefix": export_name,
+                            "scale": scale,
+                            "crs": export_crs,
+                            "maxPixels": 1e13,
+                            "fileFormat": "GeoTIFF",
+                            "formatOptions": format_options,
+                            "region": export_region
+                        }
+                        
+                        # Pass the parameters to earth engine export
+                        task = ee.batch.Export.image.toDrive(**export_params)
+                        task.start()
+                        
+                        # Store task info in session state for monitoring
+                        task_info = {
+                            'id': task.id,
+                            'name': export_name,
+                            'folder': drive_folder,
+                            'crs': export_crs,
+                            'scale': scale,
+                            'format': export_format,
+                            'type': 'Classification',
+                            'start_time': datetime.datetime.now(),
+                            'last_progress': 0,
+                            'last_update': datetime.datetime.now()
+                        }
+                        
+                        # Append to export tasks list
+                        st.session_state.export_tasks.append(task_info)
+                        
+                        st.success(f"✅ Classification export task '{export_name}' submitted successfully!")
+                        st.info(f"Task ID: {task.id}")
+                        st.markdown(f"""
+                        **Export Details:**
+                        - File location: My Drive/{drive_folder}/{export_name}.tif
+                        - CRS: {export_crs}
+                        - Resolution: {scale}m
+                        - Format: {export_format}
+                        
+                        Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks) or use the task monitor below.
+                        """)
+                        
+                except Exception as e:
+                    st.error(f"Export failed: {str(e)}")
+                    st.info("Debugging info:")
+                    st.write(f"AOI type: {type(st.session_state.get('AOI', st.session_state.get('aoi')))}")
+                    st.write(f"Classification result exists: {st.session_state.classification_result is not None}")
+        
+        #Earth Engine Export Task Monitor (reuse from Module 1 logic)
+        if st.session_state.export_tasks:
+            st.subheader("Earth Engine Export Monitor")
+            
+            #Manual refresh options with cache control
+            col_refresh1, col_refresh2 = st.columns([1, 3])
+            with col_refresh1:
+                if st.button("🔄 Refresh All", key="refresh_all_classification"):
+                    # Clear cache to force fresh data
+                    st.session_state.task_cache.clear()
+                    st.session_state.last_cache_update.clear()
+                    st.rerun()
+            
+            with col_refresh2:
+                # Show cache status
+                active_tasks_count = len(get_active_tasks())
+                total_tasks_count = len(st.session_state.export_tasks)
+                st.caption(f"Monitoring {active_tasks_count}/{total_tasks_count} active tasks | Manual refresh only")
+            
+            # Display task status for each task
+            for i, task_info in enumerate(st.session_state.export_tasks):
+                # Only show classification tasks in this tab
+                if task_info.get('type') == 'Classification':
+                    with st.expander(f"Classification Task: {task_info['name']}", expanded=True):
+                        try:
+                            # Get task status from cache or Earth Engine
+                            status = get_cached_task_status(task_info['id'])
+                            if not status:
+                                st.error("Failed to get task status")
+                                continue
+                            
+                            # Create columns for better layout
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                st.write(f"**Task ID:** {task_info['id']}")
+                                st.write(f"**Name:** {task_info['name']}")
+                                st.write(f"**Type:** {task_info.get('type', 'N/A')}")
+                                
+                                # Individual task refresh button
+                                if st.button(f"🔄", key=f"refresh_class_{i}", help="Refresh this task"):
+                                    # Clear cache for this specific task
+                                    if task_info['id'] in st.session_state.task_cache:
+                                        del st.session_state.task_cache[task_info['id']]
+                                    if task_info['id'] in st.session_state.last_cache_update:
+                                        del st.session_state.last_cache_update[task_info['id']]
+                                    st.rerun()
+                            
+                            with col2:
+                                # Status with color coding
+                                state = status.get('state', 'UNKNOWN')
+                                if state == 'COMPLETED':
+                                    st.success(f"**Status:** {state}")
+                                elif state == 'RUNNING':
+                                    st.info(f"**Status:** {state}")
+                                elif state == 'FAILED':
+                                    st.error(f"**Status:** {state}")
+                                elif state == 'CANCELLED':
+                                    st.warning(f"**Status:** {state}")
+                                else:
+                                    st.write(f"**Status:** {state}")
+                                
+                                # Progress tracking
+                                progress = status.get('progress', 0)
+                                if progress > 0:
+                                    st.progress(progress / 100.0)
+                                    st.write(f"**Progress:** {progress:.1f}%")
+                                elif state == 'RUNNING':
+                                    st.progress(0)
+                                    st.write("**Progress:** Initializing...")
+                            
+                            with col3:
+                                # Format timestamps
+                                creation_ts = status.get('creation_timestamp_ms')
+                                update_ts = status.get('update_timestamp_ms')
+                                
+                                if creation_ts:
+                                    creation_time = datetime.datetime.fromtimestamp(creation_ts / 1000)
+                                    st.write(f"**Started:** {creation_time.strftime('%H:%M:%S')}")
+                                
+                                if update_ts:
+                                    update_time = datetime.datetime.fromtimestamp(update_ts / 1000)
+                                    st.write(f"**Updated:** {update_time.strftime('%H:%M:%S')}")
+                                
+                                # Show export details
+                                st.write(f"**Format:** {task_info.get('format', 'N/A')}")
+                                st.write(f"**Scale:** {task_info.get('scale', 'N/A')}m")
+                            
+                            # Show error message if failed
+                            if state == 'FAILED' and 'error_message' in status:
+                                st.error(f"Error: {status['error_message']}")
+                            
+                            # Show completion details
+                            if state == 'COMPLETED':
+                                st.success("✅ Classification export completed successfully!")
+                                st.success(f"File saved to: [EPISTEM/EPISTEMX_Classification_Export Folder]({drive_url})")
+                                
+                                # Option to remove completed task from monitor
+                                if st.button(f"Remove from monitor", key=f"remove_class_{i}"):
+                                    st.session_state.export_tasks.pop(i)
+                                    st.rerun()
+                        
+                        except Exception as e:
+                            st.error(f"Failed to get task status: {str(e)}")
+                            st.write(f"Task ID: {task_info['id']}")
+            
+            # Clear completed classification tasks button
+            completed_classification_tasks = []
+            for task_info in st.session_state.export_tasks:
+                if task_info.get('type') == 'Classification':
+                    try:
+                        status = get_cached_task_status(task_info['id'])
+                        if status and status.get('state') == 'COMPLETED':
+                            completed_classification_tasks.append(task_info)
+                    except:
+                        pass
+            
+            if completed_classification_tasks:
+                if st.button("🗑️ Clear Completed Classification Tasks", key="clear_completed_class"):
+                    st.session_state.export_tasks = [
+                        task for task in st.session_state.export_tasks 
+                        if task not in completed_classification_tasks
+                    ]
+                    st.rerun()
 
 # Footer with navigation
 st.divider()

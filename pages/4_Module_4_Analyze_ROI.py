@@ -312,9 +312,9 @@ if st.session_state.get("analysis_complete", False):
             st.markdown("---")
             st.markdown("**Interpretasi Nilai Transformed Divergence (TD):**")
             st.markdown("""
-            - **TD ≥ 1.8**: 🟢 **Keterpisahan Baik** - Kelas - Kelas dapat dipisahkan secara spektral dan kemungkinan dapat diklasifikasikan secara akurat
-            - **1.0 ≤ TD < 1.8**: 🟡 **Keterpisahan Lemah** - Terdapat tumpang tindih yang dapat menyebabkan kesalahan klasifikasi antara kedua kelas
-            - **TD < 1.0**: 🔴 **Keterpisahan Buruk** - Terdapat tumpang tindih signifikan, terdapat risiko tinggi kesalahan klasifikasi dan bahkan tidak terpisahkan sama sekali
+            - **TD ≥ 1.8**: 🟢 **Good Separability** - Kelas - Kelas dapat dipisahkan secara spektral dan kemungkinan dapat diklasifikasikan secara akurat
+            - **1.0 ≤ TD < 1.8**: 🟡 **Weak/Marginal Separability** - Terdapat tumpang tindih yang dapat menyebabkan kesalahan klasifikasi antara kedua kelas
+            - **TD < 1.0**: 🔴 **Poort Separability** - Terdapat tumpang tindih signifikan, terdapat risiko tinggi kesalahan klasifikasi dan bahkan tidak terpisahkan sama sekali
             """)
             
         else:
