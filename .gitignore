@@ -210,3 +210,4 @@ notebooks/Module_2_Classification_Scheme.ipynb
 notebooks/Module_3_Generate_ROI.ipynb
 
 /auth
+*.geojson

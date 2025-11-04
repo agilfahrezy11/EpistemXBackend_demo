@@ -701,6 +701,22 @@ with tab4:
                 # Prepare visualization
                 classification_map = st.session_state.classification_result
                 
+                # Validate that classification_map is an ee.Image
+                if not isinstance(classification_map, ee.Image):
+                    st.error(f"Invalid classification result type: {type(classification_map)}. Expected ee.Image.")
+                    st.error(f"Classification result content: {classification_map}")
+                    st.stop()
+                
+                # Additional validation - try to get basic info about the image
+                try:
+                    # Test if we can get band names (this will fail if it's not a proper ee.Image)
+                    band_names = classification_map.bandNames().getInfo()
+                    st.info(f"Classification image bands: {band_names}")
+                except Exception as validation_error:
+                    st.error(f"Classification result validation failed: {validation_error}")
+                    st.error("The classification result appears to be corrupted or invalid.")
+                    st.stop()
+                
                 # Create color palette based on number of classes
                 # Create custom color palette with user input
                 if 'training_gdf' in st.session_state and 'selected_class_property' in st.session_state:
@@ -770,9 +786,32 @@ with tab4:
                 else:
                     Map = geemap.Map()
                 
-                # Add layers
-                Map.addLayer(classification_map, vis_params, 'Random Forest Classification', True)
-                Map.addLayer(image, st.session_state.get('visualization', {}), 'Image Composite', False)
+                # Add layers with error handling
+                try:
+                    Map.addLayer(classification_map, vis_params, 'Random Forest Classification', True)
+                    st.success("✅ Classification layer added successfully")
+                except Exception as layer_error:
+                    st.error(f"Failed to add classification layer: {layer_error}")
+                    st.error("This usually indicates the classification result contains invalid data.")
+                    
+                    # Try to get more info about the classification_map
+                    try:
+                        # Check if it's actually an ee.Image and get some basic info
+                        if hasattr(classification_map, 'getInfo'):
+                            info = classification_map.getInfo()
+                            st.error(f"Classification map info: {info}")
+                        else:
+                            st.error(f"Classification map is not an Earth Engine object: {type(classification_map)}")
+                    except Exception as info_error:
+                        st.error(f"Could not get classification map info: {info_error}")
+                    
+                    st.stop()
+                
+                try:
+                    Map.addLayer(image, st.session_state.get('visualization', {}), 'Image Composite', False)
+                except Exception as image_error:
+                    st.warning(f"Could not add image composite layer: {image_error}")
+                    # Continue anyway since the main issue is with classification_map
                 
                 #if 'training_gdf' in st.session_state:
                 #    Map.add_geojson(st.session_state['training_gdf'].__geo_interface__, 

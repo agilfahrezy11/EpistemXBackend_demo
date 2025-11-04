@@ -1,8 +1,15 @@
 import streamlit as st
 import leafmap.foliumap as leafmap
 from epistemx import auto_initialize
+import os
+import tempfile
 
 st.set_page_config(layout="wide")
+
+# Set up temporary directory for leafmap
+if not os.path.exists('/tmp'):
+    os.makedirs('/tmp', exist_ok=True)
+os.environ['TMPDIR'] = '/tmp'
 
 # Initialize Earth Engine once when the app starts
 if 'ee_initialized' not in st.session_state:
