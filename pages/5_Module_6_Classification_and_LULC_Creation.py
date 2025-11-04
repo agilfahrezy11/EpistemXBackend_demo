@@ -24,7 +24,7 @@ st.set_page_config(
     layout="wide"
 )
 #Set the page title (for the canvas)
-st.title("Land Cover Map Generations")
+st.title("Land Cover Classification")
 st.divider()
 st.markdown("""
 This module performs land cover land use classification using Random Forest classifier. Random Forest is a non-parametric machine learning classifiers widely used in remote sensing community.
@@ -98,8 +98,9 @@ if image is None or roi is None:
     st.markdown("""
     **Required Steps:**
     1. **Module 1:** Generate image composite
-    2. **Module 3:** Upload and analyze training data (ROI)
-    3. **Module 4:** Return here to perform classification
+    2. **Module 3:** Upload and validate training data
+    3. **Module 4:** Analyze the separability of the training data
+    4. **Module 6:** Return here to perform classification
     """)
     st.stop()
 
@@ -431,11 +432,6 @@ with tab2:
                 st.success("🎉 **Selamat!** Model klasifikasi telah berhasil dilatih!")
                 st.info("👉 **Apa selanjutnya?** pergi ke sub-bagian  'Evaluasi Model' untuk melihat performa model klasifikasi!")
                 
-                # Show a quick preview of what was accomplished
-                st.markdown("### ✅ Yang telah dilakukan:")
-                st.markdown(f"- ✅ Melatih model Random Forest dengan **{ntrees} pohon keputusan**")
-                st.markdown(f"- ✅ Model berusaha untuk mengenali **{len(st.session_state.get('lulc_classes_final', []))} pola penutup lahan yang unik**")
-                
             except Exception as e:
                 progress_bar.progress(0)
                 status_text.text("")
@@ -562,13 +558,15 @@ with tab3:
     
     with st.expander("Bagaimana model diuji?", expanded=False):
         st.markdown("""
-        Pengujian model dilakukan dengan menerapkan model kepada data yang tidak digunakan dalam proses pembelajaran
-        sehingga kualitas pembelajaran model dapat diketahui. 
+        Pengujian model dilakukan dengan menerapkan model kepada data yang tidak digunakan dalam proses pembelajaran pola
+        sehingga kualitas hasil pembelajaran model dapat diketahui. Hasil pengujian kemudian dilaporkan melalui metrik akurasi
+        pada tingkat keseluruhan maupun per-kelas penutup penggunaan lahan.
         
         **Metric Akurasi:**
         - **Akurasi Keseluruhan/Overall Accuracy**: Persentasi piksels yang diklasifikasikan secara benar
         - **Koefisien Kappa**: Tingkat kesepakatan antara model dan data penguji
         - **F1-Score**: Tingkat rata - rata harmonik antara metrik presisi (precision) dan sensitivitas (sensitivity)
+        - **G-mean**: 
         """)
     #check the model test data avaliability
     have_test_data = st.session_state.extracted_testing_data is not None
@@ -596,7 +594,7 @@ with tab3:
                         test_data=st.session_state.extracted_testing_data,
                         class_property=class_prop
                     )
-                    
+                    #stored the model for model accuracy assessment
                     st.session_state.model_quality = model_quality
                     st.success("✅ Accuracy assessment complete!")
                     
@@ -606,11 +604,13 @@ with tab3:
         
         # Show results if available
         if "model_quality" in st.session_state:
-            st.subheader("📈 Hasil Akurasi Model")
-            
+            st.subheader("📈 Akurasi Tingkat Keseluruhan Model")
+            st.markdown("Berikut adalah kualitas model pada tingkat keseluruhan. Akurasi pada tingkat kelas disajikan pada bagian setelah ini")
+
+            #get model quality stored in st session state
             acc = st.session_state.model_quality
             
-            # Overall metrics
+            #Overall metrics (OA, kappa, f1, gmean)
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
@@ -633,32 +633,40 @@ with tab3:
             with st.expander("📖 Panduan Interpretasi Hasil", expanded=False):
                 st.markdown("""
                 **Overall Accuracy (Akurasi Keseluruhan):**
-                - **≥ 85%**: Akurasi yang baik untuk sebagian besar aplikasi
-                - **70-84%**: Akurasi sedang, mungkin perlu perbaikan
+                - **≥ 85%**: Akurasi yang baik untuk sebagian besar kajian penutup/penggunaan lahan
+                - **70-84%**: Akurasi sedang, dapat digunakan untuk kajian tertentu 
                 - **< 70%**: Akurasi rendah, disarankan untuk melatih ulang model
                 
                 **Kappa Coefficient:**
                 - **≥ 0.8**: Kesepakatan yang kuat antara model dan data referensi
-                - **0.6-0.79**: Kesepakatan sedang
-                - **< 0.6**: Kesepakatan lemah
+                - **0.6-0.79**: Kesepakatan sedang antara model dan data referensi
+                - **< 0.6**: Kesepakatan lemah antara model dan data referensi
                 
                 **F1-Score & G-Mean:**
-                - **Nilai mendekati 1.0**: Performa yang baik
-                - **Nilai mendekati 0.5**: Performa sedang
-                - **Nilai mendekati 0.0**: Performa rendah
+                - **Nilai mendekati 1.0**: Performa yang baik. Model mampu menangkap pola baik kelas dominan maupun minoritas, sehingga dapat melakukan klasifikasi dengan ideal
+                - **Nilai mendekati 0.5**: Performa sedang. Model menangkap pola yang kurang baik, sehingga terdapat kemungkinan kesalahan klasifikasi
+                - **Nilai mendekati 0.0**: Performa rendah. Model belum menangkap pola data, sehingga terdapat kemungkinan besar kesalahan kalsifikasi 
                 
-                💡 **Catatan:** Interpretasi ini bersifat umum. Standar akurasi dapat bervariasi tergantung pada aplikasi dan kompleksitas area studi.
+                💡 **Catatan:** Interpretasi ini bersifat umum. Standar akurasi dapat bervariasi tergantung studi yang dilakukan dan kompleksitas skema klasifikasi.
                 """)
             
             st.markdown("---")
             
             # Class-level results
-            st.subheader("📋 Results by Land Cover Class")
-            
+            st.subheader("📋 Akurasi Tingkat Kelas")
+            st.markdown("""
+            Akurasi pada tingkat kelas dapat digunakan untuk menilai kualitas model pada kelas tertentu. 
+            Selain dari F1-score and G-mean, terdapat metrik akurasi lain yang digunakan untuk menilai akurasi pada tingkat kelas:
+            - **Recall/Producer's Accuracy**:  Akurasi ini menjawab pertanyaan 'Seberapa baik algoritma memetakan kelas yang ada di lapangan?'.
+            Metrik ini memberikan informasi mengenai kesalahan omisi, yaitu ketika data dari kelas yang benar tidak terdeteksi atau terlewat oleh model.
+            - **Precision/User's Accuracy**: Akurasi ini menjawab pertanyaan 'Seberapa dipercayanya hasil klasifikasi kelas tertentu?'
+            Metrik ini memberikan informasi mengenai kesalahan komisi, yaitu ketika model melakukan kesalahan klasifikasi dengan memasukkan data dari kelas lain ke dalam kelas tersebut.
+            """)
+            #Dataframe for class-level metric model accuracy
             df_metrics = pd.DataFrame({
                 "Class ID": range(len(acc["precision"])),
-                "Producer's Accuracy (%)": np.round(np.array(acc["recall"]) * 100, 1),
-                "User's Accuracy (%)": np.round(np.array(acc["precision"]) * 100, 1),
+                "Recall/Producer's Accuracy (%)": np.round(np.array(acc["recall"]) * 100, 1),
+                "Precision/User's Accuracy (%)": np.round(np.array(acc["precision"]) * 100, 1),
                 "F1-Score (%)": np.round(np.array(acc["f1_scores"]) * 100, 1),
                 "G-Mean Score (%)": np.round(np.array(acc["gmean_per_class"]) * 100, 1)
             })
