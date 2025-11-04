@@ -344,7 +344,7 @@ class sample_quality:
 
         pairs = []
         class_mapping = self.class_renaming()
-        metric_name = "TD_Distance"  # Always use Transformed Divergence
+        metric_name = "TD_Distance"  #Always use Transformed Divergence. Fyi JM avaliable in source code
         processed_pairs = set()  # Track processed pairs to avoid duplicates
 
         for class1_id, class1_data in separability.items():
@@ -353,7 +353,7 @@ class sample_quality:
                     # Create a sorted tuple to ensure unique pairs (avoid Class1-Class2 and Class2-Class1)
                     pair_key = tuple(sorted([class1_id, class2_id]))
                     
-                    # Skip if we've already processed this pair
+                    #Skip if pair is already process
                     if pair_key in processed_pairs:
                         continue
                     
@@ -420,8 +420,8 @@ class sample_quality:
         elif 1.0 <= value < 1.8:
             return "🟡 Weak/Marginal Separability (1.0 ≤ TD < 1.8)"
         else:
-            return "🔴 Class Confusion (TD < 1.0)"
-
+            return "🔴 Poor Separability (TD < 1.0)"
+    #Summarize the separability
     def sum_separability(self, df):
         """
         summarize the separability result
@@ -429,14 +429,21 @@ class sample_quality:
         sum_df = self.get_separability_df(df)
         if sum_df.empty:
             return pd.DataFrame()
+        
+        #Count each separability level for summary report
+        good_count = len(sum_df[sum_df["Separability_Level"].str.contains("Good Separability", na=False)])
+        weak_count = len(sum_df[sum_df["Separability_Level"].str.contains("Weak/Marginal Separability", na=False)])
+        poor_count = len(sum_df[sum_df["Separability_Level"].str.contains("Poor Separability", na=False)])
+        
         summary = {
             'Total Pairs': len(sum_df),
-            'Good Separability Pairs': len(sum_df[sum_df["Separability_Level"] == "Good Separability"]),
-            'Weak Separability Pairs': len(sum_df[sum_df["Separability_Level"] == "Weak/marginal Separability"]),
-            'Worst Separability Pairs': len(sum_df[sum_df["Separability_Level"] == "Class confusions"])
+            'Good Separability Pairs': good_count,
+            'Weak Separability Pairs': weak_count,
+            'Poor Separability Pairs': poor_count
         }
-        return pd.DataFrame(summary, index =[0])
+        return pd.DataFrame(summary, index=[0])
 
+    #Core function to calculate JM distance and Transformed Divergence
     def _jeffries_matusita_distance(self, class1_data, class2_data):
         """Calculate Jeffries-Matusita distance between two classes"""
         try:
@@ -509,7 +516,7 @@ class sample_quality:
         
         - TD ≥ 1.8: Good separability (classes are well-separated)
         - 1.0 ≤ TD < 1.8: Weak/marginal separability (some overlap exists)
-        - TD < 1.0: Class confusion (significant overlap, high misclassification risk)
+        - TD < 1.0: Poor separability (significant overlap, high misclassification risk)
         
         The method considers both the distance between class centers and the spread
         (variance) of each class in multidimensional spectral space.
@@ -559,7 +566,7 @@ class sample_quality:
         print("-" * 40)
         lowest_pairs = self.lowest_separability(df, top_n=10)
         if not lowest_pairs.empty:
-            display_cols = ['Class1_Name', 'Class2_Name', 'JM_Distance', 'Separability_Level', 'Interpretation']
+            display_cols = ['Class1_Name', 'Class2_Name', 'TD_Distance', 'Separability_Level', 'Interpretation']
             print(lowest_pairs[display_cols].to_string(index=False))
         
         print("\n" + "="*80)
