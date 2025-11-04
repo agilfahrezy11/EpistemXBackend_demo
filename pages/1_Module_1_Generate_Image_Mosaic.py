@@ -17,7 +17,6 @@ import tempfile
 import zipfile
 import os
 import ee
-import time
 import datetime
 import pandas as pd
 from epistemx.ee_config import initialize_earth_engine
@@ -55,6 +54,50 @@ if 'gdf' not in st.session_state:
     st.session_state.gdf = None
 if 'export_tasks' not in st.session_state:
     st.session_state.export_tasks = []
+
+#Task status caching to reduce API calls
+#Lesson learn from multiple exports, since it conflict between user session state
+#Cache aim to reduce the conflict between user
+if 'task_cache' not in st.session_state:
+    st.session_state.task_cache = {}
+if 'last_cache_update' not in st.session_state:
+    st.session_state.last_cache_update = {}
+
+#Cache task status with time to live to reduce API calls
+def get_cached_task_status(task_id, cache_ttl=30):
+    """Get task status with caching to reduce API calls"""
+    now = datetime.datetime.now()
+    
+    # Check if we have cached data that's still fresh
+    if (task_id in st.session_state.task_cache and 
+        task_id in st.session_state.last_cache_update):
+        
+        last_update = st.session_state.last_cache_update[task_id]
+        if (now - last_update).seconds < cache_ttl:
+            return st.session_state.task_cache[task_id]
+    
+    # Fetch fresh data
+    try:
+        status = ee.data.getTaskStatus(task_id)[0]
+        st.session_state.task_cache[task_id] = status
+        st.session_state.last_cache_update[task_id] = now
+        return status
+    except Exception as e:
+        return None
+
+def get_active_tasks():
+    """Return only tasks that need monitoring"""
+    active_tasks = []
+    for task_info in st.session_state.export_tasks:
+        # Skip if we know it's completed/failed from cache
+        cached_status = st.session_state.task_cache.get(task_info['id'])
+        if cached_status:
+            state = cached_status.get('state', 'UNKNOWN')
+            if state in ['COMPLETED', 'FAILED', 'CANCELLED']:
+                continue
+        active_tasks.append(task_info)
+    return active_tasks
+
 #Based on early experiments, shapefile with complex geometry often cause issues in GEE
 #User input, AOI upload
 st.subheader("Upload Area of Interest (Shapefile)")
@@ -508,44 +551,48 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
     if st.session_state.export_tasks:
         st.subheader("Earth Engine Export Monitor")
         
-        # Auto-refresh and manual refresh options
+        # Manual refresh options with cache control
         col_refresh1, col_refresh2 = st.columns([1, 3])
         with col_refresh1:
-            auto_refresh = st.checkbox("Auto-refresh (30s)", value=False)
-        with col_refresh2:
-            if st.button("🔄 Refresh Task Status"):
+            if st.button("🔄 Refresh All"):
+                # Clear cache to force fresh data
+                st.session_state.task_cache.clear()
+                st.session_state.last_cache_update.clear()
                 st.rerun()
         
-        # Auto-refresh logic
-        if auto_refresh:
-            time.sleep(30)
-            st.rerun()
+        with col_refresh2:
+            # Show cache status
+            active_tasks_count = len(get_active_tasks())
+            total_tasks_count = len(st.session_state.export_tasks)
+            st.caption(f"Monitoring {active_tasks_count}/{total_tasks_count} active tasks | Manual refresh only")
         
-        # Summary of active tasks
+        #Summary of active tasks using cached status
         running_tasks = 0
         completed_tasks_count = 0
         failed_tasks = 0
         
         for task_info in st.session_state.export_tasks:
             try:
-                status = ee.data.getTaskStatus(task_info['id'])[0]
-                state = status.get('state', 'UNKNOWN')
-                if state == 'RUNNING':
-                    running_tasks += 1
-                elif state == 'COMPLETED':
-                    completed_tasks_count += 1
-                elif state == 'FAILED':
-                    failed_tasks += 1
+                status = get_cached_task_status(task_info['id'])
+                if status:
+                    state = status.get('state', 'UNKNOWN')
+                    if state == 'RUNNING':
+                        running_tasks += 1
+                    elif state == 'COMPLETED':
+                        completed_tasks_count += 1
+                    elif state == 'FAILED':
+                        failed_tasks += 1
             except:
                 pass
-        
-        
-        # Display task status for each task
+        #Display task status for each task
         for i, task_info in enumerate(st.session_state.export_tasks):
             with st.expander(f"Task: {task_info['name']}", expanded=True):
                 try:
-                    # Get task status from Earth Engine
-                    status = ee.data.getTaskStatus(task_info['id'])[0]
+                    # Get task status from cache or Earth Engine
+                    status = get_cached_task_status(task_info['id'])
+                    if not status:
+                        st.error("Failed to get task status")
+                        continue
                     
                     # Create columns for better layout
                     col1, col2, col3 = st.columns(3)
@@ -553,6 +600,15 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     with col1:
                         st.write(f"**Task ID:** {task_info['id']}")
                         st.write(f"**Name:** {task_info['name']}")
+                        
+                        # Individual task refresh button
+                        if st.button(f"🔄", key=f"refresh_{i}", help="Refresh this task"):
+                            # Clear cache for this specific task
+                            if task_info['id'] in st.session_state.task_cache:
+                                del st.session_state.task_cache[task_info['id']]
+                            if task_info['id'] in st.session_state.last_cache_update:
+                                del st.session_state.last_cache_update[task_info['id']]
+                            st.rerun()
                     
                     with col2:
                         # Status with color coding
@@ -657,6 +713,14 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                                 st.caption(f"Total time: {total_runtime/60:.1f}h {total_runtime%60:.0f}m")
                             else:
                                 st.caption(f"Total time: {total_runtime:.0f} min")
+                        
+                        # Show cache status
+                        if task_info['id'] in st.session_state.last_cache_update:
+                            cache_age = (datetime.datetime.now() - st.session_state.last_cache_update[task_info['id']]).seconds
+                            if cache_age < 60:
+                                st.caption(f"📊 Data: {cache_age}s ago")
+                            else:
+                                st.caption(f"📊 Data: {cache_age//60}m ago")
                     
                     # Show error message if failed
                     if state == 'FAILED' and 'error_message' in status:
@@ -681,8 +745,8 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
         completed_tasks = []
         for task_info in st.session_state.export_tasks:
             try:
-                status = ee.data.getTaskStatus(task_info['id'])[0]
-                if status.get('state') == 'COMPLETED':
+                status = get_cached_task_status(task_info['id'])
+                if status and status.get('state') == 'COMPLETED':
                     completed_tasks.append(task_info)
             except:
                 pass
