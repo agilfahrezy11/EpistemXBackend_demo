@@ -257,8 +257,7 @@ if "training_gdf" in st.session_state:
                 st.session_state["separability_method"] = method
                 st.session_state["analysis_complete"] = True
                 progress.progress(100)
-                status_text.text("Analisis Selesai!")
-                st.success("Separability analysis completed successfully!")
+                st.success("Analisis Selesai!")
             except Exception as e:
                 st.error(f"Error during analysis: {str(e)}")
                 st.write("Mohon periksa kembali Area Sampel dan parameter analisis Anda, lalu coba lagi.")
