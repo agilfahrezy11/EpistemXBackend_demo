@@ -8,6 +8,8 @@ import zipfile
 import os
 import geopandas as gpd
 import plotly.express as px
+from epistemx.ee_config import initialize_earth_engine
+initialize_earth_engine()
 
 #Page configuration
 st.set_page_config(
@@ -15,6 +17,19 @@ st.set_page_config(
     page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
+
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
+
+# Apply custom theme
+load_css()
+
 
 #Initialize accuracy assessment manager
 @st.cache_resource
@@ -183,7 +198,7 @@ def user_input_for_accuracy_assessment():
         )
 
     # Run assessment
-    if st.button("Evaluate Map Accuracy", type="primary", use_container_width=True):
+    if st.button("🎯 Evaluate Map Accuracy", type="primary", use_container_width=True):
         with st.spinner("Running thematic accuracy assessment..."):
             success, results = manager.run_accuracy_assessment(
                 lcmap=lcmap,

@@ -26,6 +26,18 @@ st.set_page_config(
     layout="wide"
 )
 
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass  # CSS file not found, continue without custom styling
+
+# Apply custom theme
+load_css()
+
 #=========Page requirements (title, description, session state)===========
 #title of the module
 st.title("Acquisition of Near-Cloud-Free Satellite Imagery")

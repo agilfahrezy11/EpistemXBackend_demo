@@ -28,6 +28,19 @@ st.set_page_config(
     page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
+
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
+
+# Apply custom theme
+load_css()
+
 #title of the module
 st.title("Spectral Separability Analysis")
 st.divider()
@@ -161,23 +174,18 @@ if "training_gdf" in st.session_state:
     st.session_state["selected_class_property"] = class_property
     st.session_state["selected_class_name_property"] = class_name_property
 
+    
     #Separability Parameters
     st.subheader("Analysis Parameters")
-    #Hardcode method to Transformed Divergence
-    method = "TD"
-    #Add information for separability approach
-    st.info("Separability Analysis Method: Transformed Divergence (TD)")
-    st.markdown("""
-    This method measures the statistical separability between spectral classes by analyzing the differences in their mean values and covariance structures. 
-    TD values range from 0 to 2, where higher values indicate better class separability.
-    """)
+    method = st.radio("Select separability method:", ["JM", "TD"], horizontal=True, 
+                        help="JM = Jeffries-Matusita Distance, TD = Transformed Divergence")
 
     scale = st.number_input("Spatial resolution (meters):", min_value=10, max_value=1000, value=30, step=10, 
                             help="Higher values = lower resolution but faster processing")
     max_pixels = st.number_input("Maximum pixels per class:", min_value=1000, max_value=10000, value=5000, step=500,
                                 help="Lower values = faster processing but less representative sampling")
 
-    #Single command to complete the analysis
+#Single command to complete the analysis
     if st.button("Run Separability Analysis", type="primary", use_container_width=True):
         if "training_data" not in st.session_state:
             st.error("Please upload a valid ROI shapefile first.")
@@ -316,16 +324,6 @@ if st.session_state.get("analysis_complete", False):
                     st.warning(f"Moderate: {good_pct:.1f}% of class pairs have good separability")
                 else:
                     st.error(f"Poor: Only {good_pct:.1f}% of class pairs have good separability")
-            
-            # Add detailed interpretation guide
-            st.markdown("---")
-            st.markdown("**Transformed Divergence (TD) Interpretation:**")
-            st.markdown("""
-            - **TD ≥ 1.8**: 🟢 **Good Separability** - Classes are spectrally separated and should be able classified accurately
-            - **1.0 ≤ TD < 1.8**: 🟡 **Weak/Marginal Separability** - Overlap exist, may cause miss-classification between two corresponding class
-            - **TD < 1.0**: 🔴 **Class Confusion** - Significant overlap, high risk of miss-classification or even not able to be classified at all
-            """)
-            
         else:
             st.write("No separability summary available")           
     # Detailed Separability Results
@@ -339,16 +337,6 @@ if st.session_state.get("analysis_complete", False):
         if "lowest_separability" in st.session_state:
             st.markdown("*These class pairs have the lowest separability and may cause classification confusion:*")
             st.dataframe(st.session_state["lowest_separability"], use_container_width=True)
-            
-            # Add actionable recommendations
-            st.markdown("---")
-            st.markdown("**💡 How to Improve Spectral Separability?:**")
-            st.markdown("""
-            - **Collect more training samples** for poorly separated classes
-            - **Review class definitions** - ensure they represent truly different land cover types
-            - **Consider merging similar classes** that consistently show poor separability
-            - **Refine training polygons** to avoid mixed pixels at class boundaries
-            """)
         else:
             st.write("No problematic pairs data available")            
 
