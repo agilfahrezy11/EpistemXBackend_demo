@@ -28,6 +28,19 @@ st.set_page_config(
     page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
+
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
+
+# Apply custom theme
+load_css()
+
 #title of the module
 st.title("Analisis Pemisahan Data Area Sampel (Region of Interest/ROI)")
 st.divider()
@@ -162,6 +175,7 @@ if "training_gdf" in st.session_state:
     st.session_state["selected_class_property"] = class_property
     st.session_state["selected_class_name_property"] = class_name_property
 
+    
     #Separability Parameters
     st.subheader("Parameter Analisis")
     #Hardcode method to Transformed Divergence
@@ -329,16 +343,6 @@ if st.session_state.get("analysis_complete", False):
         if "lowest_separability" in st.session_state:
             st.markdown("*Pasangan kelas ini memiliki tingkat pemisahan data terendah dan dapat menyebabkan kerancuan klasifikasi:*")
             st.dataframe(st.session_state["lowest_separability"], use_container_width=True)
-            
-            # Add actionable recommendations
-            st.markdown("---")
-            st.markdown("**💡 How to Improve Spectral Separability?:**")
-            st.markdown("""
-            - **Collect more training samples** for poorly separated classes
-            - **Review class definitions** - ensure they represent truly different land cover types
-            - **Consider merging similar classes** that consistently show poor separability
-            - **Refine training polygons** to avoid mixed pixels at class boundaries
-            """)
         else:
             st.write("No problematic pairs data available")            
 

@@ -1,0 +1,87 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+notebooks/.ipynb_checkpoints
+
+# Environment files
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Documentation
+docs/_build/
+
+# Large data files (keep essential test data)
+*.tif
+*.tiff
+*.nc
+*.hdf
+*.h5
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Logs
+*.log
+logs/
+
+# Keep essential files
+!test_data/
+!logos/
+
+# Exclude auth directory when using environment variables (optional)
+# Uncomment the line below if you want to use only environment variables
+# auth/

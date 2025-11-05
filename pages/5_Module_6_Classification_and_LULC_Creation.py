@@ -25,6 +25,20 @@ st.set_page_config(
     page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
+
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
+
+# Apply custom theme
+load_css()
+
+
 #Set the page title (for the canvas)
 st.title("Pembuatan Peta Tutupan Lahan")
 st.divider()

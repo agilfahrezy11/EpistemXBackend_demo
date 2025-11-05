@@ -21,6 +21,18 @@ st.set_page_config(
     layout="wide"
 )
 
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
+
+# Apply custom theme
+load_css()
+
 # Initialize session state for persistence
 def init_session_state():
     """Initialize session state variables for LULC scheme management."""
