@@ -8,7 +8,6 @@ Architecture:
 - Frontend (this file): Streamlit UI with session state management
 - State synchronization ensures data persistence across page interactions
 """
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -409,7 +408,6 @@ with tab2:
                     min_value=1,
                     max_value=100,
                     value=1,
-
                     help= "Jumlah minimal sampel yang dibutuhkan untuk leaf node"
                 )
                 
@@ -709,13 +707,57 @@ with tab3:
             - **Precision/User's Accuracy**: Akurasi ini menjawab pertanyaan 'Seberapa dipercayanya hasil klasifikasi kelas tertentu?'
             Metrik ini memberikan informasi mengenai kesalahan komisi, yaitu ketika model melakukan kesalahan klasifikasi dengan memasukkan data dari kelas lain ke dalam kelas tersebut.
             """)
-            #Dataframe for class-level metric model accuracy
+            #Dataframe for class-level metric model accuracy using actual class IDs from training data
+            # Get the original class IDs from training data (like in feature extraction)
+            if 'training_gdf' in st.session_state and 'selected_class_property' in st.session_state:
+                gdf = st.session_state['training_gdf']
+                class_prop = st.session_state['selected_class_property']
+                class_name_prop = st.session_state.get('selected_class_name_property')
+                
+                # Get unique class IDs from original training data
+                original_class_ids = sorted(gdf[class_prop].unique())
+                
+                # Create class name mapping if available
+                class_name_mapping = {}
+                if class_name_prop and class_name_prop in gdf.columns:
+                    for class_id in original_class_ids:
+                        class_name = gdf[gdf[class_prop] == class_id][class_name_prop].iloc[0]
+                        class_name_mapping[class_id] = class_name
+            else:
+                # Fallback to accuracy results if training data not available
+                original_class_ids = acc.get('actual_class_ids', list(range(len(acc["precision"]))))
+                class_name_mapping = {}
+            
+            # Ensure all arrays have the same length
+            precision_array = np.array(acc["precision"])
+            recall_array = np.array(acc["recall"])
+            f1_array = np.array(acc["f1_scores"])
+            gmean_array = np.array(acc["gmean_per_class"])
+            
+            # Get actual class IDs from accuracy results (classes that were actually tested)
+            tested_class_ids = acc.get('actual_class_ids', list(range(len(precision_array))))
+            
+            # Truncate to match accuracy array lengths if needed
+            if len(tested_class_ids) > len(precision_array):
+                tested_class_ids = tested_class_ids[:len(precision_array)]
+            elif len(tested_class_ids) < len(precision_array):
+                tested_class_ids = tested_class_ids + list(range(len(tested_class_ids), len(precision_array)))
+            
+            # Create class labels with names if available
+            class_labels = []
+            for class_id in tested_class_ids:
+                if class_id in class_name_mapping:
+                    class_labels.append(f"{class_id}: {class_name_mapping[class_id]}")
+                else:
+                    class_labels.append(str(class_id))
+            
             df_metrics = pd.DataFrame({
-                "Class ID": range(len(acc["precision"])),
-                "Recall/Producer's Accuracy (%)": np.round(np.array(acc["recall"]) * 100, 1),
-                "Precision/User's Accuracy (%)": np.round(np.array(acc["precision"]) * 100, 1),
-                "F1-Score (%)": np.round(np.array(acc["f1_scores"]) * 100, 1),
-                "G-Mean Score (%)": np.round(np.array(acc["gmean_per_class"]) * 100, 1)
+                "Class ID": tested_class_ids,
+                "Class Name": class_labels,
+                "Recall/Producer's Accuracy (%)": np.round(recall_array * 100, 1),
+                "Precision/User's Accuracy (%)": np.round(precision_array * 100, 1),
+                "F1-Score (%)": np.round(f1_array * 100, 1),
+                "G-Mean Score (%)": np.round(gmean_array * 100, 1)
             })
             
             st.dataframe(df_metrics, use_container_width=True)
@@ -724,11 +766,157 @@ with tab3:
             st.subheader("🔍 Confusion Matrix")
             st.markdown("Shows how often each class was correctly identified vs confused with other classes")
             
-            cm = pd.DataFrame(
-                acc["confusion_matrix"],
-                columns=[f"Predicted {i}" for i in range(len(acc["confusion_matrix"]))],
-                index=[f"Actual {i}" for i in range(len(acc["confusion_matrix"]))]
-            )
+            # Get confusion matrix and handle missing classes properly
+            confusion_matrix_array = acc["confusion_matrix"]
+            matrix_size = len(confusion_matrix_array)
+            
+            # Get class IDs from training data (like in feature extraction)
+            if 'training_gdf' in st.session_state and 'selected_class_property' in st.session_state:
+                gdf = st.session_state['training_gdf']
+                class_prop = st.session_state['selected_class_property']
+                class_name_prop = st.session_state.get('selected_class_name_property')
+                
+                # Get all original class IDs from training data
+                all_original_class_ids = sorted(gdf[class_prop].unique())
+                
+                # Create class name mapping
+                class_name_mapping = {}
+                if class_name_prop and class_name_prop in gdf.columns:
+                    for class_id in all_original_class_ids:
+                        class_name = gdf[gdf[class_prop] == class_id][class_name_prop].iloc[0]
+                        class_name_mapping[class_id] = class_name
+            else:
+                all_original_class_ids = list(range(matrix_size))
+                class_name_mapping = {}
+            
+            # Get actual class IDs that appear in the confusion matrix
+            # First, let's check what we actually have in the accuracy results
+            actual_class_ids_raw = acc.get('actual_class_ids', [])
+            predicted_class_ids_raw = acc.get('predicted_class_ids', [])
+            
+            # If we don't have class IDs from backend, create them based on matrix size
+            if not actual_class_ids_raw or not predicted_class_ids_raw:
+                actual_class_ids_cm = list(range(matrix_size))
+                predicted_class_ids_cm = list(range(matrix_size))
+            else:
+                actual_class_ids_cm = list(actual_class_ids_raw)
+                predicted_class_ids_cm = list(predicted_class_ids_raw)
+            
+            
+            # Ensure class ID arrays match the confusion matrix dimensions and are unique
+            if len(actual_class_ids_cm) != matrix_size:
+                st.warning(f"Actual class IDs length ({len(actual_class_ids_cm)}) doesn't match matrix size ({matrix_size})")
+                if len(actual_class_ids_cm) > matrix_size:
+                    actual_class_ids_cm = actual_class_ids_cm[:matrix_size]
+                else:
+                    # Fill missing with sequential numbers, but avoid duplicates
+                    existing_ids = set(actual_class_ids_cm)
+                    next_id = max(actual_class_ids_cm) + 1 if actual_class_ids_cm else 0
+                    while len(actual_class_ids_cm) < matrix_size:
+                        while next_id in existing_ids:
+                            next_id += 1
+                        actual_class_ids_cm.append(next_id)
+                        existing_ids.add(next_id)
+                        next_id += 1
+                        
+            if len(predicted_class_ids_cm) != matrix_size:
+                st.warning(f"Predicted class IDs length ({len(predicted_class_ids_cm)}) doesn't match matrix size ({matrix_size})")
+                if len(predicted_class_ids_cm) > matrix_size:
+                    predicted_class_ids_cm = predicted_class_ids_cm[:matrix_size]
+                else:
+                    # Fill missing with sequential numbers, but avoid duplicates
+                    existing_ids = set(predicted_class_ids_cm)
+                    next_id = max(predicted_class_ids_cm) + 1 if predicted_class_ids_cm else 0
+                    while len(predicted_class_ids_cm) < matrix_size:
+                        while next_id in existing_ids:
+                            next_id += 1
+                        predicted_class_ids_cm.append(next_id)
+                        existing_ids.add(next_id)
+                        next_id += 1
+            
+            # Check for duplicates and handle them
+            if len(set(actual_class_ids_cm)) != len(actual_class_ids_cm):
+                st.error("Duplicate actual class IDs detected!")
+                st.write(f"Actual class IDs: {actual_class_ids_cm}")
+                # Remove duplicates while preserving order
+                seen = set()
+                actual_class_ids_cm = [x for x in actual_class_ids_cm if not (x in seen or seen.add(x))]
+                
+            if len(set(predicted_class_ids_cm)) != len(predicted_class_ids_cm):
+                st.error("Duplicate predicted class IDs detected!")
+                st.write(f"Predicted class IDs: {predicted_class_ids_cm}")
+                # Remove duplicates while preserving order
+                seen = set()
+                predicted_class_ids_cm = [x for x in predicted_class_ids_cm if not (x in seen or seen.add(x))]
+            
+            # Final validation: ensure arrays match matrix dimensions after deduplication
+            if len(actual_class_ids_cm) != matrix_size or len(predicted_class_ids_cm) != matrix_size:
+                st.error(f"Class ID arrays don't match matrix size after processing!")
+                st.write(f"Matrix size: {matrix_size}")
+                st.write(f"Actual class IDs: {len(actual_class_ids_cm)} - {actual_class_ids_cm}")
+                st.write(f"Predicted class IDs: {len(predicted_class_ids_cm)} - {predicted_class_ids_cm}")
+                
+                # Fallback: use simple sequential numbering
+                st.warning("Using fallback sequential numbering for confusion matrix")
+                actual_class_ids_cm = list(range(matrix_size))
+                predicted_class_ids_cm = list(range(matrix_size))
+            
+            # Create labels with class names if available
+            def create_class_label(class_id, prefix=""):
+                if class_id in class_name_mapping:
+                    return f"{prefix}{class_id}: {class_name_mapping[class_id]}"
+                else:
+                    return f"{prefix}{class_id}"
+            
+            # Create row and column labels
+            row_labels = [create_class_label(class_id, "Actual ") for class_id in actual_class_ids_cm]
+            col_labels = [create_class_label(class_id, "Predicted ") for class_id in predicted_class_ids_cm]
+            
+            # Final check for duplicate labels
+            if len(set(row_labels)) != len(row_labels):
+                st.error("Duplicate row labels detected!")
+                st.write(f"Row labels: {row_labels}")
+                # Add unique suffixes to duplicates
+                seen = {}
+                for i, label in enumerate(row_labels):
+                    if label in seen:
+                        seen[label] += 1
+                        row_labels[i] = f"{label} ({seen[label]})"
+                    else:
+                        seen[label] = 0
+                        
+            if len(set(col_labels)) != len(col_labels):
+                st.error("Duplicate column labels detected!")
+                st.write(f"Column labels: {col_labels}")
+                # Add unique suffixes to duplicates
+                seen = {}
+                for i, label in enumerate(col_labels):
+                    if label in seen:
+                        seen[label] += 1
+                        col_labels[i] = f"{label} ({seen[label]})"
+                    else:
+                        seen[label] = 0
+            
+            try:
+                cm = pd.DataFrame(
+                    confusion_matrix_array,
+                    columns=col_labels,
+                    index=row_labels
+                )
+            except Exception as e:
+                st.error(f"Error creating confusion matrix DataFrame: {e}")
+                st.write("Falling back to simple numeric labels")
+                cm = pd.DataFrame(
+                    confusion_matrix_array,
+                    columns=[f"Predicted {i}" for i in range(matrix_size)],
+                    index=[f"Actual {i}" for i in range(matrix_size)]
+                )
+            
+            # Check for missing classes and add warning if needed
+            missing_classes = set(all_original_class_ids) - set(actual_class_ids_cm)
+            if missing_classes:
+                st.warning(f"⚠️ Some classes from training data are missing in test results: {sorted(missing_classes)}")
+                st.info("This can happen when classes have very few samples or are not present in the test split.")
             
             fig = px.imshow(
                 cm,
@@ -737,9 +925,42 @@ with tab3:
                 color_continuous_scale="Blues",
                 title="Confusion Matrix: Actual vs Predicted Classes"
             )
-            fig.update_layout(height=500)
+            fig.update_layout(
+                height=max(500, matrix_size * 50),  # Adjust height based on number of classes
+                xaxis_title="Predicted Classes",
+                yaxis_title="Actual Classes"
+            )
             
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Add interpretation guide
+            with st.expander("📖 How to Read the Confusion Matrix", expanded=False):
+                st.markdown("""
+                **Understanding the Confusion Matrix:**
+                - **Diagonal values (dark blue)**: Correctly classified samples
+                - **Off-diagonal values**: Misclassified samples
+                - **Row totals**: Total samples for each actual class
+                - **Column totals**: Total predictions for each class
+                
+                **Good Classification Indicators:**
+                - High values along the diagonal
+                - Low values off the diagonal
+                - Darker blue squares on the diagonal
+                
+                **Problem Areas:**
+                - High off-diagonal values indicate class confusion
+                - Light colored diagonal elements suggest poor class performance
+                """)
+            
+            # Show class mapping for reference
+            if class_name_mapping:
+                with st.expander("🏷️ Class ID to Name Mapping", expanded=False):
+                    mapping_df = pd.DataFrame([
+                        {"Class ID": class_id, "Class Name": class_name}
+                        for class_id, class_name in class_name_mapping.items()
+                        if class_id in actual_class_ids_cm or class_id in predicted_class_ids_cm
+                    ])
+                    st.dataframe(mapping_df, use_container_width=True, hide_index=True)
 
 # ==================== TAB 4 Visualization ====================
 with tab4:
