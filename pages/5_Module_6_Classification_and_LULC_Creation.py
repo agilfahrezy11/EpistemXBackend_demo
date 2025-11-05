@@ -26,13 +26,12 @@ st.set_page_config(
     layout="wide"
 )
 #Set the page title (for the canvas)
-st.title("Land Cover Classification")
+st.title("Pembuatan Peta Tutupan Lahan")
 st.divider()
 st.markdown("""
-This module performs land cover land use classification using Random Forest classifier. Random Forest is a non-parametric machine learning classifiers widely used in remote sensing community.
-In order to use this module, you must complete module 1 - 4. Module 1 generates satellite imagery mosaic which serves as predictor variable used to generate the final classification. 
-Module 2 allows you to define the classification scheme which aims to list the class of the final map. Module 3 define the ROI or training data which used to trained the model 
-Module 4 allows you to analyze the quality of the training data using separability analysis and various plots
+Modul ini melakukan klasifikasi tutupan lahan menggunakan metode Random Forest. 
+Untuk menggunakan modul ini, Anda harus menyelesaikan Modul 1 hingga 4. 
+Modul 1 menghasilkan gabungan citra, Modul 2 mendefinisikan skema kelas, Modul 3 membuat data latihan (Area Sampel), dan Modul 4 menganalisis kualitas data latihan.
 """)
 
 #Sidebar info
@@ -43,14 +42,14 @@ st.sidebar.image(logo)
 
 #Check prerequisites from previous modules. The module cannot open if the previous modules is not complete.
 #add module 2 check and module 3 (for training data not analysis)
-st.subheader("Prerequisites Check")
+st.subheader("Cek Prasyarat")
 
 col1, col2 = st.columns(2)
 
 #Check for image composite from Module 1
 with col1:
     if 'composite' in st.session_state and st.session_state.composite is not None:
-        st.success("✅ Image Composite Available (Module 1)")
+        st.success("✅ Gabungan citra tersedia dari modul 1")
         image = st.session_state['composite']
         
         # Display metadata if available
@@ -62,14 +61,14 @@ with col1:
                 st.write(f"**Total Images:** {metadata.get('total_images', 'N/A')}")
     else:
         #Display error message if composite is not found
-        st.error("❌ Image Composite Not Found")
-        st.warning("Please complete Module 1 first to generate an image composite")
+        st.error("❌ Gabungan citra tidak tersedia")
+        st.warning("Mohon selesaikan modul 1 untuk menghasilkan gabungan citra")
         image = None
 
 #Check for training data from Module 3/4
 with col2:
     if 'training_data' in st.session_state and st.session_state.training_data is not None:
-        st.success("✅ Training Data Available")
+        st.success("✅ Data sampel tersedia")
         roi = st.session_state['training_data']
         
         # Display training data info if available
@@ -89,20 +88,21 @@ with col2:
                         st.write("**Class Distribution:**")
                         st.dataframe(class_counts, use_container_width=True)
     else:
-        st.error("❌ Training Data Not Found")
-        st.warning("Please complete Module 3 and 4 to create and analyze the Region of Interest (ROI)")
+        st.error("❌ Data sampel tidak tersedia")
+        st.warning("Mohon selesaikan modul 3 dan 4 untuk menghasilkan dan melakukan analisis data sampel")
         roi = None
 
 #Stop if prerequisites are not met
 if image is None or roi is None:
     st.divider()
-    st.info("⚠️ Please complete the previous modules before proceeding with classification")
+    st.info("⚠️ Selesaikan modul-modul sebelumnya sebelum melanjutkan ke klasifikasi")
     st.markdown("""
-    **Required Steps:**
-    1. **Module 1:** Generate image composite
-    2. **Module 3:** Upload and validate training data
-    3. **Module 4:** Analyze the separability of the training data
-    4. **Module 6:** Return here to perform classification
+    **Langkah yang Diperlukan:**
+    1. **Module 1:** Buat gabungan citra
+    2. **Module 2:** Definisikan skema klasifikasi 
+    3. **Module 3:** Unggah dan validasi data sampe;
+    4. **Module 4:** Analisis keterpisahan data sampel
+    5. **Module 6:** Kembali ke sini untuk melakukan klasifikasi
     """)
     st.stop()
 
@@ -166,9 +166,8 @@ def get_active_tasks():
 st.divider()
 
 #Main content tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Feature Extraction", "Model Training", "Model Summary and Evaluation", "Visualization", "Export Classification"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Ekstraksi Fitur/Nilai Piksel", "Latih Model Klasifikasi", "Ringkasan Hasil Latih dan Evaluasi Model Klasifikasi", "Visualisasi", "Unduh Hasil Klasifikasi"])
 #write each the content for each tab
-
 # ==================== Tab 1: Feature Extraction ====================
 #Option to either use all of the training data for classification, or split them into train and test data
 #This section can be change to module 3 (?)
@@ -492,15 +491,17 @@ with tab2:
 with tab3:
     #Lets dump some exposition for this tab
     st.header("Ulasan Model Klasifikasi")
-    st.markdown("Platform EPISTEM mendukung dua alat untuk mengulas kemampuan pembelajaran mesin:")
+    st.markdown("""
+    Melalui bagian ini, anda dapat mengulas proses latih model klasifikasi yang telah dilakukan
+    Platform EPISTEM mendukung dua pendekatan untuk mengulas kemampuan pembelajaran mesin:""")
     st.markdown("1. Feature Importance: Kanal mana yang paling penting untuk pembelajaran model?")
-    st.markdown("2. Akurasi Model: Bagaimana model menghadapi data yang baru?")
+    st.markdown("2. Akurasi Model: Bagaimana model klasifikasi menghadapi data yang baru?")
     
     #Column for feature importance and Model accuracy explanation
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**📊 Feature Importance**")
-        with st.expander("🤔 Apa itu Feature Importance?", expanded=False):
+        with st.expander("Apa itu Feature Importance?", expanded=False):
             st.markdown("""
              Analisis tingkat kepentingan fitur merupakan salah satu umpan balik model
              yang bertujuan untuk memberikan informasi kontribusi setiap fitur (dalam konteks ini adalah kanal citra satelit)
@@ -510,7 +511,7 @@ with tab3:
                 )
     with col2:
         st.markdown("**🎯 Akurasi Model**") 
-        with st.expander("🤔 Apa itu evaluasi model?", expanded=False):
+        with st.expander("Apa itu evaluasi model?", expanded=False):
             st.markdown("""
             Salah satu kelebihan klasifikasi berbasis pembelajaran mesin adalah kemampuan untuk 
             melakukan evaluasi proses pembelajaran sebelum menghasilkan klasifikasi untuk seluruh citra.
@@ -871,120 +872,216 @@ with tab3:
                     st.success("🎉 Perfect classification! No misclassifications found.")
 
 # ==================== TAB 4 Visualization ====================
+#USE MODULE 2 CLASSIFICATION SCHEME 
 with tab4:
     st.header("Visualization")
-    
+    st.markdown("""
+    Pada bagian ini anda dapat melihat hasil klasifikasi yang telah dilakukan oleh model yang telah dilatih.
+    Sistem akan menggunakan warna yang telah ditentukan di modul 2 untuk visualisasi hasil klasifikasi,
+    namun anda masih bisa melakukan penyesuaian jika memang diperlukan
+    """)
     if st.session_state.classification_result is None:
         st.info("ℹ️ No classification results yet. Please run classification first.")
     else:
-        st.success("✅ Classification completed!")
+        st.success("✅ Klasifikasi Selesai!")
         # Visualization section
-        st.subheader("Classification Map Preview")
-        if st.checkbox("Show Classification Map", value=True):
+        st.subheader("Pratinjau Hasil Klasifikasi")
+        if st.checkbox("Tunjukan klasifikasi tutupan lahan", value=True):
             try:
-                # Prepare visualization
+                #Prepare visualization
                 classification_map = st.session_state.classification_result
                 
-                # Create color palette based on number of classes
-                # Create custom color palette with user input
-                if 'training_gdf' in st.session_state and 'selected_class_property' in st.session_state:
+                # Get class information from Module 2 and training data
+                class_info = {}
+                palette = []
+                unique_classes = []
+                
+                #First, try to get class info from Module 2
+                if 'lulc_classes_final' in st.session_state:
+                    lulc_classes = st.session_state['lulc_classes_final']
+                    for cls in lulc_classes:
+                        class_id = cls.get('ID', cls.get('Class ID'))
+                        class_name = cls.get('Class Name', cls.get('Land Cover Class', f'Class {class_id}'))
+                        color_code = cls.get('Color Code', cls.get('Color', '#228B22'))
+                        class_info[class_id] = {
+                            'name': class_name,
+                            'color': color_code
+                        }
+                    unique_classes = sorted(class_info.keys())
+                    palette = [class_info[cls]['color'] for cls in unique_classes]
+                
+                #if failed, use a default and or random color palette
+                elif 'training_gdf' in st.session_state and 'selected_class_property' in st.session_state:
                     class_prop = st.session_state['selected_class_property']
                     class_name_prop = st.session_state.get('selected_class_name_property', None)
                     gdf = st.session_state['training_gdf']
                     unique_classes = sorted(gdf[class_prop].unique())
                     
-                    # Allow user to customize colors
-                    st.subheader("Customize Map Colors")
+                    # Create default color mapping if not from Module 2
+                    default_colors = ['#228B22', '#0000FF', '#FF0000', '#FFFF00', '#8B4513', 
+                                    '#808080', '#FFA500', '#00FFFF', '#FF00FF', '#90EE90']
                     
-                    with st.expander("Define Class Colors", expanded=False):
-                        st.markdown("Assign colors to each land cover class:")
+                    for idx, class_id in enumerate(unique_classes):
+                        if class_name_prop and class_name_prop in gdf.columns:
+                            class_name = gdf[gdf[class_prop] == class_id][class_name_prop].iloc[0]
+                        else:
+                            class_name = f"Class {class_id}"
                         
-                        # Create color mapping dictionary
-                        if 'class_colors' not in st.session_state:
-                            # Initialize with default colors
-                            default_colors = ['#228B22', '#0000FF', '#FF0000', '#FFFF00', '#8B4513', 
-                                            '#808080', '#FFA500', '#00FFFF', '#FF00FF', '#90EE90']
-                            st.session_state.class_colors = {
-                                cls: default_colors[i % len(default_colors)] 
-                                for i, cls in enumerate(unique_classes)
-                            }
-                        
-                        # Create color pickers for each class
-                        cols = st.columns(3)
-                        for idx, class_id in enumerate(unique_classes):
-                            with cols[idx % 3]:
-                                # Get class name if available
-                                if class_name_prop and class_name_prop in gdf.columns:
-                                    class_name = gdf[gdf[class_prop] == class_id][class_name_prop].iloc[0]
-                                    label = f"Class {class_id}: {class_name}"
-                                else:
-                                    label = f"Class {class_id}"
-                                
-                                # Color picker
-                                st.session_state.class_colors[class_id] = st.color_picker(
-                                    label,
-                                    value=st.session_state.class_colors.get(class_id, '#228B22'),
-                                    key=f"color_{class_id}"
-                                )
-                        
-                        # Reset to default colors button
-                        if st.button("🔄 Reset to Default Colors"):
-                            default_colors = ['#228B22', '#0000FF', '#FF0000', '#FFFF00', '#8B4513', 
-                                            '#808080', '#FFA500', '#00FFFF', '#FF00FF', '#90EE90']
-                            st.session_state.class_colors = {
-                                cls: default_colors[i % len(default_colors)] 
-                                for i, cls in enumerate(unique_classes)
-                            }
-                            st.rerun()
+                        class_info[class_id] = {
+                            'name': class_name,
+                            'color': default_colors[idx % len(default_colors)]
+                        }
                     
-                    # Build palette from user selections
-                    palette = [st.session_state.class_colors[cls] for cls in unique_classes]
-                    
+                    palette = [class_info[cls]['color'] for cls in unique_classes]
+                
+                # Create visualization parameters
+                if unique_classes and palette:
                     vis_params = {
                         'min': min(unique_classes),
                         'max': max(unique_classes),
                         'palette': palette
                     }
-                
-                # Create map
-                if 'training_gdf' in st.session_state:
-                    gdf = st.session_state['training_gdf']
-                    centroid = gdf.geometry.centroid.iloc[0]
-                    Map = geemap.Map(center=[centroid.y, centroid.x], zoom=10)
+                    
+                    # Display legend before the map
+                    st.subheader("🗺️ Legenda Klasifikasi")
+                    
+                    # Create legend in columns for better layout
+                    num_cols = min(4, len(unique_classes))  # Max 4 columns
+                    cols = st.columns(num_cols)
+                    
+                    for idx, class_id in enumerate(unique_classes):
+                        with cols[idx % num_cols]:
+                            class_name = class_info[class_id]['name']
+                            color = class_info[class_id]['color']
+                            
+                            # Create colored legend item
+                            st.markdown(
+                                f"""
+                                <div style='display: flex; align-items: center; margin-bottom: 8px;'>
+                                    <div style='background-color: {color}; 
+                                                width: 20px; height: 20px; 
+                                                border: 1px solid #ccc; 
+                                                margin-right: 8px; 
+                                                border-radius: 3px;'></div>
+                                    <span style='font-size: 14px;'><strong>{class_id}:</strong> {class_name}</span>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                    
+                    # Option to customize colors (expandable section)
+                    with st.expander("🎨 Customize Map Colors", expanded=False):
+                        st.markdown("Adjust colors for each land cover class:")
+                        
+                        # Create color pickers for each class
+                        color_cols = st.columns(min(3, len(unique_classes)))
+                        updated_colors = {}
+                        
+                        for idx, class_id in enumerate(unique_classes):
+                            with color_cols[idx % len(color_cols)]:
+                                class_name = class_info[class_id]['name']
+                                current_color = class_info[class_id]['color']
+                                
+                                # Color picker
+                                new_color = st.color_picker(
+                                    f"Class {class_id}: {class_name}",
+                                    value=current_color,
+                                    key=f"viz_color_{class_id}"
+                                )
+                                updated_colors[class_id] = new_color
+                        
+                        # Update colors if changed
+                        if st.button("🔄 Apply Color Changes"):
+                            for class_id in unique_classes:
+                                class_info[class_id]['color'] = updated_colors[class_id]
+                            palette = [class_info[cls]['color'] for cls in unique_classes]
+                            vis_params['palette'] = palette
+                            st.success("Colors updated! Map will refresh automatically.")
+                            st.rerun()
+                        
+                        # Reset to Module 2 colors button
+                        if 'lulc_classes_final' in st.session_state:
+                            if st.button("🔄 Reset to Module 2 Colors"):
+                                # Reload colors from Module 2
+                                lulc_classes = st.session_state['lulc_classes_final']
+                                for cls in lulc_classes:
+                                    class_id = cls.get('ID', cls.get('Class ID'))
+                                    original_color = cls.get('Color Code', cls.get('Color', '#228B22'))
+                                    class_info[class_id]['color'] = original_color
+                                palette = [class_info[cls]['color'] for cls in unique_classes]
+                                vis_params['palette'] = palette
+                                st.success("Colors reset to Module 2 scheme!")
+                                st.rerun()
+                    
+                    st.markdown("---")
+                    
+                    # Create map
+                    if 'training_gdf' in st.session_state:
+                        gdf = st.session_state['training_gdf']
+                        centroid = gdf.geometry.centroid.iloc[0]
+                        Map = geemap.Map(center=[centroid.y, centroid.x], zoom=10)
+                    else:
+                        Map = geemap.Map()
+                    
+                    # Add layers
+                    Map.addLayer(classification_map, vis_params, 'Land Cover Classification', True)
+                    Map.addLayer(image, st.session_state.get('visualization', {}), 'Image Composite', False)
+                    
+                    # Add training data as overlay (optional)
+                    if 'training_gdf' in st.session_state:
+                        try:
+                            Map.add_geojson(
+                                st.session_state['training_gdf'].__geo_interface__, 
+                                layer_name="Training Data", 
+                                style={'color': 'yellow', 'weight': 2, 'fillOpacity': 0},
+                                shown=False
+                            )
+                        except:
+                            pass  # Skip if geojson conversion fails
+                    
+                    # Display the map
+                    Map.to_streamlit(height=600)
+                    
+                    # Add map information
+                    st.info("""
+                    **Data yang ditampilkan di kanvas peta:**
+                    - 🗺️ **Land Cover Classification**: Hasil klasifikasi anda
+                    - 🛰️ **Image Composite**: Citra satelit yang digunakan untuk proses klasifikasi (aktifkan melalui kendali layar kanan atas kanvas peta)
+                    - 📍 **Training Data**: data sampel yang digunakan untuk melatih model (aktifkan melalui kendali layar kanan atas kanvas peta)
+                    """)
+                    
                 else:
-                    Map = geemap.Map()
-                
-                # Add layers
-                Map.addLayer(classification_map, vis_params, 'Random Forest Classification', True)
-                Map.addLayer(image, st.session_state.get('visualization', {}), 'Image Composite', False)
-                
-                #if 'training_gdf' in st.session_state:
-                #    Map.add_geojson(st.session_state['training_gdf'].__geo_interface__, 
-                #                   layer_name="Training Data", shown=False)
-    
-                Map.to_streamlit(height=600)
+                    st.error("Informasi kelas tidak tersedia")
+                    st.info("Pastikan modul 2 telah selesai atau data sampel memiliki ID dan nama kelas yang unik")
+                    
                 
             except Exception as e:
                 st.error(f"Error displaying map: {e}")
                 st.code(traceback.format_exc())
-        
-        st.markdown("---")
 
 # ==================== TAB 5 Export Classification ====================
 #REUSE THE LOGIC FROM MODULE 1
 with tab5:
     st.header("Simpan Hasil Klasifikasi")
+    st.markdown("""
+    Pada bagian ini anda dapat menyimpan hasil klasifikasi melalui platform google drive, kemudian mengunduhnya di komputer pribadi anda.
+    Saat ini platform EPISTEM belum mendukung proses unduh data secara langsung. Hal - Hal yang perlu diperhatikan dalam menyimpan hasil klasifikasi adalah sebagai berikut:
+    
+    1. Silahkan beri nama file hasil klasifikasi yang dapat anda kenali dengan mudah. Format yang disarankan: LULC_Area_Studi_Tahun_citra, contoh: LULC_Sumsel_2024_Landsat8
+    2. Untuk memantau proses penyimpanan hasil klasifikasi, tekan tombol refresh
+    """)
+    
     #check if the classification result is complete
     if st.session_state.classification_result is None:
         st.info("ℹ️ Klasifikasi belum tersedia, silahkan jalankan klasifikasi terlebih dahulu")
     else:
-        st.success("✅ Classification completed!")
+        st.success("✅ Klasifikasi selesai!")
         
-        # Export section
-        st.subheader("Export Classification to Google Drive")
+        #Export section
+        st.subheader("Simpan Hasil Klasifikasi Melalui Google Drive")
         
-        # Create export settings
-        with st.expander("Export Settings", expanded=True):
+        #Create export settings
+        with st.expander("Pengaturan Penyimpanan", expanded=True):
             #Classification Naming
             classification_params = st.session_state.get('classification_params', {})
             sensor = st.session_state.get('search_metadata', {}).get('sensor', 'unknown')
@@ -1011,7 +1108,7 @@ with tab5:
                 "Custom EPSG": "CUSTOM"
             }
             crs_choice = st.selectbox(
-                "Coordinate Reference System:",
+                "Sistem Referensi Koordinat:",
                 options=list(crs_options.keys()),
                 index=0
             )
@@ -1028,7 +1125,7 @@ with tab5:
             
             #Define the spatial resolution
             scale = st.number_input(
-                "Pixel Size (meters):",
+                "Ukuran Piksel (meter):",
                 min_value=10,
                 max_value=1000,
                 value=30,
@@ -1040,9 +1137,9 @@ with tab5:
             st.info("📄 Export format: GeoTIFF (Integer)")
             
             # Button to start export
-            if st.button("Start Export Classification to Google Drive", type="primary"):
+            if st.button("Mulai menyimpan hasil klasifikasi ke google drive", type="primary"):
                 try:
-                    with st.spinner("Preparing classification export task..."):
+                    with st.spinner("Menyiapkan proses penyimpanan..."):
                         #Use the classification result from session state
                         export_image = st.session_state.classification_result
                         
@@ -1112,7 +1209,7 @@ with tab5:
                         - Resolution: {scale}m
                         - Format: {export_format}
                         
-                        Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks) or use the task monitor below.
+                        Pantau proses penyimpanan data di [Earth Engine Task Manager](https://code.earthengine.google.com/tasks) atau gunakan monitor dibawah.
                         """)
                         
                 except Exception as e:
