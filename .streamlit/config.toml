@@ -8,11 +8,12 @@ enableXsrfProtection = false
 [browser]
 gatherUsageStats = false
 
-[theme]
-primaryColor = "#1f77b4"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f0f2f6"
-textColor = "#262730"
-
 [client]
 showErrorDetails = true
+
+[theme]
+primaryColor = "#EC1776"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F6F6F9"
+textColor = "#1C1C1C"
+font = "sans serif"
