@@ -1,3 +1,14 @@
+"""
+Module 4: Spectral Separability Analysis
+
+This module facilitate the user to perform spectral separability analysis for their training data
+
+Architecture:
+- Backend (module_4.py and module_4_part2.py): Pure backend process without UI dependencies
+- Frontend (this file): Streamlit UI with session state management
+- State synchronization ensures data persistence across page interactions
+"""
+
 import streamlit as st
 from epistemx.shapefile_utils import shapefile_validator, EE_converter
 from epistemx.module_4 import sample_quality
@@ -14,44 +25,58 @@ import os
 #Page configuration
 st.set_page_config(
     page_title="Perform ROI Analysis", #visible in the browser
-    page_icon="logos\logo_epistem_crop.png",
+    page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
+
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
+
+# Apply custom theme
+load_css()
+
 #title of the module
-st.title("Spectral Separability Analysis")
+st.title("Analisis Pemisahan Data Area Sampel (Region of Interest/ROI)")
 st.divider()
-st.markdown("This module allow the user to perform separability analysis between the class in the region of interest (ROI). " \
-"Prior to the analysis, the user must upload the ROI data in shapefile format. This data should contain unique the class ID and corresponding class names. " \
-"After the ROI is uploaded, user can perform separability analysis using the following steps:")
-st.markdown("1. Define the training data attributes (class ID and class names)")
-st.markdown("2. Select separability parameters, which consist of selecting separability methods, spatial resolution, and maximum pixel per class. The platform support two methods," \
-" Jeffries-Matusita (JM) and Transformed Divergence (TD)")
+st.markdown("""Modul ini memungkinkan pengguna melakukan analisis keterpisahan antar kelas tutupan/penggunaan lahan di dalam wilayah analisis yang anda tentukan. 
+Sebelum melakukan analisis, pengguna harus mengunggah data referensi tiap-tiap kelas tutupan/penggunaan lahan yang sudah ditentukan dalam format yang kompatibel. 
+Data ini harus memuat ID kelas unik dan nama kelas yang sesuai. Setelah data referensi diunggah, 
+pengguna dapat melakukan analisis keterpisahan dengan langkah-langkah berikut:""")
+st.markdown("1. Pilih attibute data latih, yaitu ID dan nama kelas")
+st.markdown("2. Pilih parameter keterpisahan yang terdiri dari resolusi spasial dan jumlah maksimum piksel untuk setiap kelas. Platform ini menggunakan metode Transformed Divergence (TD) untuk melakukan analisis keterpisahan")
 
 #set page layout and side info
-st.sidebar.title("About")
+st.sidebar.title("Tentang Modul ini")
 markdown = """
-This module is designed to perform separability analysis of the training data.
+Modul ini dirancang untuk melakukan analisis keterpisahan antar 
+kelas tutupan/penggunaan lahan berdasarkan data latih yang telah disiapkan di modul 3.
 """
 st.sidebar.info(markdown)
-logo = "logos\logo_epistem.png"
+logo = "logos/logo_epistem.png"
 st.sidebar.image(logo)
 
-st.markdown("Availability of landsat data from module 1")
+st.markdown("Ketersedian gabungan citra satelit dari modul 1")
 #Check if landsat data from module 1 is available
 if 'composite' in st.session_state:
-    st.success("Landsat mosaic available from Module 1!")
+    st.success("Gabungan citra satelit tersedia!")
     # Display information about available imagery
     if 'collection_metadata' in st.session_state:
         metadata = st.session_state['Image_metadata']
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Total Images", metadata.get('total_images', 'N/A'))
+            st.metric("Jumlah Citra", metadata.get('total_images', 'N/A'))
         with col2:
-            st.metric("Date Range", metadata.get('date_range', 'N/A'))
+            st.metric("Periode Perekaman", metadata.get('date_range', 'N/A'))
         with col3:
-            st.metric("Average Scene Cloud Cover", f"{metadata.get('cloud_cover', {}).get('mean', 'N/A')}%")
+            st.metric("Rata - Rata Tutupan Awan", f"{metadata.get('cloud_cover', {}).get('mean', 'N/A')}%")
 #Preview the landsat mosaic
-    if st.checkbox("Preview Landsat Mosaic"):
+    if st.checkbox("Pratinjau Gabungan Citra Satelit"):
         composite = st.session_state['composite']
         vis_params = st.session_state['visualization']
         aoi = st.session_state['AOI']
@@ -61,13 +86,13 @@ if 'composite' in st.session_state:
         m.addLayer(aoi, {}, "AOI", True, 0.5)
         m.to_streamlit(height=600)
 else:
-    st.warning("Landsat mosaic not found. Please run Module 1 first.")
+    st.warning("Gabungan Citra Satelit tidak ditemukan. Mohon jalankan Modul 1 terlebih dahulu.")
     st.stop()
 st.divider()
 #User input ROI upload
-st.subheader("A. Upload Region of Interest (Shapefile)")
-st.markdown("currently the platform only support shapefile in .zip format")
-uploaded_file = st.file_uploader("Upload a zipped shapefile (.zip)", type=["zip"])
+st.subheader("A. Unggah Wilayah Minat (Shapefile)")
+st.markdown("saat ini platform hanya mendukung shapefile dalam format .zip")
+uploaded_file = st.file_uploader("Unggah area minat dalam berkas zip (.zip)", type=["zip"])
 aoi = None
 #define AOI upload function
 if uploaded_file:
@@ -130,19 +155,19 @@ st.divider()
 #Used the previously uploaded ROI
 if "training_gdf" in st.session_state:
     gdf_cleaned = st.session_state["training_gdf"]
-    st.subheader("B. Perform Separability Analysis")
-    st.markdown("Select the appropriate fields from your ROI that correspond to numeric class IDs and class names.")   
+    st.subheader("B. Lakukan Analisis Keterpisahan Sampel")
+    st.markdown("Pilih kolom yang sesuai dari Area Sampel Anda yang merujuk pada ID Kelas numerik dan Nama Kelas.")   
     
     #Dropdown for class_property (numeric IDs)
     class_property = st.selectbox(
-        "Select the field containing numeric class IDs, (example: 1, 2, 3, 4, etc):",
+        "Pilih kolom yang memuat ID Kelas numerik, (contoh: 1, 2, 3, 4, dst.):",
         options=gdf_cleaned.columns.tolist(),
         index=gdf_cleaned.columns.get_loc("CLASS_ID") if "CLASS_ID" in gdf_cleaned.columns else 0,
         key="class_property"
     )
     #Dropdown for class_name_property (class names)
     class_name_property = st.selectbox(
-        "Select the field containing class names, (example: Forest, Water, Urban, etc.):",
+        "Pilih kolom tabel atribute yang berisi nama kelas (contoh: Hutan, Badan Air, Permukiman, dll):",
         options=gdf_cleaned.columns.tolist(),
         index=gdf_cleaned.columns.get_loc("CLASS_NAME") if "CLASS_NAME" in gdf_cleaned.columns else 0,
         key="class_name_property"
@@ -152,19 +177,25 @@ if "training_gdf" in st.session_state:
 
     
     #Separability Parameters
-    st.subheader("Analysis Parameters")
-    method = st.radio("Select separability method:", ["JM", "TD"], horizontal=True, 
-                        help="JM = Jeffries-Matusita Distance, TD = Transformed Divergence")
-
-    scale = st.number_input("Spatial resolution (meters):", min_value=10, max_value=1000, value=30, step=10, 
+    st.subheader("Parameter Analisis")
+    #Hardcode method to Transformed Divergence
+    method = "TD"
+    #Add information for separability approach
+    st.info("Metode Analisis Keterpisahan: Transformed Divergence (TD)")
+    st.markdown("""
+    Metode ini mengukur keterpisahan statisk antara kelas penutup lahan melalui analisis perbedaan nilai rata - rata (mean) dan struktur kovarian. 
+    Nilai TD memiliki rentang 0 - 2, dimana nilai yang lebih tinggi mengacu kepada keterpisahan yang lebih baik.
+    """)
+    #user input (scale and max pixels). Note user did not have a lot to do, just make it default
+    scale = st.number_input("Resolusi Spasial:", min_value=10, max_value=1000, value=30, step=10, 
                             help="Higher values = lower resolution but faster processing")
     max_pixels = st.number_input("Maximum pixels per class:", min_value=1000, max_value=10000, value=5000, step=500,
                                 help="Lower values = faster processing but less representative sampling")
 
-#Single command to complete the analysis
-    if st.button("Run Separability Analysis", type="primary",width='stretch'):
+    #Single command to complete the analysis
+    if st.button("Jalankan Analisis Keterpisahan", type="primary", use_container_width=True):
         if "training_data" not in st.session_state:
-            st.error("Please upload a valid ROI shapefile first.")
+            st.error("Mohon unggah Shapefile Area Sampel yang valid terlebih dahulu.")
         else:
             try:
                 #get the properties 
@@ -174,7 +205,7 @@ if "training_gdf" in st.session_state:
                 progress = st.progress(0)
                 status_text = st.empty()
                 #Intialize analyzer
-                status_text.text("Step 1/5: Initializing analyzer...")
+                status_text.text("Langkah 1/5: Memulai proses analisis...")
                 analyzer = sample_quality(
                     training_data=st.session_state["training_data"],
                     image=st.session_state["composite"],
@@ -187,13 +218,13 @@ if "training_gdf" in st.session_state:
                 st.session_state["analyzer_class_name_property"] = class_name_prop
                 progress.progress(20)
                 #ROI statistics
-                status_text.text("Step 2/5: Computing ROI statistics...")
+                status_text.text("Langkah 2/5: Menghitung statistik area sampel")
                 sample_stats_df = analyzer.get_sample_stats_df()
                 st.session_state["sample_stats"] = sample_stats_df
                 progress.progress(40)
 
                 #Extract spectral values
-                status_text.text("Step 3/5: Extracting spectral values... (This may take a few minutes)")
+                status_text.text("Langkah 3/5: Mengekstraks nilai spektral dari berbagai band… Proses ini memakan waktu beberapa menit.")
                 try:
                     print(f"Debug: About to extract spectral values with scale={scale}, max_pixels={max_pixels}")
                     print(f"Debug: Analyzer class_property={analyzer.class_property}")
@@ -216,7 +247,7 @@ if "training_gdf" in st.session_state:
                         raise extract_error
 
                 #Compute pixel statistics
-                status_text.text("🔍 Step 4/5: Computing pixel statistics...")
+                status_text.text("Langkah 4/5: Menghitung statistik piksel...")
                 try:
                     print("Debug: About to compute pixel statistics")
                     pixel_stats_df = analyzer.get_sample_pixel_stats_df(pixel_extract)
@@ -229,7 +260,7 @@ if "training_gdf" in st.session_state:
                     traceback.print_exc()
                     raise stats_error
                 #Run separability analysis
-                status_text.text("Step 5/5: Running separability analysis...")
+                status_text.text("Langkah 5/5: Menjalankan analisis keterpisahan…")
                 separability_df = analyzer.get_separability_df(pixel_extract, method=method)
                 lowest_sep = analyzer.lowest_separability(pixel_extract, method=method)
                 summary_df = analyzer.sum_separability(pixel_extract)
@@ -240,79 +271,78 @@ if "training_gdf" in st.session_state:
                 st.session_state["separability_method"] = method
                 st.session_state["analysis_complete"] = True
                 progress.progress(100)
-                status_text.text("Analysis complete!")
-                st.success("Separability analysis completed successfully!")
+                st.success("Analisis Selesai!")
             except Exception as e:
                 st.error(f"Error during analysis: {str(e)}")
-                st.write("Please check your ROI and analysis parameters, then try again.")
+                st.write("Mohon periksa kembali Area Sampel dan parameter analisis Anda, lalu coba lagi.")
     #display the result
 if st.session_state.get("analysis_complete", False):
     st.divider()
-    st.subheader("C. Analysis Results")
-    #Summary metric 
-    col1, col2, col3, col4 = st.columns(4)
-    if "sample_stats" in st.session_state and not st.session_state["sample_stats"].empty:
-        with col1: 
-            total_samples = st.session_state["sample_stats"]["Sample_Count"].sum()
-            st.metric("Total Samples", total_samples)
-        with col2:
-            num_class = len(st.session_state["sample_stats"])
-            st.metric("Number of classess", num_class)
-    if "pixel_extract" in st.session_state and not st.session_state["pixel_extract"].empty:
-        with col3:
-            total_pixels = len(st.session_state["pixel_extract"])
-            st.metric("Total Pixels Extracted", total_pixels)
-    if "separability_summary" in st.session_state and not st.session_state["separability_summary"].empty:
-        with col4:
-            method_used = st.session_state.get("separability_method", "N/A")
-            st.metric("Method", method_used)
-
+    st.subheader("C. Hasil Analisis")
+    st.markdown("""
+    Analisis keterpisahan menghasilkan beberapa tabel:
+    - **Statistik Area Minat:** 
+    - **Statistik Dasar Piksel:**
+    - **Ringkasan Keterpisahan:**
+    - **Keterpisahan Setiap Pasangan Kelas**
+    
+    """)
     #Display the results in table format
     #ROI Stats
     with st.expander("ROI Statistics", expanded=False):
         if "sample_stats" in st.session_state:
-            st.dataframe(st.session_state["sample_stats"], width='stretch')
+            st.dataframe(st.session_state["sample_stats"], use_container_width=True)
         else:
-            st.write("No sample statistics available")
+            st.write("Statistik sampel tidak tersedia.")
     #Pixel stats
-    with st.expander("Pixel Statistics", expanded=True):  
+    with st.expander("Statistik Piksel", expanded=True):  
         if "pixel_stats" in st.session_state:
-            st.dataframe(st.session_state["pixel_stats"], width='stretch')
+            st.dataframe(st.session_state["pixel_stats"], use_container_width=True)
         else:
-            st.write("No pixel statistics available")
+            st.write("Statistik piksel tidak tersedia.")
     #Separability summary
-    with st.expander("Separability Summary", expanded=True):
+    with st.expander("Ringkasan Analisis Keterpisahan", expanded=True):
         if "separability_summary" in st.session_state:
-            st.dataframe(st.session_state["separability_summary"], width='stretch')
+            st.dataframe(st.session_state["separability_summary"], use_container_width=True)
             
-            # Add interpretation
+            #Add interpretation
             summary = st.session_state["separability_summary"].iloc[0]
             total_pairs = summary.get('Total Pairs', 0)
             good_pairs = summary.get('Good Separability Pairs', 0)
             weak_pairs = summary.get('Weak Separability Pairs', 0)
-            poor_pairs = summary.get('Worst Separability Pairs', 0)
+            poor_pairs = summary.get('Poor Separability Pairs', 0)
             
             if total_pairs > 0:
                 good_pct = (good_pairs / total_pairs) * 100
                 if good_pct >= 70:
-                    st.success(f"Excellent! {good_pct:.1f}% of class pairs have good separability")
+                    st.success(f"Sangat Baik! {good_pct:.1f}% dari pasangan kelas memiliki pemisahan data yang baik")
                 elif good_pct >= 50:
-                    st.warning(f"Moderate: {good_pct:.1f}% of class pairs have good separability")
+                    st.warning(f"Menengah: {good_pct:.1f}% dari pasangan kelas memiliki pemisahan data yang baik")
                 else:
-                    st.error(f"Poor: Only {good_pct:.1f}% of class pairs have good separability")
+                    st.error(f"Buruk: Hanya {good_pct:.1f}% dari pasangan kelas memiliki pemisahan data yang baik")
+            
+            # Add detailed interpretation guide
+            st.markdown("---")
+            st.markdown("**Interpretasi Nilai Transformed Divergence (TD):**")
+            st.markdown("""
+            - **TD ≥ 1.8**: 🟢 **Good Separability** - Kelas - Kelas dapat dipisahkan secara spektral dan kemungkinan dapat diklasifikasikan secara akurat
+            - **1.0 ≤ TD < 1.8**: 🟡 **Weak/Marginal Separability** - Terdapat tumpang tindih yang dapat menyebabkan kesalahan klasifikasi antara kedua kelas
+            - **TD < 1.0**: 🔴 **Poort Separability** - Terdapat tumpang tindih signifikan, terdapat risiko tinggi kesalahan klasifikasi dan bahkan tidak terpisahkan sama sekali
+            """)
+            
         else:
-            st.write("No separability summary available")           
+            st.write("Ringkasan analisis keterpisahan data tidak tersedia.")           
     # Detailed Separability Results
     with st.expander("Detailed Separability Results", expanded=False):
         if "separability_results" in st.session_state:
-            st.dataframe(st.session_state["separability_results"], width='stretch')
+            st.dataframe(st.session_state["separability_results"], use_container_width=True)
         else:
             st.write("No detailed separability results available")
     # Most Problematic Class Pairs
     with st.expander("Most Problematic Class Pairs", expanded=True):
         if "lowest_separability" in st.session_state:
-            st.markdown("*These class pairs have the lowest separability and may cause classification confusion:*")
-            st.dataframe(st.session_state["lowest_separability"], width='stretch')
+            st.markdown("*Pasangan kelas ini memiliki tingkat pemisahan data terendah dan dapat menyebabkan kerancuan klasifikasi:*")
+            st.dataframe(st.session_state["lowest_separability"], use_container_width=True)
         else:
             st.write("No problematic pairs data available")            
 
@@ -589,13 +619,13 @@ col1, col2 = st.columns(2)
 
 with col1:
     # Back to Module 3 button (always available)
-    if st.button("⬅️ Back to Module 3: Generate ROI",width='stretch'):
+    if st.button("⬅️ Back to Module 3: Generate ROI", use_container_width=True):
         st.switch_page("pages/3_Module_3_Generate_ROI.py")
 
 with col2:
     # Forward to Module 6 button (conditional)
     if module_2_completed:
-        if st.button("➡️ Go to Module 6: Supervised Classification", type="primary",width='stretch'):
+        if st.button("➡️ Go to Module 6: Supervised Classification", type="primary", use_container_width=True):
             st.switch_page("pages/5_Module_6_Classification_and_LULC_Creation.py")
     else:
         st.button("🔒 Complete Module 4 First", disabled=True,width='stretch', 

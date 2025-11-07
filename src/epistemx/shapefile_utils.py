@@ -5,11 +5,10 @@ import json
 import ee 
 import geemap
 from .ee_config import ensure_ee_initialized
-
-# Ensure Earth Engine is initialized
-ensure_ee_initialized()
 from shapely.validation import make_valid
 from shapely.geometry import MultiPoint
+
+# Do not initialize Earth Engine at import time. Initialize when classes are instantiated.
 
 #Based on early experiments, shapefile with complex geometry often cause issues in GEE
 #The following functions are used to handle the common geometry issues
@@ -25,8 +24,12 @@ class shapefile_validator:
     """
     def __init__(self, verbose=True):
         """
-        Initialze the validator
+        Initialize the validator
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
         """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
+        
         self.verbose = verbose
     def log(self, message, level = "info"):
         if self.verbose:
@@ -211,6 +214,13 @@ class EE_converter:
     Handle shapefile conversion from geodataframe to earth engine object
     """
     def __init__(self, verbose=True):
+        """
+        Initialize the EE converter
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
+        """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
+        
         self.verbose = verbose
 
     def log(self, message, level = "info"):

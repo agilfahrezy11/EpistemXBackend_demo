@@ -4,8 +4,7 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 from .ee_config import ensure_ee_initialized
-# Ensure Earth Engine is initialized
-ensure_ee_initialized()
+# Do not initialize Earth Engine at import time. Initialize when classes are instantiated.
 
 """
 
@@ -51,6 +50,13 @@ class spectral_transformation_calcultator:
     Calculate spectral transformation for creating an input covariates in land cover mapping
     """
     def __init__(self):
+        """
+        Initialize the spectral transformation calculator
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
+        """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
+        
         self.avaliable_indices = self.initialize_index()
         self.calculated_count = 0
     #Initialize the supported index. The list here is tailored with landsat mission

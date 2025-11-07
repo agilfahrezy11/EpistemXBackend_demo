@@ -7,6 +7,18 @@ from epistemx.ee_config import initialize_earth_engine
 
 # Initialize Earth Engine
 initialize_earth_engine()
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass
+
+# Apply custom theme
+load_css()
+
 
 # Module title and description
 st.title("Penentuan Data Sampel Klasifikasi Tutupan/penggunaan lahan")
@@ -26,7 +38,7 @@ Modul ini dibuat untuk menentukan data sampel training.
 # Set page layout and side info
 st.sidebar.title("About")
 st.sidebar.info(markdown)
-logo = "logos\logo_epistem.png"
+logo = "logos/logo_epistem.png"
 st.sidebar.image(logo)
 
 st.markdown("Ketersediaan keluaran hasil modul 1 dan 2")

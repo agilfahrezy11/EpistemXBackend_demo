@@ -6,8 +6,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from .ee_config import ensure_ee_initialized
 
-# Ensure Earth Engine is initialized
-ensure_ee_initialized()
+# Do not initialize Earth Engine at import time. Initialize when classes are instantiated.
 
 # Module 4: Region of Interest Separability Analysis
 ## System Response 4.2 Sample Visualization
@@ -18,7 +17,13 @@ class spectral_plotter:
     """
     #Initialize the class. 
     def __init__(self, sample_quality):
-        """Initialize using functions from sample_quality class"""
+        """
+        Initialize using functions from sample_quality class
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
+        """
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
+        
         self.sq = sample_quality
         self.band_names = self.sq.band_names
         self.class_property = self.sq.class_property

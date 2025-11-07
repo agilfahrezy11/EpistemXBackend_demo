@@ -46,6 +46,9 @@ def initialize_with_service_account(
     """
     global _ee_initialized
     
+    # Initialize service_account_info variable
+    service_account_info = None
+    
     try:
         # Validate service account file exists
         if not os.path.exists(service_account_file):
@@ -54,26 +57,63 @@ def initialize_with_service_account(
         
         # Load service account credentials
         with open(service_account_file, 'r') as f:
-            service_account_info = json.load(f)
+            try:
+                service_account_info = json.load(f)
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error in service account file: {e}")
+                logger.error(f"File: {service_account_file}")
+                return False
+        
+        # Check if we successfully parsed the service account info
+        if not service_account_info:
+            logger.error("Failed to parse service account JSON")
+            return False
         
         # Extract project ID if not provided
         if not project:
             project = service_account_info.get('project_id')
         
-        # Create credentials and initialize
-        credentials = ee.ServiceAccountCredentials(
-            email=service_account_info['client_email'],
-            key_file=service_account_file
-        )
+        logger.info(f"Attempting to initialize Earth Engine with service account for project: {project}")
         
-        ee.Initialize(credentials, project=project)
+        # Set the environment variable for Google Application Credentials
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = service_account_file
+        
+        # Initialize Earth Engine with the project
+        if project:
+            ee.Initialize(project=project)
+        else:
+            ee.Initialize()
+        
         _ee_initialized = True
-        logger.info(f"Earth Engine initialized with service account for project: {project}")
+        logger.info(f"Earth Engine initialized successfully with service account for project: {project}")
         return True
         
     except Exception as e:
         logger.error(f"Service account initialization failed: {e}")
-        return False
+        # Try alternative method with explicit credentials only if we have service account info
+        if service_account_info:
+            try:
+                logger.info("Trying alternative authentication method...")
+                credentials = ee.ServiceAccountCredentials(
+                    email=service_account_info['client_email'],
+                    key_file=service_account_file
+                )
+                
+                if project:
+                    ee.Initialize(credentials, project=project)
+                else:
+                    ee.Initialize(credentials)
+                
+                _ee_initialized = True
+                logger.info(f"Earth Engine initialized with alternative method for project: {project}")
+                return True
+                
+            except Exception as e2:
+                logger.error(f"Alternative authentication method also failed: {e2}")
+                return False
+        else:
+            logger.error("Cannot try alternative method - service account info not available")
+            return False
 
 def authenticate_manually(project: Optional[str] = None) -> bool:
     """

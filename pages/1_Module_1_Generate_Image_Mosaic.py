@@ -1,3 +1,13 @@
+"""
+Module 1: Acquisition of Near cloud free satellite imagery
+
+This module provides a user interface for fetching satellite imagery from google earth engine python API
+
+Architecture:
+- Backend (module_2.py): Pure earth engine process without UI dependencies
+- Frontend (this file): Streamlit UI with session state management
+- State synchronization ensures data persistence across page interactions
+"""
 import streamlit as st
 import geemap.foliumap as geemap
 import geopandas as gpd
@@ -9,14 +19,24 @@ import os
 import ee
 import datetime
 import pandas as pd
-from epistemx.ee_config import initialize_earth_engine
-initialize_earth_engine()
 # Page configuration
 st.set_page_config(
     page_title="Search Imagery Composite",
-    page_icon="logos\logo_epistem_crop.png",
+    page_icon="logos/logo_epistem_crop.png",
     layout="wide"
 )
+
+# Load custom CSS
+def load_css():
+    """Load custom CSS for EpistemX theme"""
+    try:
+        with open('.streamlit/style.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass  # CSS file not found, continue without custom styling
+
+# Apply custom theme
+load_css()
 
 #=========Page requirements (title, description, session state)===========
 #title of the module
@@ -29,7 +49,7 @@ This module allows users to search and generate a Landsat image mosaic for a spe
 #set page layout and side info
 st.sidebar.title("About")
 st.sidebar.info(markdown)
-logo = "logos\logo_epistem.png"
+logo = "logos/logo_epistem.png"
 st.sidebar.image(logo)
 #Initialize session state for storing collection, composite, aoi, AOI that has been converted to gdf, and export task
 #similar to a python dict, we fill it later
@@ -43,6 +63,50 @@ if 'gdf' not in st.session_state:
     st.session_state.gdf = None
 if 'export_tasks' not in st.session_state:
     st.session_state.export_tasks = []
+
+#Task status caching to reduce API calls
+#Lesson learn from multiple exports, since it conflict between user session state
+#Cache aim to reduce the conflict between user
+if 'task_cache' not in st.session_state:
+    st.session_state.task_cache = {}
+if 'last_cache_update' not in st.session_state:
+    st.session_state.last_cache_update = {}
+
+#Cache task status with time to live to reduce API calls
+def get_cached_task_status(task_id, cache_ttl=30):
+    """Get task status with caching to reduce API calls"""
+    now = datetime.datetime.now()
+    
+    # Check if we have cached data that's still fresh
+    if (task_id in st.session_state.task_cache and 
+        task_id in st.session_state.last_cache_update):
+        
+        last_update = st.session_state.last_cache_update[task_id]
+        if (now - last_update).seconds < cache_ttl:
+            return st.session_state.task_cache[task_id]
+    
+    # Fetch fresh data
+    try:
+        status = ee.data.getTaskStatus(task_id)[0]
+        st.session_state.task_cache[task_id] = status
+        st.session_state.last_cache_update[task_id] = now
+        return status
+    except Exception as e:
+        return None
+
+def get_active_tasks():
+    """Return only tasks that need monitoring"""
+    active_tasks = []
+    for task_info in st.session_state.export_tasks:
+        # Skip if we know it's completed/failed from cache
+        cached_status = st.session_state.task_cache.get(task_info['id'])
+        if cached_status:
+            state = cached_status.get('state', 'UNKNOWN')
+            if state in ['COMPLETED', 'FAILED', 'CANCELLED']:
+                continue
+        active_tasks.append(task_info)
+    return active_tasks
+
 #Based on early experiments, shapefile with complex geometry often cause issues in GEE
 #User input, AOI upload
 st.subheader("Upload Area of Interest (Shapefile)")
@@ -298,7 +362,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             #Display the table with formatting
             st.dataframe(
                 scene_df,
-                width='stretch',
+                use_container_width=True,
                 hide_index=True,
                 column_config={
                     '#': st.column_config.NumberColumn('#', width='small'),
@@ -370,48 +434,46 @@ else:
 #=========5. Exporting the image collection===========
 #check if the session state is not empty
 if st.session_state.composite is not None and st.session_state.aoi is not None:
-    st.subheader("Export Mosaic to Google Drive")
+    st.subheader("Export Imagery to Google Drive")
     #Create an export setting for the user to filled
     with st.expander("Export Settings", expanded=True):
-        col1, col2 = st.columns(2)
+        col1 = st.columns(1)
         #File Naming
-        with col1:
-            default_name = f"Landsat_{st.session_state.search_metadata.get('sensor', 'unknown')}_{st.session_state.search_metadata.get('start_date', '')}_{st.session_state.search_metadata.get('end_date', '')}_mosaic"
-            export_name = st.text_input(
+        default_name = f"Landsat_{st.session_state.search_metadata.get('sensor', 'unknown')}_{st.session_state.search_metadata.get('start_date', '')}_{st.session_state.search_metadata.get('end_date', '')}_mosaic"
+        export_name = st.text_input(
                 "Export Filename:",
                 value=default_name,
                 help="The output will be saved as GeoTIFF (.tif)"
             )
-            #Folder location
-            drive_folder = st.text_input(
-                "Google Drive Folder:",
-                value="EarthEngine_Exports",
-                help="Google Drive folder to store the result"
-            )
+        #Hardcoded folder location so that the export is in one location
+        #Located in My Drive/EPISTEM/EPISTEMX_Landsat_Export folder structure
+        drive_folder = "EPISTEM/EPISTEMX_Landsat_Export"  
+        drive_url = "https://drive.google.com/drive/folders/1JKwqv3q3JyQnkIEuIqTQ2hlwPmM-FQaF?usp=sharing"
+       
+        st.info(f"Files will be exported to [EPISTEM/EPISTEMX_Landsat_Export folder]({drive_url})")
         #Coordinate Reference System (CRS)
         #User can define their own CRS using EPSG code, if not, used WGS 1984 as default option    
-        with col2:
-            crs_options = {
+        crs_options = {
                 "WGS 84 (EPSG:4326)": "EPSG:4326",
                 "Custom EPSG": "CUSTOM"
             }
-            crs_choice = st.selectbox(
+        crs_choice = st.selectbox(
                 "Coordinate Reference System:",
                 options=list(crs_options.keys()),
                 index=0
             )
             
-            if crs_choice == 'Custom EPSG':
-                custom_epsg = st.text_input(
-                    "Enter EPSG Code:",
-                    value="4326",
-                    help="Example: 32648 (UTM Zone 48N)"
+        if crs_choice == 'Custom EPSG':
+            custom_epsg = st.text_input(
+                "Enter EPSG Code:",
+                value="4326",
+                help="Example: 32648 (UTM Zone 48N)"
                 )
-                export_crs = f"EPSG:{custom_epsg}"
-            else:
-                export_crs = crs_options[crs_choice]
+            export_crs = f"EPSG:{custom_epsg}"
+        else:
+            export_crs = crs_options[crs_choice]
             #Define the scale/spatial resolution of the imagery
-            scale = st.number_input(
+        scale = st.number_input(
                 "Pixel Size (meters):",
                 min_value=10,
                 max_value=1000,
@@ -432,8 +494,6 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     
                     #Get the AOI from geometry
                     aoi_obj = st.session_state.aoi
-                    #try convert the AOI so that it is compatible with export requirement, several option avaliable if one failed
-                    #Convert to geometry based on type
 
                     if isinstance(aoi_obj, ee.FeatureCollection):
                         export_region = aoi_obj.geometry()
@@ -442,7 +502,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     elif isinstance(aoi_obj, ee.Geometry):
                         export_region = aoi_obj
                     else:
-                        # If all else fails, try to get bounds
+                        #If all else fails, try to get bounds
                         try:
                             export_region = aoi_obj.geometry()
                         except:
@@ -451,7 +511,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     #Summarize the export parameter from user input
                     export_params = {
                         "image": export_image,
-                        "description": export_name.replace(" ", "_"),  # Remove spaces from description
+                        "description": export_name.replace(" ", "_"),  #Remove spaces from description
                         "folder": drive_folder,
                         "fileNamePrefix": export_name,
                         "scale": scale,
@@ -466,15 +526,29 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     task = ee.batch.Export.image.toDrive(**export_params)
                     task.start()
                     
+                    #Store task info in session state for monitoring
+                    task_info = {
+                        'id': task.id,
+                        'name': export_name,
+                        'folder': drive_folder,
+                        'crs': export_crs,
+                        'scale': scale,
+                        'start_time': datetime.datetime.now(),
+                        'last_progress': 0,
+                        'last_update': datetime.datetime.now()
+                    }
+                    #Append to export tasks list
+                    st.session_state.export_tasks.append(task_info)
+                    #note, here the task is submitted, but not yet done
                     st.success(f"✅ Export task '{export_name}' submitted successfully!")
                     st.info(f"Task ID: {task.id}")
                     st.markdown(f"""
                     **Export Details:**
-                    - File location: Google Drive/{drive_folder}/{export_name}.tif
+                    - File location: My Drive/{drive_folder}/{export_name}.tif
                     - CRS: {export_crs}
                     - Resolution: {scale}m
                     
-                    Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks)
+                    Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks) or use the task monitor below.
                     """)
                     
             except Exception as e:
@@ -482,6 +556,218 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                 st.info("Debugging info:")
                 st.write(f"AOI type: {type(st.session_state.aoi)}")
                 st.write(f"Composite exists: {st.session_state.composite is not None}")
+
+    #Earth Engine Export Task Monitor
+    if st.session_state.export_tasks:
+        st.subheader("Earth Engine Export Monitor")
+        
+        # Manual refresh options with cache control
+        col_refresh1, col_refresh2 = st.columns([1, 3])
+        with col_refresh1:
+            if st.button("🔄 Refresh All"):
+                # Clear cache to force fresh data
+                st.session_state.task_cache.clear()
+                st.session_state.last_cache_update.clear()
+                st.rerun()
+        
+        with col_refresh2:
+            # Show cache status
+            active_tasks_count = len(get_active_tasks())
+            total_tasks_count = len(st.session_state.export_tasks)
+            st.caption(f"Monitoring {active_tasks_count}/{total_tasks_count} active tasks | Manual refresh only")
+        
+        #Summary of active tasks using cached status
+        running_tasks = 0
+        completed_tasks_count = 0
+        failed_tasks = 0
+        
+        for task_info in st.session_state.export_tasks:
+            try:
+                status = get_cached_task_status(task_info['id'])
+                if status:
+                    state = status.get('state', 'UNKNOWN')
+                    if state == 'RUNNING':
+                        running_tasks += 1
+                    elif state == 'COMPLETED':
+                        completed_tasks_count += 1
+                    elif state == 'FAILED':
+                        failed_tasks += 1
+            except:
+                pass
+        #Display task status for each task
+        for i, task_info in enumerate(st.session_state.export_tasks):
+            with st.expander(f"Task: {task_info['name']}", expanded=True):
+                try:
+                    # Get task status from cache or Earth Engine
+                    status = get_cached_task_status(task_info['id'])
+                    if not status:
+                        st.error("Failed to get task status")
+                        continue
+                    
+                    # Create columns for better layout
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.write(f"**Task ID:** {task_info['id']}")
+                        st.write(f"**Name:** {task_info['name']}")
+                        
+                        # Individual task refresh button
+                        if st.button(f"🔄", key=f"refresh_{i}", help="Refresh this task"):
+                            # Clear cache for this specific task
+                            if task_info['id'] in st.session_state.task_cache:
+                                del st.session_state.task_cache[task_info['id']]
+                            if task_info['id'] in st.session_state.last_cache_update:
+                                del st.session_state.last_cache_update[task_info['id']]
+                            st.rerun()
+                    
+                    with col2:
+                        # Status with color coding
+                        state = status.get('state', 'UNKNOWN')
+                        if state == 'COMPLETED':
+                            st.success(f"**Status:** {state}")
+                        elif state == 'RUNNING':
+                            st.info(f"**Status:** {state}")
+                        elif state == 'FAILED':
+                            st.error(f"**Status:** {state}")
+                        elif state == 'CANCELLED':
+                            st.warning(f"**Status:** {state}")
+                        else:
+                            st.write(f"**Status:** {state}")
+                        
+                        # Enhanced progress tracking with time estimates
+                        progress = status.get('progress', 0)
+                        current_time = datetime.datetime.now()
+                        
+                        if state == 'RUNNING' and progress > 0:
+                            # Only update timing calculations if progress has changed
+                            progress_changed = progress != task_info.get('last_progress', 0)
+                            
+                            if progress_changed:
+                                task_info['last_progress'] = progress
+                                task_info['last_update'] = current_time
+                                #Calculate the progress ETA if only session state is changed
+                                elapsed_time = current_time - task_info['start_time']
+                                elapsed_minutes = elapsed_time.total_seconds() / 60
+                                
+                                if progress > 0:
+                                    rate = progress / elapsed_minutes
+                                    task_info['current_rate'] = rate
+                                    if progress > 5:  # Only calculate ETA after 5% progress
+                                        estimated_total_time = elapsed_minutes * (100 / progress)
+                                        remaining_time = estimated_total_time - elapsed_minutes
+                                        task_info['remaining_time'] = remaining_time
+                                        task_info['elapsed_minutes'] = elapsed_minutes
+                            
+                            # Use cached calculations for display
+                            progress_bar = st.progress(progress / 100.0)
+                            
+                            # Time information
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.write(f"**Progress:** {progress:.1f}%")
+                            
+                            if progress > 5:
+                                with col_b:
+                                    remaining_time = task_info.get('remaining_time', 0)
+                                    if remaining_time > 60:
+                                        st.write(f"**ETA:** ~{remaining_time/60:.0f}h {remaining_time%60:.0f}m")
+                                    elif remaining_time > 1:
+                                        st.write(f"**ETA:** ~{remaining_time:.0f} min")
+                                    else:
+                                        st.write("**ETA:** <1 min")
+                                
+                                # Additional timing info using cached values
+                                elapsed_minutes = task_info.get('elapsed_minutes', 0)
+                                rate = task_info.get('current_rate', 0)
+                                st.caption(f"Elapsed: {elapsed_minutes:.0f} min | Rate: {rate:.1f}%/min")
+                            else:
+                                # Basic progress for early stages
+                                st.progress(progress / 100.0)
+                                st.write(f"**Progress:** {progress:.1f}% (calculating ETA...)")
+                                st.caption(f"Elapsed: {task_info.get('elapsed_minutes', 0):.0f} min")
+                        
+                        elif state == 'RUNNING':
+                            # Task is running but no progress reported yet
+                            st.progress(0)
+                            elapsed_time = current_time - task_info['start_time']
+                            elapsed_minutes = elapsed_time.total_seconds() / 60
+                            st.write("**Progress:** Initializing...")
+                            st.caption(f"Elapsed: {elapsed_minutes:.0f} min")
+                        
+                        elif progress > 0 and state not in ['COMPLETED', 'FAILED', 'CANCELLED']:
+                            # Show progress for other states
+                            st.progress(progress / 100.0)
+                            st.write(f"**Progress:** {progress:.1f}%")
+                    
+                    with col3:
+                        # Format timestamps more readably
+                        creation_ts = status.get('creation_timestamp_ms')
+                        update_ts = status.get('update_timestamp_ms')
+                        
+                        if creation_ts:
+                            creation_time = datetime.datetime.fromtimestamp(creation_ts / 1000)
+                            st.write(f"**Started:** {creation_time.strftime('%H:%M:%S')}")
+                        else:
+                            st.write("**Started:** N/A")
+                        
+                        if update_ts:
+                            update_time = datetime.datetime.fromtimestamp(update_ts / 1000)
+                            st.write(f"**Updated:** {update_time.strftime('%H:%M:%S')}")
+                        else:
+                            st.write("**Updated:** N/A")
+                        
+                        # Show total runtime for completed tasks
+                        if state == 'COMPLETED' and creation_ts and update_ts:
+                            total_runtime = (update_ts - creation_ts) / 1000 / 60  # minutes
+                            if total_runtime > 60:
+                                st.caption(f"Total time: {total_runtime/60:.1f}h {total_runtime%60:.0f}m")
+                            else:
+                                st.caption(f"Total time: {total_runtime:.0f} min")
+                        
+                        # Show cache status
+                        if task_info['id'] in st.session_state.last_cache_update:
+                            cache_age = (datetime.datetime.now() - st.session_state.last_cache_update[task_info['id']]).seconds
+                            if cache_age < 60:
+                                st.caption(f"📊 Data: {cache_age}s ago")
+                            else:
+                                st.caption(f"📊 Data: {cache_age//60}m ago")
+                    
+                    # Show error message if failed
+                    if state == 'FAILED' and 'error_message' in status:
+                        st.error(f"Error: {status['error_message']}")
+                    
+                    # Show completion details
+                    if state == 'COMPLETED':
+                        st.success("✅ Export completed successfully!")
+                        drive_url = "https://drive.google.com/drive/folders/1JKwqv3q3JyQnkIEuIqTQ2hlwPmM-FQaF?usp=sharing"
+                        st.success(f"File saved to: [EPISTEM/EPISTEMX_Landsat_Export Folder]({drive_url})")
+                        
+                        #Option to remove completed task from monitor
+                        if st.button(f"Remove from monitor", key=f"remove_{i}"):
+                            st.session_state.export_tasks.pop(i)
+                            st.rerun()
+                
+                except Exception as e:
+                    st.error(f"Failed to get task status: {str(e)}")
+                    st.write(f"Task ID: {task_info['id']}")
+        
+        # Clear all completed tasks button
+        completed_tasks = []
+        for task_info in st.session_state.export_tasks:
+            try:
+                status = get_cached_task_status(task_info['id'])
+                if status and status.get('state') == 'COMPLETED':
+                    completed_tasks.append(task_info)
+            except:
+                pass
+        
+        if completed_tasks:
+            if st.button("🗑️ Clear All Completed Tasks"):
+                st.session_state.export_tasks = [
+                    task for task in st.session_state.export_tasks 
+                    if task not in completed_tasks
+                ]
+                st.rerun()
 
 # Navigation
 st.divider()
