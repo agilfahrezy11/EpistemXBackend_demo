@@ -14,7 +14,9 @@ from .ee_config import (
     get_auth_status,
     print_auth_instructions,
     setup_earth_engine,
-    reset_ee_initialization
+    reset_ee_initialization,
+    get_auth_url,
+    authenticate_with_code
 )
 import os
 import warnings
@@ -191,5 +193,7 @@ __all__ = [
     'print_auth_instructions',
     'setup_earth_engine',
     'reset_ee_initialization',
-    'auto_initialize'
+    'auto_initialize',
+    'get_auth_url',
+    'authenticate_with_code'
 ]

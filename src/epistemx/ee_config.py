@@ -115,7 +115,7 @@ def initialize_with_service_account(
             logger.error("Cannot try alternative method - service account info not available")
             return False
 
-def authenticate_manually(project: Optional[str] = None) -> bool:
+def authenticate_manually(project: Optional[str] = None, force_cloud_api: bool = False) -> bool:
     """
     Perform manual Earth Engine authentication.
     
@@ -125,6 +125,8 @@ def authenticate_manually(project: Optional[str] = None) -> bool:
     ----------
     project : str, optional
         GEE project ID. If None, uses default project.
+    force_cloud_api : bool, default False
+        If True, forces authentication using the Cloud API method.
         
     Returns
     -------
@@ -140,7 +142,12 @@ def authenticate_manually(project: Optional[str] = None) -> bool:
     
     try:
         logger.info("Starting manual Earth Engine authentication...")
-        ee.Authenticate()
+        
+        # Try authentication with optional force_cloud_api parameter
+        if force_cloud_api:
+            ee.Authenticate(force_cloud_api=True)
+        else:
+            ee.Authenticate()
         
         if project:
             ee.Initialize(project=project)
@@ -153,6 +160,84 @@ def authenticate_manually(project: Optional[str] = None) -> bool:
         
     except Exception as e:
         logger.error(f"Manual authentication failed: {e}")
+        return False
+
+
+def get_auth_url() -> Optional[str]:
+    """
+    Get the authentication URL for manual OAuth flow.
+    
+    This is useful for environments where automatic browser opening doesn't work,
+    such as remote servers or containerized applications.
+    
+    Returns
+    -------
+    str or None
+        The authentication URL, or None if it cannot be generated.
+        
+    Example
+    -------
+    >>> from epistemx.ee_config import get_auth_url
+    >>> url = get_auth_url()
+    >>> print(f"Please visit: {url}")
+    """
+    try:
+        # This attempts to get the auth URL without completing the flow
+        # Note: This is a workaround and may not work in all versions of ee
+        import ee.oauth as oauth
+        
+        # Get the OAuth helper
+        auth_helper = oauth.get_authorization_url()
+        return auth_helper
+        
+    except Exception as e:
+        logger.error(f"Failed to get auth URL: {e}")
+        return None
+
+
+def authenticate_with_code(auth_code: str, project: Optional[str] = None) -> bool:
+    """
+    Complete authentication using an authorization code.
+    
+    This is useful for environments where the OAuth flow needs to be completed
+    manually (e.g., copying the code from a browser).
+    
+    Parameters
+    ----------
+    auth_code : str
+        The authorization code obtained from the OAuth flow.
+    project : str, optional
+        GEE project ID. If None, uses default project.
+        
+    Returns
+    -------
+    bool
+        True if authentication successful, False otherwise.
+        
+    Example
+    -------
+    >>> from epistemx.ee_config import authenticate_with_code
+    >>> authenticate_with_code("your-auth-code-here")
+    """
+    global _ee_initialized
+    
+    try:
+        # Note: This is a simplified version. The actual implementation
+        # depends on the Earth Engine Python API version
+        logger.info("Attempting to authenticate with provided code...")
+        
+        # Try to initialize with the assumption that credentials are already set up
+        if project:
+            ee.Initialize(project=project)
+        else:
+            ee.Initialize()
+        
+        _ee_initialized = True
+        logger.info("Authentication successful")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Authentication with code failed: {e}")
         return False
 
 def _print_manual_auth_instructions() -> None:

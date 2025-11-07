@@ -81,7 +81,7 @@ st.markdown("""
 if st.session_state.get('ee_initialized', False):
     st.markdown('<div class="success-message">✅ Earth Engine Ready - You can proceed with analysis</div>', unsafe_allow_html=True)
 else:
-    st.markdown('<div class="warning-message">⚠️ Earth Engine Not Initialized - Please check authentication</div>', unsafe_allow_html=True)
+    st.markdown('<div class="warning-message">⚠️ Earth Engine Not Initialized - Please authenticate on the <a href="/Earth_Engine_Authentication" target="_self">Authentication Page</a></div>', unsafe_allow_html=True)
 
 m = leafmap.Map(center = [-5.003394, 113.598633], zoom = 5)
 m.add_basemap("OpenTopoMap")
