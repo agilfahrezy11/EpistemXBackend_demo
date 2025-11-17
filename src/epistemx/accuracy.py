@@ -2,144 +2,9 @@ import ee
 import pandas as pd
 ee.Initialize()
 
-class Generate_and_evaluate_LULC:
+class Evaluate_LULC:
     def __init__(self):
-        """
-        Perform classification to generate Land Cover Land Use Map. The parameters used in the classification should be the result of hyperparameter tuning
-        """
-        ee.Initialize()
         pass
-
-    ############################# 1. Multiclass Classification ###########################
-    def multiclass_classification(self, training_data, class_property, image, ntrees = 100, 
-                                  v_split = None, min_leaf = 1, seed=0):
-        """
-        Perform multiclass hard classification to generate land cover land use map
-            Parameters:
-            training data: ee.FeatureCollection, input sample data from feature extraction function (must contain pixel value)
-            class_property (str): Column name contain land cover class id
-            ntrees (int): Number of trees (user should input the best parammeter from parameter optimization)
-            v_split (int): Variables per split (default = sqrt(#covariates)). (user should input the best parammeter from parameter optimization)
-            min_leaf (int): Minimum leaf population. (user should input the best parammeter from parameter optimization)
-            seed (int): Random seed.
-        returns:
-        ee.Image contain hard multiclass classification
-        """
-   # parameters and input valdiation
-        if not isinstance(training_data, ee.FeatureCollection):
-            raise ValueError("training_data must be an ee.FeatureCollection")
-        if not isinstance(image, ee.Image):
-            raise ValueError("image must be an ee.Image")
-        #if for some reason var split is not specified, used 
-        if v_split is None:
-            v_split = ee.Number(image.bandNames().size()).sqrt().ceil()
-        #Random Forest model
-        clf = ee.Classifier.smileRandomForest(
-                numberOfTrees=ntrees, 
-                variablesPerSplit=v_split,
-                minLeafPopulation=min_leaf,
-                seed=seed)
-        model = clf.train(
-            features=training_data,
-            classProperty=class_property,
-            inputProperties=image.bandNames()
-        )
-        #Implement the trained model to classify the whole imagery
-        multiclass = image.classify(model)
-        return multiclass
-     ############################# 1. One-vs-rest (OVR) binary Classification ###########################
-    def ovr_classification(self, training_data, class_property, image, include_final_map=True,
-                                ntrees = 100, v_split = None, min_leaf =1, seed=0, probability_scale = 100):
-        """
-        Implementation of one-vs-rest binary classification approach for multi-class land cover classification, similar to the work of
-        Saah et al 2020. This function create probability layer stack for each land cover class. The final land cover map is created using
-        maximum probability, via Argmax
-
-        Parameters
-            training_data (ee.FeatureCollection): The data which already have a pixel value from input covariates
-            class_property (str): Column name contain land cover class id
-            image (ee.Image): Image data
-            covariates (list): covariates names
-            ntrees (int): Number of trees (user should input the best parammeter from parameter optimization)
-            v_split (int): Variables per split (default = sqrt(#covariates)). (user should input the best parammeter from parameter optimization)
-            min_leaf (int): Minimum leaf population. (user should input the best parammeter from parameter optimization)
-            seed (int): Random seed.
-            probability scale = used to scaled up the probability layer
-
-        Returns:
-            ee.Image: Stacked probability bands + final classified map.
-        """
-        # parameters and input valdiation
-        if not isinstance(training_data, ee.FeatureCollection):
-            raise ValueError("training_data must be an ee.FeatureCollection")
-        if not isinstance(image, ee.Image):
-            raise ValueError("image must be an ee.Image")
-        #if for some reason var split is not specified, used 
-        if v_split is None:
-            v_split = ee.Number(image.bandNames().size()).sqrt().ceil()
-        
-        # Get distinct classes ID from the training data. It should be noted that unique ID should be in integer, since 
-        # float types tend to resulted in error during the band naming process 
-        class_list = training_data.aggregate_array(class_property).distinct()
-        
-        #Define how to train one vs rest classification and map them all across the class
-        def per_class(class_id):
-            class_id = ee.Number(class_id)
-            #Creating a binary features, 1 for a certain class and 0 for other (forest = 1, other = 0)
-            binary_train = training_data.map(lambda ft: ft.set('binary', ee.Algorithms.If(
-                            ee.Number(ft.get(class_property)).eq(class_id), 1, 0
-                                )
-                            ))
-            #Build random forest classifiers, setting the outputmode to 'probability'. The probability mode will resulted in
-            #one binary classification for each class. This give flexibility in modifying the final weight for the final land cover
-            #multiprobability resulted in less flexibility in modifying the class weight
-            #(the parameters required tuning)
-            classifier = ee.Classifier.smileRandomForest(
-                numberOfTrees=ntrees, 
-                variablesPerSplit=v_split,
-                minLeafPopulation=min_leaf,
-                seed=seed
-            ).setOutputMode("PROBABILITY")
-            #Train the model
-            trained = classifier.train(
-                features=binary_train,
-                classProperty="binary",
-                inputProperties=image.bandNames()
-            )
-            # Apply to the image and get the probability layer
-            # (probability 1 represent the confidence of a pixel belonging to target class)
-            prob_img = image.classify(trained).select(['probability_1'])
-            #scaled and convert to byte
-            prob_img = prob_img.multiply(probability_scale).round().byte()
-            #rename the bands
-            #Ensure class_id is integer. 
-            class_id_str = class_id.int().format()
-            band_name = ee.String ('prob_').cat(class_id_str)
-
-            return prob_img.rename(band_name)
-        # Map over classes to get probability bands
-        prob_imgs = class_list.map(per_class)
-        prob_imgcol = ee.ImageCollection(prob_imgs)
-        prob_stack = prob_imgcol.toBands()
-
-        #if final map  is not needed, the functin will return prob bands only
-        if not include_final_map:
-            return prob_stack
-        #final map creation using argmax
-        print('Creating final classification using argmax')
-        class_ids = ee.List(class_list)
-        #find the mad prob in each band for each pixel
-        #use an index image (0-based) indicating which class has highest probability
-        max_prob_index = prob_stack.toArray().arrayArgmax().arrayGet(0)
-
-        #map the index to actual ID
-        final_lc = max_prob_index.remap(ee.List.sequence(0, class_ids.size().subtract(1)),
-                                        class_ids).rename('classification')
-        #calculate confidence layer
-        max_confidence = prob_stack.toArray().arrayReduce(ee.Reducer.max(), [0]).arrayGet([0]).rename('confidence')
-        #stack the final map and confidence
-        stacked = prob_stack.addBands([final_lc, max_confidence])
-        return stacked
 
     def thematic_assessment(self, lcmap, validation_data, class_property,
                             region=None, scale=10, return_per_class = True):
@@ -289,7 +154,16 @@ class Generate_and_evaluate_LULC:
             results['per_class_metric'] = per_class_metrics
         return results
     ############################# 8. Printing the accuracy metrics ###########################
-
+    # Display and Review Accuracy Results
+    # Front-end: 1. User reviews the test results, including the Confusion Matrix and all accuracy metrics displayed by print_metrics(). 
+    # 2. If satisfied, the process completes. 
+    # 3. If unsatisfied, the user is prompted to: * Go back to @sec-module-3 to check and clarify the Reference Data. * Go back to @sec-module-6 to refine the hyperparameters or try a different classification approach.
+    # Back-end:
+    # * Formats and displays comprehensive accuracy report
+    # * Identifies potential issues based on error patterns
+    # * Provides specific recommendations for improvement
+    # Related Functions:
+    # * print_metrics() - displays formatted accuracy results with interpretations
     def print_metrics (self, evaluation, class_names = None):
         
         print("CLASSIFICATION THEMATIC EVALUATION RESULT\n")
@@ -325,4 +199,3 @@ class Generate_and_evaluate_LULC:
         print("• Micro F1: Weighted by class frequency (dominated by frequent classes)")
         print("• Geometric Mean: Sensitive to poor performance on any class")
         print("• Kappa: Agreement beyond chance, accounts for class imbalance")    
-    
