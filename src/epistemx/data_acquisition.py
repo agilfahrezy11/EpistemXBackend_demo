@@ -7,6 +7,9 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# Step: 1.3 Selection and Preparation of Satellite Imagery
+# Sub-Step: 1.3.1 Satellite Data Acquisition and Filtering
 class Reflectance_Data:
     """
     Class for fetching and analyzing Landsat optical/thermal image collections with logging.
@@ -68,6 +71,13 @@ class Reflectance_Data:
             'type': 'landsat_sr',
             'sensor': 'L9',
             'description': 'Landsat 9 Operational Land Imager-2 Surface Reflectance'
+        },
+        'HLS_2': {
+            'collection': 'NASA/HLS/HLSL30/v002',
+            'cloud_property': 'CLOUD_COVERAGE', 
+            'type': 'landsat_sr',
+            'sensor': 'L8',
+            'description': 'HLS-2 Landsat Operational Land Imager Surface Reflectance and TOA Brightness Daily Global '
         }
     }
 #Define the thermal datasets. The thermal bands used is from Collection 2 Top-of-atmosphere data 
@@ -102,6 +112,9 @@ class Reflectance_Data:
             'description': 'Landsat 9 Top-of-atmosphere reflectance'      
         }
     }
+
+    #Sub-Step: 1.3.2 Image Processing
+    
     #Initialize the class
     def __init__(self, log_level=logging.INFO):
         """
@@ -310,6 +323,9 @@ class Reflectance_Data:
             'filtered_collection': filtered_stats,
             'detailed_stats_computed': compute_detailed_stats
         }
+    
+# Step: 1.4 Visualization and Saving of Data
+# Sub-Step: 1.4.1 Visualization and Saving of Data    
 class Reflectance_Stats:
     """
     Class for fetching image collection statistics
