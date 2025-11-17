@@ -3,20 +3,28 @@
     in this project
 -------------------------------------------------------------------------------------> 
 
-EpistemXBackend
+xi
+pyproject.toml				# Python project dependencies tracking
+Dockerfile					# Docker for reproducibility
+.gitignore
+LICENSE						
+README.md
+├── tests					# For testing routine (not yet developed)	
 ├── docs
 	├── repo_structure.md	       # Repository navigation structure
-├── src/epistemx				  # contain functions of backend
+├── src/epistemx				  # Contain functions of backend
 	├── __init__.py                      
-	├── helpers.py                # helper functions shared by multiple modules
-	├── shapefile_utils.py        # to validate the uploaded shapefiles
-	├── modules_phase1
-		└── module_1.py           # Acquisition of Near-Cloud-Free Satellite Imagery
-		└── module_3.py           # Reference Data Generation
-		└── module_4.py           # Spectral Separability Analysis
-		└── module_6.py           # LULC Map Generation
-		└── module_7.py           # Thematic Accuracy Assessment
-├── test_data
-	├── AOI_sample.zip         		# Test shapefiles/CSV for AOI/training (small files)
+	├── helpers.py            # Helper functions shared by multiple modules
+	├── input_utils.py        # Validate the uploaded input file
+	├── data_acquisition.py   # Module 1: Acquisition of Near-Cloud-Free Satellite Imagery
+	├── classification_scheme.py           # Module 2: LULC Classification scheme
+	├── sample_data.py        # Module 3: Sample Data Generation
+	├── sample_data_quality.py           # Module 4: Sample Data Quality Analysis
+	├── predictor.py           # Module 5: Predictor Introduction 
+	├── classification.py           # Module 6: LULC Map Generation
+	├── accuracy.py           # Module 7: Thematic Accuracy Assessment
+	├── post_classification.py           # Module 8: Post Classification Analysis	
+├── data
+	├── aoi_sample.zip         		# Test shapefiles/CSV for AOI/training (small files)
 ├── notebooks
-	└── Module_implmentation.ipynb  # Exploratory analysis for developers
+	└── module_implementation.ipynb  # Exploratory analysis for developers
