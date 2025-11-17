@@ -6,6 +6,7 @@
 xi
 pyproject.toml				# Python project dependencies tracking
 Dockerfile					# Docker for reproducibility
+.dockerignore
 .gitignore
 LICENSE						
 README.md
