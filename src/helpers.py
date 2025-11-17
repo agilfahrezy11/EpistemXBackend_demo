@@ -91,4 +91,3 @@ def distance_metric_stack(aoi, max_dist = 500000, in_meters = False):
     dist_settlement = distance_image(hrsl_masked).rename('dist_settlement')
     # Stack into one image
     return ee.Image.cat(dist_roads, dist_coast, dist_settlement)
-
