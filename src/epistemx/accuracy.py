@@ -1,201 +1,205 @@
+from scipy import stats
+import numpy as np
 import ee
-import pandas as pd
-ee.Initialize()
+from typing import Dict, List, Tuple, Any, Optional
+import logging
+from .ee_config import ensure_ee_initialized
 
-class Evaluate_LULC:
+# Do not initialize Earth Engine at import time. Initialize when classes are instantiated.
+
+#Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Module 7: Thematic Accuracy Assessment
+## System Response 7.2 Ground Reference Verification
+#Create a class for thematic assesment
+class Thematic_Accuracy_Assessment:
+    """
+    Module 7: Thematic Accuracy Assessment Manager
+    Backend processing for land cover classification accuracy evaluation
+    """
+    
     def __init__(self):
-        pass
-
-    def thematic_assessment(self, lcmap, validation_data, class_property,
-                            region=None, scale=10, return_per_class = True):
         """
-        Evaluate the thematic accuracy of land cover land use map wih several accuracy metric:
-        overall accuracy
-        F1-score
-        Geometric mean
-        Per-class accuracy
-        balanced accuracy score
-        
+        Initialize the accuracy assessment manager
+        Ensure Earth Engine is initialized lazily (avoids import-time failures).
         """
-        if region is None:
-            validation_sample = lcmap.select('classification').sampleRegions(
-                collection = validation_data,
-                properties = [class_property],
-                scale = scale,
-                geometries = False,
-                tileScale = 4
-            )
-        else:
-            validation_sample = lcmap.select('classification').sampleRegions(
-                collection = validation_data.filterBounds(region),
-                properties = [class_property],
-                scale = scale,
-                tileScale = 4
-            )
-        #create a confuction matrix
-        confusion_matrix = validation_sample.errorMatrix(class_property, 'classification')
-        #basic metric calculation:
-        oa = confusion_matrix.accuracy()
-        kappa = confusion_matrix.kappa()
-        #calculate per class accuracy
-        class_order = confusion_matrix.order()
-        matrix_array = confusion_matrix.array()
-        def per_class_acc():
-            """
-            calculate precision, recal, and f1 per class
-            """
-            n_class = matrix_array.length().get(0)
-            def per_class_calc(i):
-                i = ee.Number(i)
-                #TP = True Positive
-                tp = matrix_array.get([i, i])
-                #FP = False positive
-                col_sum = matrix_array.slice(0,0,-1).slice(1, i, i.add(1)).reduce(ee.Reuducer.sum(), [0])
-                fp = col_sum.get([0,0]).subtract(tp)
-                #fn = false negatives
-                row_sum = matrix_array.slice(0, i, i.add(1)).slice(1,0,-1).reduce(ee.Reducer.sum(), [1])
-                fn = row_sum.get([0,0]).subtract(tp)
-                #calculate precision (user accuracy), recall (producer accuracy), and f1-score
-                precision = ee.Number(tp).divide(ee.Number(tp).add(ee.Number(fp)))
-                recall = ee.Number(tp).divide(ee.Number(tp).add(ee.Number(fn)))
-                #f1 score with zero division handling
-                f1 = ee.Algorithms.If(precision.add(recall).eq(0), 0,
-                                    precision.multiply(recall).multiply(2).divide(precision.add(recall))
-                                    )
-                return ee.Dictionary({
-                    'class_ID': class_order.get(i),
-                    'Preicison/User Accuracy': precision, 
-                    'Recall/Producer Accuracy': recall,
-                    'F1 Score': f1,
-                    'True Positive': tp,
-                    'False Positive': fp,
-                    'False Negative': fn
-                })
-            #map all classes
-            class_index = ee.List.sequence(0, n_class.subtract(1))
-            per_class_result = class_index.map(per_class_calc)
-            return per_class_result
+        # Ensure Earth Engine is initialized when first used (raises helpful error if not)
+        ensure_ee_initialized()
         
-        #now calculate the metric:
-        per_class_metrics = per_class_acc()
-            # Calculate macro-averaged metrics
-        def calculate_macro_metrics():
-            """Calculate macro-averaged F1, Precision, Recall"""
-            # Extract individual metric lists
-            precision_values = per_class_metrics.map(lambda x: ee.Dictionary(x).get('precision'))
-            recall_values = per_class_metrics.map(lambda x: ee.Dictionary(x).get('recall'))
-            f1_values = per_class_metrics.map(lambda x: ee.Dictionary(x).get('f1_score'))
-            # Calculate means
-            macro_precision = ee.Array(precision_values).reduce(ee.Reducer.mean(), [0]).get([0])
-            macro_recall = ee.Array(recall_values).reduce(ee.Reducer.mean(), [0]).get([0])
-            macro_f1 = ee.Array(f1_values).reduce(ee.Reducer.mean(), [0]).get([0])
-            return {
-                'macro_precision': macro_precision,
-                'macro_recall': macro_recall,
-                'macro_f1': macro_f1
-            }
-        # Calculate micro-averaged metrics
-        def calculate_micro_metrics():
-            """Calculate micro-averaged F1, Precision, Recall"""
-            # Sum all TP, FP, FN across classes
-            total_tp = ee.Array(per_class_metrics.map(lambda x: ee.Dictionary(x).get('tp'))).reduce(ee.Reducer.sum(), [0]).get([0])
-            total_fp = ee.Array(per_class_metrics.map(lambda x: ee.Dictionary(x).get('fp'))).reduce(ee.Reducer.sum(), [0]).get([0])
-            total_fn = ee.Array(per_class_metrics.map(lambda x: ee.Dictionary(x).get('fn'))).reduce(ee.Reducer.sum(), [0]).get([0])
-            # Calculate micro metrics
-            micro_precision = ee.Number(total_tp).divide(ee.Number(total_tp).add(ee.Number(total_fp)))
-            micro_recall = ee.Number(total_tp).divide(ee.Number(total_tp).add(ee.Number(total_fn)))
-            micro_f1 = micro_precision.multiply(micro_recall).multiply(2).divide(micro_precision.add(micro_recall))
-            return {
-                'micro_precision': micro_precision,
-                'micro_recall': micro_recall,
-                'micro_f1': micro_f1
-            }
-        # Calculate Geometric Mean
-        def calculate_geometric_mean():
-            """Calculate Geometric Mean of per-class recalls (sensitivities)"""
+        self.supported_metrics = [
+            'overall_accuracy', 'kappa', 'producer_accuracy', 
+            'user_accuracy', 'f1_scores', 'confusion_matrix'
+        ]
+    
+    def validate_inputs(self, lcmap: ee.Image, validation_data: ee.FeatureCollection, 
+                       class_property: str, scale: int) -> Tuple[bool, Optional[str]]:
+        """Validate input parameters for accuracy assessment"""
+        try:
+            # Check if lcmap has classification band
+            band_names = lcmap.bandNames().getInfo()
+            if 'classification' not in band_names:
+                return False, "Input land cover map must contain a band named 'classification'"
             
-            recall_values = per_class_metrics.map(lambda x: ee.Dictionary(x).get('recall'))
-            # Calculate geometric mean: (r1 * r2 * ... * rn)^(1/n)
-            # Using log transform: exp(mean(log(recalls)))
-            log_recalls = ee.Array(recall_values).log()
-            mean_log_recall = log_recalls.reduce(ee.Reducer.mean(), [0]).get([0])
-            geometric_mean = ee.Number(mean_log_recall).exp()
-            return geometric_mean
+            # Check if validation data has the specified class property
+            first_feature = validation_data.first()
+            properties = first_feature.propertyNames().getInfo()
+            if class_property not in properties:
+                return False, f"Class property '{class_property}' not found in validation data"
+            
+            # Validate scale
+            if not isinstance(scale, (int, float)) or scale <= 0:
+                return False, "Scale must be a positive number"
+            
+            return True, None
+            
+        except Exception as e:
+            return False, f"Validation error: {str(e)}"
+    
+    def _calculate_confidence_interval(self, n_correct: int, n_total: int, 
+                                     confidence: float = 0.95) -> Tuple[float, float]:
+        """Calculate confidence interval for overall accuracy using normal approximation"""
+        if n_total == 0:
+            return 0.0, 0.0
         
-        # Calculate Balanced Accuracy
-        # Should be reconsidered since it could be redundant with OA
-        def calculate_balanced_accuracy():
-            """Calculate Balanced Accuracy (macro-averaged recall)"""
-            recall_values = per_class_metrics.map(lambda x: ee.Dictionary(x).get('recall'))
-            balanced_accuracy = ee.Array(recall_values).reduce(ee.Reducer.mean(), [0]).get([0])
-            return balanced_accuracy
+        p = n_correct / n_total
+        se = np.sqrt((p * (1 - p)) / n_total)
+        z = stats.norm.ppf((1 + confidence) / 2)
+        margin = z * se
         
-        # Get all calculated metrics
-        macro_metrics = calculate_macro_metrics()
-        micro_metrics = calculate_micro_metrics()
-        geometric_mean = calculate_geometric_mean()
-        balanced_accuracy = calculate_balanced_accuracy()
-        # append the result into a dictionary
-        results = {
-            'confusion_matrix': confusion_matrix,
-            'class_order': class_order,
-            'overall accuracy': oa,
-            'balanced accuracy': balanced_accuracy,
-            'kappa': kappa,
-            'macro_f1': macro_metrics['macro_f1'],
-            'macro_precision': macro_metrics['macro_precision'], 
-            'macro_recall': macro_metrics['macro_recall'],
-            'micro_f1': micro_metrics['micro_f1'],
-            'micro_precision': micro_metrics['micro_precision'],
-            'micro_recall': micro_metrics['micro_recall'],
-            'geometric_mean': geometric_mean,
+        lower = max(0.0, p - margin)
+        upper = min(1.0, p + margin)
+        
+        return lower, upper
+    def _calculate_f1_scores(self, producer_accuracy: List[float], 
+                           user_accuracy: List[float]) -> List[float]:
+        """Calculate F1 scores for each class"""
+        f1_scores = []
+        
+        for producer_acc, user_acc in zip(producer_accuracy, user_accuracy):
+            if producer_acc + user_acc > 0:
+                f1 = 2 * (producer_acc * user_acc) / (producer_acc + user_acc)
+            else:
+                f1 = 0.0
+            f1_scores.append(f1)
+        
+        return f1_scores
+    
+    def _extract_confusion_matrix_data(self, confusion_matrix: ee.ConfusionMatrix) -> Dict[str, Any]:
+        """Extract all metrics from Earth Engine confusion matrix"""
+        try:
+            # Get basic metrics
+            overall_accuracy = confusion_matrix.accuracy().getInfo()
+            kappa = confusion_matrix.kappa().getInfo()
+            
+            # Get per-class accuracies
+            producers_accuracy_raw = confusion_matrix.producersAccuracy().getInfo()
+            consumers_accuracy_raw = confusion_matrix.consumersAccuracy().getInfo()
+            
+            # Get confusion matrix array
+            cm_info = confusion_matrix.getInfo()
+            cm_array = cm_info['array'] if isinstance(cm_info, dict) else cm_info
+            
+            # Flatten accuracy arrays
+            producers_accuracy = np.array(producers_accuracy_raw).flatten().tolist()
+            consumers_accuracy = np.array(consumers_accuracy_raw).flatten().tolist()
+            
+            return {
+                'overall_accuracy': overall_accuracy,
+                'kappa': kappa,
+                'producers_accuracy': producers_accuracy,
+                'consumers_accuracy': consumers_accuracy,
+                'cm_array': cm_array
+            }
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to extract confusion matrix data: {str(e)}")
+    
+    def run_accuracy_assessment(self, lcmap: ee.Image, validation_data: ee.FeatureCollection,
+                               class_property: str, scale: int = 30, 
+                               confidence: float = 0.95) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Perform comprehensive thematic accuracy assessment
+        
+        Args:
+            lcmap: Classified land cover map with 'classification' band
+            validation_data: Ground reference validation points
+            class_property: Column name containing class IDs in validation data
+            scale: Spatial resolution for sampling (meters)
+            confidence: Confidence level for accuracy intervals
+            
+        Returns:
+            Tuple of (success, results_dict or error_message)
+        """
+        try:
+            # Validate inputs
+            is_valid, error_msg = self.validate_inputs(lcmap, validation_data, class_property, scale)
+            if not is_valid:
+                return False, {"error": error_msg}
+            
+            logger.info("Starting accuracy assessment...")
+            
+            # Sample the classified map at validation points
+            validation_sample = lcmap.select('classification').sampleRegions(
+                collection=validation_data,
+                properties=[class_property],
+                scale=scale,
+                geometries=False,
+                tileScale=4
+            )
+            
+            # Create confusion matrix
+            confusion_matrix = validation_sample.errorMatrix(class_property, 'classification')
+            
+            # Extract all metrics
+            cm_data = self._extract_confusion_matrix_data(confusion_matrix)
+            
+            # Calculate confidence interval
+            n_correct = int(np.trace(np.array(cm_data['cm_array'])))
+            n_total = int(np.sum(np.array(cm_data['cm_array'])))
+            ci_lower, ci_upper = self._calculate_confidence_interval(n_correct, n_total, confidence)
+            
+            # Calculate F1 scores
+            f1_scores = self._calculate_f1_scores(
+                cm_data['producers_accuracy'], 
+                cm_data['consumers_accuracy']
+            )
+            
+            # Compile final results
+            results = {
+                'overall_accuracy': cm_data['overall_accuracy'],
+                'kappa': cm_data['kappa'],
+                'producer_accuracy': cm_data['producers_accuracy'],
+                'user_accuracy': cm_data['consumers_accuracy'],
+                'f1_scores': f1_scores,
+                'confusion_matrix': cm_data['cm_array'],
+                'overall_accuracy_ci': (ci_lower, ci_upper),
+                'confidence_level': confidence,
+                'n_total': n_total,
+                'n_correct': n_correct,
+                'scale': scale
+            }
+            
+            logger.info("Accuracy assessment completed successfully")
+            return True, results
+            
+        except Exception as e:
+            error_msg = f"Accuracy assessment failed: {str(e)}"
+            logger.error(error_msg)
+            return False, {"error": error_msg}
+    
+    @staticmethod
+    def format_accuracy_summary(results: Dict[str, Any]) -> Dict[str, str]:
+        """Format accuracy results for display"""
+        if 'error' in results:
+            return results
+        
+        summary = {
+            'overall_accuracy': f"{results['overall_accuracy']*100:.2f}%",
+            'kappa': f"{results['kappa']:.3f}",
+            'confidence_interval': f"{results['overall_accuracy_ci'][0]*100:.2f}% - {results['overall_accuracy_ci'][1]*100:.2f}%",
+            'sample_size': str(results['n_total'])
         }
-        if return_per_class: 
-            results['per_class_metric'] = per_class_metrics
-        return results
-    ############################# 8. Printing the accuracy metrics ###########################
-    # Display and Review Accuracy Results
-    # Front-end: 1. User reviews the test results, including the Confusion Matrix and all accuracy metrics displayed by print_metrics(). 
-    # 2. If satisfied, the process completes. 
-    # 3. If unsatisfied, the user is prompted to: * Go back to @sec-module-3 to check and clarify the Reference Data. * Go back to @sec-module-6 to refine the hyperparameters or try a different classification approach.
-    # Back-end:
-    # * Formats and displays comprehensive accuracy report
-    # * Identifies potential issues based on error patterns
-    # * Provides specific recommendations for improvement
-    # Related Functions:
-    # * print_metrics() - displays formatted accuracy results with interpretations
-    def print_metrics (self, evaluation, class_names = None):
         
-        print("CLASSIFICATION THEMATIC EVALUATION RESULT\n")
-        #overall metrics
-        print('Overall Metrics:')
-        print(f'Overall Accuracy:{evaluation["overall_accuracy"].getInfo():.4f}')
-        print(f'Balanced Accuracy: {evaluation["balanced_accuracy"].getInfo():.4f}')
-        print(f'Kappa Coefficient:{evaluation["kappa"].getInfo():.4f}')
-        print(f'Geometric Mean: {evaluation["geometric_mean"].getInfo():.4f}')
-
-        #Aggregate Metric
-        print('Aggregate Metric:')
-        print(f"Macro F-1 Score: {evaluation['macro_f1'].getInfo():.4f}")
-        print(f"Micro F1-Score: {evaluation['micro_f1'].getInfo():.4f}")
-        print(f"Macro Precision: {evaluation['macro_precision'].getInfo():.4f}")
-        print(f"Macro Recall: {evaluation['macro_recall'].getInfo():.4f}")
-
-        #per class if requested
-        if 'per_class_metrics' in evaluation:
-            print('PER-CLASS METRICS:')
-            per_class = evaluation['per_class_metrics'].getInfo()
-            print(f"{'Class':<10} {'Precision':<10} {'Recall':<10} {'F1-Score':<10}")
-            print('-' * 45)
-            for metrics in per_class:
-                class_id = metrics['class_id']
-                class_names = class_names.get(class_id, f"class_{class_id}") if class_names else f"class_{class_id}"
-                print(f"{class_names:<10} {metrics['precision']:<10.4f} {metrics['recall']:<10.4f} {metrics['f1_score']:<10.4f}")
-        
-        print("\n=== METRIC INTERPRETATIONS ===")
-        print("• Overall Accuracy: Can be misleading with imbalanced data")
-        print("• Balanced Accuracy: Average of per-class recalls (better for imbalanced data)")
-        print("• Macro F1: Unweighted average F1 across classes (treats all classes equally)")
-        print("• Micro F1: Weighted by class frequency (dominated by frequent classes)")
-        print("• Geometric Mean: Sensitive to poor performance on any class")
-        print("• Kappa: Agreement beyond chance, accounts for class imbalance")    
+        return summary
