@@ -155,12 +155,12 @@ class LULC_Scheme_Manager:
         # Update existing class
         if self.edit_mode and self.edit_idx is not None:
             self.classes[self.edit_idx] = class_data
-            success_msg = f"KElas '{class_name}' (ID: {class_id}) berhasil diperbarui!"
+            success_msg = f"Class '{class_name}' (ID: {class_id}) updated successfully!"
             self._reset_edit_mode()
         else:
             # Add new class
             self.classes.append(class_data)
-            success_msg = f"Kelas '{class_name}' (ID: {class_id}) berhasil ditambahkan!"
+            success_msg = f"Class '{class_name}' (ID: {class_id}) added successfully!"
         
         self._sort_and_update_next_id()
         return True, success_msg
@@ -272,7 +272,7 @@ class LULC_Scheme_Manager:
         if 0 <= idx < len(self.classes):
             class_to_delete = self.classes[idx]
             del self.classes[idx]
-            success_msg = f"Kelas '{class_to_delete['Class Name']}' (ID: {class_to_delete['ID']}) berhasil dihapus!"
+            success_msg = f"Class '{class_to_delete['Class Name']}' (ID: {class_to_delete['ID']}) deleted successfully!"
             return True, success_msg
         return False, "Invalid class index"
     
@@ -390,7 +390,7 @@ class LULC_Scheme_Manager:
             # Clear temporary storage
             self.csv_temp_classes = []
             
-            return True, f"Skema klasifikasi berhasil dibuat dengan {len(self.classes)} kelas"
+            return True, f"Classification scheme created with {len(self.classes)} classes"
             
         except Exception as e:
             return False, f"Error finalizing CSV upload: {str(e)}"
