@@ -252,7 +252,7 @@ class Reflectance_Data:
         return image.addBands(optical_bands, None, True)
     #Function to retrive Landsat multispectral bands
     def get_optical_data(self, aoi, start_date, end_date, optical_data='L8_SR',
-                        cloud_cover=30,
+                        cloud_cover=30, max_scenes=200,
                         verbose=True, compute_detailed_stats=True):
         """
         Get optical image collection for Landsat 1-9 SR data with detailed information logging.
@@ -264,6 +264,7 @@ class Reflectance_Data:
         end_date : str. End date in format 'YYYY-MM-DD' or year.
         optical_data : str. Dataset type: i.e 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
         cloud_cover : int. Maximum cloud cover percentage on land (default: 30).
+        max_scenes : int. Maximum number of scenes to return (default: 200, prevents memory timeout).
         verbose : bool. Print detailed information about the collection (default: True).
         compute_detailed_stats : bool
             If True, compute detailed statistics 
@@ -332,11 +333,16 @@ class Reflectance_Data:
 
         #Collection after cloud cover filter
         collection = initial_collection.filter(ee.Filter.lt(config['cloud_property'], cloud_cover))
+        
+        #Limit to max_scenes to prevent memory timeout
+        collection = collection.limit(max_scenes)
         filtered_stats = stats_object.get_collection_statistics(collection, compute_detailed_stats)
         #Computing image statistics
         if verbose and compute_detailed_stats:
             if filtered_stats.get('total_images', 0) > 0:
                 self.logger.info(f"After cloud filtering (<{cloud_cover}%): {filtered_stats['total_images']} images")
+                if filtered_stats['total_images'] >= max_scenes:
+                    self.logger.warning(f"Collection limited to {max_scenes} scenes to prevent memory timeout")
                 self.logger.info(f"Cloud cover of selected images: "
                                 f"{filtered_stats['cloud_cover']['min']:.1f}% - "
                                 f"{filtered_stats['cloud_cover']['max']:.1f}%")
@@ -379,7 +385,7 @@ class Reflectance_Data:
         }
     #TOA-based Thermal Bands
     def get_thermal_bands(self, aoi, start_date, end_date, thermal_data = 'L8_TOA', cloud_cover=30,
-                        verbose=True, compute_detailed_stats=True):
+                        max_scenes=200, verbose=True, compute_detailed_stats=True):
         """
         Get the thermal bands from landsat TOA data
     
@@ -390,6 +396,7 @@ class Reflectance_Data:
         end_date : str. End date in format 'YYYY-MM-DD' or year.
         optical_data : str. Dataset type: 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
         cloud_cover : int. Maximum cloud cover percentage on land (default: 30).
+        max_scenes : int. Maximum number of scenes to return (default: 200, prevents memory timeout).
         verbose : bool. Print detailed information about the collection (default: True).
         compute_detailed_stats : bool
             If True, compute detailed statistics 
@@ -464,10 +471,15 @@ class Reflectance_Data:
             self.logger.info(f"Date range of available images: {initial_stats['date_range']}")
         #Apply cloud cover filter
         collection = initial_collection.filter(ee.Filter.lt(config['cloud_property'], cloud_cover))
+        
+        #Limit to max_scenes to prevent memory timeout
+        collection = collection.limit(max_scenes)
         filtered_stats = stats.get_collection_statistics(collection, compute_detailed_stats)
         if verbose and compute_detailed_stats:
             if filtered_stats.get('total_images', 0) > 0:
                 self.logger.info(f"After cloud filtering (<{cloud_cover}%): {filtered_stats['total_images']} images")
+                if filtered_stats['total_images'] >= max_scenes:
+                    self.logger.warning(f"Collection limited to {max_scenes} scenes to prevent memory timeout")
                 self.logger.info(f"Cloud cover range: {filtered_stats['cloud_cover']['min']:.1f}% - {filtered_stats['cloud_cover']['max']:.1f}%")
                 self.logger.info(f"Average cloud cover: {filtered_stats['cloud_cover']['mean']:.1f}%")
             else:
