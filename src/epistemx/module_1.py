@@ -15,7 +15,7 @@ logging.basicConfig(
 class Reflectance_Data:
     """Class for fetching and pre-processing Landsat image collection from Google Earth Engine API."""
     #Define the optical datasets. The band reflectances used is from Collection 2 Surface Reflectancce Data
-    OPTICAL_DATASETS = {
+    MULTISPECTRAL_DATASETS = {
         'L1_RAW': {
             'collection': 'LANDSAT/LM01/C02/T1',
             'cloud_property': 'CLOUD_COVER_LAND',
@@ -253,7 +253,7 @@ class Reflectance_Data:
         #thermal_bands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
         return image.addBands(optical_bands, None, True)
     #Function to retrive Landsat multispectral bands
-    def get_optical_data(self, aoi, start_date, end_date, optical_data='L8_SR',
+    def get_multispectral_data(self, aoi, start_date, end_date, optical_data='L8_SR',
                         cloud_cover=30,
                         verbose=True, compute_detailed_stats=True):
         """
@@ -291,10 +291,10 @@ class Reflectance_Data:
         start_date = parse_year_or_date(start_date, is_start=True)
         end_date   = parse_year_or_date(end_date, is_start=False)
 
-        if optical_data not in self.OPTICAL_DATASETS:
-            raise ValueError(f"optical_data must be one of: {list(self.OPTICAL_DATASETS.keys())}")
+        if optical_data not in self.MULTISPECTRAL_DATASETS:
+            raise ValueError(f"optical_data must be one of: {list(self.MULTISPECTRAL_DATASETS.keys())}")
 
-        config = self.OPTICAL_DATASETS[optical_data]
+        config = self.MULTISPECTRAL_DATASETS[optical_data]
 
         #Use verbose to import detailed logging information
         if verbose:
@@ -804,7 +804,11 @@ class final_Image:
         -------
         ee.Image
             Composite image clipped to AOI with original band names (NIR, RED, etc.)
-            
+
+        Reference
+        -------
+        https://developers.google.com/earth-engine/guides/reducers_intro 
+
         Example
         -------
         >>> data_fetcher = Reflectance_Data()
@@ -812,15 +816,15 @@ class final_Image:
         >>> image_processor = final_Image()
         >>> composite = image_processor.get_temporal_composite(collection, aoi, reducer='median')
         """
+        #AOI checks, make sure the data is feature collection
         if isinstance(aoi, ee.FeatureCollection):
             geometry = aoi.geometry()
         else:
             geometry = aoi
         
-        # Get original band names before reduction
+        #Define the original band names (before reduction)
         original_bands = collection.first().bandNames()
-        
-        #Get reducer
+        #Get reducer, more 
         if isinstance(reducer, str):
             reducer_lower = reducer.lower()
             if reducer_lower == 'median':
@@ -839,21 +843,21 @@ class final_Image:
         else:
             ee_reducer = reducer
         
-        # Check collection size - only if verbose to avoid unnecessary getInfo()
+        #Check collection size, only if verbose to avoid unnecessary client side call
         if verbose:
             size = collection.size().getInfo()
             if size == 0:
                 raise ValueError("Collection is empty, cannot create composite")
             self.logger.info(f"Creating {reducer} composite from {size} images")
         
-        # Create composite
+        #Create composite
         if add_band_stats:
-            # Combine multiple reducers
+            #Combine multiple reducers
             composite = collection.reduce(ee.Reducer.median()
                                         .combine(ee.Reducer.stdDev(), '', True)
                                         .combine(ee.Reducer.count(), '', True))
-            # For stats, keep the suffixes but rename main bands
-            # Get band names after reduction
+            #For stats, keep the suffixes but rename main bands
+            #Get band names after reduction
             composite_bands = composite.bandNames()
             
             # Create new names: main bands without suffix, stats bands with suffix
@@ -895,7 +899,7 @@ class final_Image:
         start_date = ee.Date(first_img.get('system:time_start')).format('YYYY-MM-dd')
         end_date = ee.Date(last_img.get('system:time_start')).format('YYYY-MM-dd')
         size_server = collection.size()
-        
+        #composite metadata
         composite = composite.set({
             'composite_start_date': start_date,
             'composite_end_date': end_date,
@@ -908,5 +912,4 @@ class final_Image:
             start_date_str = start_date.getInfo()
             end_date_str = end_date.getInfo()
             self.logger.info(f"Composite created from {start_date_str} to {end_date_str}")
-        
         return composite
