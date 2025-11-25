@@ -14,7 +14,7 @@ logging.basicConfig(
 ## System Response 1.2: Search and Filter Imagery
 class Reflectance_Data:
     """Class for fetching and pre-processing Landsat image collection from Google Earth Engine API."""
-    #Define the optical datasets. The band reflectances used is from Collection 2 Surface Reflectancce Data
+    #Define the optical datasets. The multispectral bands from Collection 2 Surface Reflectancce Data
     MULTISPECTRAL_DATASETS = {
         'L1_RAW': {
             'collection': 'LANDSAT/LM01/C02/T1',
@@ -126,10 +126,10 @@ class Reflectance_Data:
         self.logger.setLevel(log_level)
 
         self.logger.info("ReflectanceData initialized.")
-    
+    #function to check if landsat sensor has thermal data. 
     def has_thermal_capability(self, optical_data):
         """
-        Check if a given optical dataset has corresponding thermal bands.
+        Check if a given optical dataset has corresponding thermal bands. Used during get multispectral data function
         
         Parameters
         ----------
@@ -150,57 +150,58 @@ class Reflectance_Data:
         return thermal_data in self.THERMAL_DATASETS
     #Function to mask clouds, shadow, and cirrus. Using QA Bands
     def mask_landsat_sr(self, image,cloud_conf_thresh=2, shadow_conf_thresh=2, cirrus_conf_thresh=2):
-            """
-            Mask clouds, shadows and cirrus for Landsat Collection 2 SR using QA_PIXEL band.
+        """
+        Mask clouds, shadows and cirrus for Landsat Collection 2 SR using QA_PIXEL band.
                 
-            Parameters:
-            -----------
-            image : ee.Image: Landsat SR image
-            cloud_conf_thresh : int. Cloud confidence threshold (0=None, 1=Low, 2=Med, 3=High)
-            shadow_conf_thresh : int. Shadow confidence threshold (0=None, 1=Low, 2=Med, 3=High)
-            cirrus_conf_thresh : int. Cirrus confidence threshold (0=None, 1=Low, 2=Med, 3=High)
+        Parameters:
+        -----------
+        image : ee.Image: Landsat SR image
+        cloud_conf_thresh : int. Cloud confidence threshold (0=None, 1=Low, 2=Med, 3=High)
+        shadow_conf_thresh : int. Shadow confidence threshold (0=None, 1=Low, 2=Med, 3=High)
+        cirrus_conf_thresh : int. Cirrus confidence threshold (0=None, 1=Low, 2=Med, 3=High)
 
-            Returns:
-            --------
-            ee.Image : Masked image (ee.)
+        Returns:
+        --------
+        ee.Image : Masked image (ee.)
 
-            References
-            --------
-            https://www.usgs.gov/landsat-missions/landsat-collection-2-quality-assessment-bands 
+        References
+        --------
+        https://www.usgs.gov/landsat-missions/landsat-collection-2-quality-assessment-bands 
 
-            Example
-            --------
-            >>> get_landsat = Reflectance_Data()
-            #Implementation on image collection
-            >>> collection = (collection.map(lambda img: get_landsat.mask_landsat_sr(img))
-            #Implementatio on Image
-            >>> masked_image = get_landsat.mask_landsat_sr(image)
-            """
-            qa = image.select('QA_PIXEL')
-            #Deterministic bits
-            #fyi, (bit 3 is set to 1) and so on
-            cloud_bit = 1 << 3
-            shadow_bit = 1 << 4
-            cirrus_bit = 1 << 2
-            
-            cloud_mask = qa.bitwiseAnd(cloud_bit).eq(0)
-            shadow_mask = qa.bitwiseAnd(shadow_bit).eq(0)
-            cirrus_mask = qa.bitwiseAnd(cirrus_bit).eq(0)
-            #Confidence bits ---
-            cloud_conf = qa.rightShift(8).bitwiseAnd(3)     # Bits 8–9
-            shadow_conf = qa.rightShift(10).bitwiseAnd(3)   # Bits 10–11
-            cirrus_conf = qa.rightShift(14).bitwiseAnd(3)   # Bits 14–15
-            #Keep pixels below thresholds
-            conf_mask = (cloud_conf.lt(cloud_conf_thresh)
+        Example
+        --------
+        >>> get_landsat = Reflectance_Data()
+        #Implementation on image collection
+        >>> collection = (collection.map(lambda img: get_landsat.mask_landsat_sr(img))
+        #Implementatio on Image
+        >>> masked_image = get_landsat.mask_landsat_sr(image)
+        """
+        qa = image.select('QA_PIXEL')
+        #Deterministic bits
+        #fyi, (bit 3 is set to 1) and so on
+        cloud_bit = 1 << 3
+        shadow_bit = 1 << 4
+        cirrus_bit = 1 << 2
+        #bitwise operations to get the masks
+        cloud_mask = qa.bitwiseAnd(cloud_bit).eq(0)
+        shadow_mask = qa.bitwiseAnd(shadow_bit).eq(0)
+        cirrus_mask = qa.bitwiseAnd(cirrus_bit).eq(0)
+        #Confidence bits ---
+        cloud_conf = qa.rightShift(8).bitwiseAnd(3)     # Bits 8–9
+        shadow_conf = qa.rightShift(10).bitwiseAnd(3)   # Bits 10–11
+        cirrus_conf = qa.rightShift(14).bitwiseAnd(3)   # Bits 14–15
+        #Keep pixels below thresholds
+        conf_mask = (cloud_conf.lt(cloud_conf_thresh)
                         .And(shadow_conf.lt(shadow_conf_thresh))
                         .And(cirrus_conf.lt(cirrus_conf_thresh)))
-            #Final mask
-            final_mask = cloud_mask.And(shadow_mask).And(cirrus_mask).And(conf_mask)
-            return image.updateMask(final_mask).copyProperties(image, image.propertyNames())
+        #Final mask
+        final_mask = cloud_mask.And(shadow_mask).And(cirrus_mask).And(conf_mask)
+        return image.updateMask(final_mask).copyProperties(image, image.propertyNames())
     #Functions to rename Landsat bands 
     def rename_landsat_bands(self, image, sensor_type):
         """
         Standardize Landsat Surface Reflectance (SR) band names based on sensor type. From 'SR_B*' or 'B*' to 'NIR', 'GREEN', etc.
+        Used in get multispectral data function
 
         Parameters
         ----------
@@ -212,8 +213,10 @@ class Reflectance_Data:
         ee.Image : Image with standardized band names
 
         Example
-        --------
-
+        -------
+        >>> rd = Reflectance_Data()
+        >>> img8 = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044034_20200716')
+        >>> renamed8 = rd.rename_landsat_bands(img8, 'L8')
         """
         if sensor_type in ['L4','L5', 'L7']:
             # Landsat 5/7 SR bands
@@ -248,9 +251,20 @@ class Reflectance_Data:
         Returns
         -------
         ee.Image : Image with floating point, corresponding to surface reflectance value
+        
+        References
+        -------
+        https://www.usgs.gov/faqs/how-do-i-use-a-scale-factor-landsat-level-2-science-products
+        
+        Example
+        --------
+        >>> get_landsat = Reflectance_Data()
+        #Implementation on image collection
+        >>> collection = (collection.map(lambda img: get_landsat.apply_scale_factors(img))
+        #Implementatio on Image
+        >>> masked_image = get_landsat.apply_scale_factors(image)
         """        
         optical_bands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
-        #thermal_bands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
         return image.addBands(optical_bands, None, True)
     #Function to retrive Landsat multispectral bands
     def get_multispectral_data(self, aoi, start_date, end_date, optical_data='L8_SR',
@@ -275,6 +289,15 @@ class Reflectance_Data:
         -------
         tuple : (ee.ImageCollection, dict)
             Filtered and preprocessed image collection with statistics.
+        
+        References
+        -------
+        https://developers.google.com/earth-engine/datasets/catalog/landsat
+
+        Example
+        --------
+        >>> get_landsat = Reflectance_Data()
+        >>> collection, stats = get_landsat.get_multispectral_data(aoi, 2020, 2023, 'L8_SR', 30, True, True)
         """
         #Helper function so that the user only input year or specific date range
         def parse_year_or_date(date_input, is_start=True):
@@ -511,7 +534,40 @@ class Reflectance_Stats:
         self.logger.info("Reflectance Stats initialized.")
     def get_collection_statistics(self, collection, compute_stats=True, print_report=False):
         """
-        Get comprehensive statistics about an image collection.
+        Get comprehensive statistics about an Earth Engine image collection retrival.
+
+        Parameters
+        ----------
+        collection : ee.ImageCollection
+            The Earth Engine ImageCollection (from get multispectral function).
+        compute_stats : bool, optional
+            If True (default) the function will call ``getInfo()`` to compute
+            detailed statistics (counts, cloud cover numbers, dates, WRS tiles).
+            If False the function returns a minimal, server-side friendly
+            summary object and avoids client-side network calls.
+        print_report : bool, optional
+            If True the function will print formatted report of collection retrival
+            (default: False).
+
+        Returns
+        -------
+        dict
+            A dictionary containing either detailed statistics (when
+            ``compute_stats=True``) or a lightweight summary with the server
+            side objects (when ``compute_stats=False``). Typical keys when
+            detailed stats are returned:
+            - 'total_images'
+            - 'date_range'
+            - 'cloud_cover' (dict with min/max/mean/values)
+            - 'path_row_tiles'
+            - 'unique_tiles'
+            - 'individual_dates'
+            - 'Scene_ids'
+
+        Example
+        -------
+        >>> stats = Reflectance_Stats().get_collection_statistics(collection, compute_stats=True)
+        >>> print(stats['total_images'], stats['date_range'])
         """
         #Get the number of image used 
         try:
@@ -703,7 +759,12 @@ class final_Image:
         -------
         ee.Image
             Quality mosaic image clipped to AOI with best available pixels
-            
+        
+        Reference
+        -------
+        https://developers.google.com/earth-engine/guides/ic_composite_mosaic
+        https://developers.google.com/earth-engine/apidocs/ee-imagecollection-qualitymosaic
+
         Example
         -------
         >>> data_fetcher = Reflectance_Data()
