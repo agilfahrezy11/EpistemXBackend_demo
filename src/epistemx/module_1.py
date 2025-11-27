@@ -266,9 +266,123 @@ class Reflectance_Data:
         """        
         optical_bands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
         return image.addBands(optical_bands, None, True)
+    #Add new code for calculating cloud cover within AOI
+    def add_aoi_cloud_cover(self, img, aoi, scale=90, max_pixels=1e9,
+                            cloud_conf_thresh=2, shadow_conf_thresh=2, cirrus_conf_thresh=2,
+                            debug=False):
+        """
+        Calculate cloud/shadow/cirrus coverage percentage within AOI.
+        Uses the same QA_PIXEL logic as mask_landsat_sr() for consistency.
+        
+        Parameters
+        ----------
+        img : ee.Image
+            Landsat image with QA_PIXEL band
+        aoi : ee.Geometry or ee.FeatureCollection
+            Area of interest for cloud calculation
+        scale : int
+            Pixel scale for computation in meters (default: 90m for efficiency)
+            Use 30m for accurate results on small areas, 90m+ for large regions
+        max_pixels : float
+            Maximum number of pixels to process (default: 1e9)
+        cloud_conf_thresh : int
+            Cloud confidence threshold (0=None, 1=Low, 2=Med, 3=High)
+        shadow_conf_thresh : int
+            Shadow confidence threshold (0=None, 1=Low, 2=Med, 3=High)
+        cirrus_conf_thresh : int
+            Cirrus confidence threshold (0=None, 1=Low, 2=Med, 3=High)
+        debug : bool
+            If True, print debug information about cloud calculation (default: False)
+        
+        Returns
+        -------
+        ee.Image
+            Input image with added 'CLOUDY_PERC_AOI' property
+        
+        Example
+        -------
+        >>> collection = collection.map(lambda img: optical_reflectance.add_aoi_cloud_cover(img, aoi, scale=90))
+        >>> collection = collection.filter(ee.Filter.lt('CLOUDY_PERC_AOI', 30))
+        """
+        # Convert FeatureCollection to geometry if needed
+        geometry = aoi.geometry() if isinstance(aoi, ee.FeatureCollection) else aoi
+        
+        # Get QA band and clip to AOI
+        qa = img.select('QA_PIXEL').clip(geometry)
+        
+        # === SAME LOGIC AS mask_landsat_sr() ===
+        # Deterministic bits
+        cloud_bit = 1 << 3
+        shadow_bit = 1 << 4
+        cirrus_bit = 1 << 2
+        
+        # Bitwise operations to get the masks
+        cloud_mask = qa.bitwiseAnd(cloud_bit).eq(0)
+        shadow_mask = qa.bitwiseAnd(shadow_bit).eq(0)
+        cirrus_mask = qa.bitwiseAnd(cirrus_bit).eq(0)
+        
+        # Confidence bits
+        cloud_conf = qa.rightShift(8).bitwiseAnd(3)
+        shadow_conf = qa.rightShift(10).bitwiseAnd(3)
+        cirrus_conf = qa.rightShift(14).bitwiseAnd(3)
+        
+        # Keep pixels below thresholds
+        conf_mask = (cloud_conf.lt(cloud_conf_thresh)
+                    .And(shadow_conf.lt(shadow_conf_thresh))
+                    .And(cirrus_conf.lt(cirrus_conf_thresh)))
+        
+        # Final clear mask (1 = clear, 0 = cloudy/masked)
+        clear_mask_aoi = cloud_mask.And(shadow_mask).And(cirrus_mask).And(conf_mask)
+        # === END SAME LOGIC ===
+        
+        # Calculate areas
+        pixel_area = ee.Image.pixelArea()
+        
+        # Total area in AOI
+        total_area = pixel_area.reduceRegion(
+            reducer=ee.Reducer.sum(),
+            geometry=geometry,
+            scale=scale,
+            maxPixels=max_pixels,
+            bestEffort=True,
+            tileScale=4
+        )
+        
+        # Clear (unmasked) area - rename band to avoid confusion
+        clear_area_img = clear_mask_aoi.multiply(pixel_area).rename('clear_area')
+        clear_area = clear_area_img.reduceRegion(
+            reducer=ee.Reducer.sum(),
+            geometry=geometry,
+            scale=scale,
+            maxPixels=max_pixels,
+            bestEffort=True,
+            tileScale=4
+        )
+        
+        # Calculate cloud percentage with proper null handling
+        total = ee.Number(total_area.get('area')).max(1)  # Avoid division by zero
+        clear = ee.Number(clear_area.get('clear_area')).max(0)  # Default to 0 if null
+        
+        clear_percent = clear.multiply(100).divide(total)
+        cloud_percent = ee.Number(100).subtract(clear_percent).round()
+        
+        # Clamp between 0 and 100
+        cloud_percent = cloud_percent.max(0).min(100)
+        
+        # Debug logging if requested
+        if debug:
+            scene_id = img.get('system:index')
+            cloud_val = cloud_percent.getInfo()
+            total_val = total.getInfo()
+            clear_val = clear.getInfo()
+            self.logger.info(f"Scene {scene_id.getInfo()}: AOI Cloud={cloud_val}%, Total={total_val/1e6:.2f}km², Clear={clear_val/1e6:.2f}km²")
+        
+        return img.set('CLOUDY_PERC_AOI', cloud_percent)
+
+
     #Function to retrive Landsat multispectral bands
     def get_multispectral_data(self, aoi, start_date, end_date, optical_data='L8_SR',
-                        cloud_cover=30,
+                        cloud_cover=30, aoi_cloud_cover=None, aoi_cloud_scale=90,
                         verbose=True, compute_detailed_stats=True):
         """
         Get optical image collection for Landsat 1-9 SR data with detailed information logging.
@@ -280,6 +394,11 @@ class Reflectance_Data:
         end_date : str. End date in format 'YYYY-MM-DD' or year.
         optical_data : str. Dataset type: i.e 'L5_SR', 'L7_SR', 'L8_SR', 'L9_SR'.
         cloud_cover : int. Maximum cloud cover percentage on land (default: 30).
+        aoi_cloud_cover : int or None. Maximum cloud cover percentage within AOI (default: None).
+            If None, AOI-specific cloud filtering is skipped (recommended for large AOIs).
+            If set (e.g., 50), filters images based on cloud cover within the AOI boundary.
+        aoi_cloud_scale : int. Pixel scale in meters for AOI cloud calculation (default: 90).
+            Use 30m for small areas, 90m+ for large regions to avoid computation limits.
         verbose : bool. Print detailed information about the collection (default: True).
         compute_detailed_stats : bool
             If True, compute detailed statistics 
@@ -298,6 +417,9 @@ class Reflectance_Data:
         --------
         >>> get_landsat = Reflectance_Data()
         >>> collection, stats = get_landsat.get_multispectral_data(aoi, 2020, 2023, 'L8_SR', 30, True, True)
+        >>> # With AOI cloud filtering
+        >>> collection, stats = get_landsat.get_multispectral_data(aoi, 2020, 2023, 'L8_SR', 
+        ...                                                         cloud_cover=30, aoi_cloud_cover=50)
         """
         #Helper function so that the user only input year or specific date range
         def parse_year_or_date(date_input, is_start=True):
@@ -324,6 +446,8 @@ class Reflectance_Data:
             self.logger.info(f"Starting data fetch for {config['description']}")
             self.logger.info(f"Date range: {start_date} to {end_date}")
             self.logger.info(f"Cloud cover threshold: {cloud_cover}%")
+            if aoi_cloud_cover is not None:
+                self.logger.info(f"AOI cloud cover threshold: {aoi_cloud_cover}% (scale: {aoi_cloud_scale}m)")
             if not compute_detailed_stats:
                 self.logger.info("detailed statistics will not be computed")
 
@@ -331,31 +455,14 @@ class Reflectance_Data:
         initial_collection = (ee.ImageCollection(config['collection'])
                             .filterBounds(aoi)
                             .filterDate(start_date, end_date))
-        #Compute cloud within the area of interest (produce additional processing time)
-        '''
-        def add_aoi_cloud(img):
-            qa = img.select('QA_PIXEL')
-            cloud_mask = qa.bitwiseAnd(1 << 3).Or(qa.bitwiseAnd(1<<4))
-            total = ee.Number(cloud_mask.reduceRegion(
-                reducer=ee.Reducer.count(), geometry=aoi, scale=30, maxPixels=1e9
-            ).values().get(0))
-            cloudy = ee.Number(cloud_mask.reduceRegion(
-                reducer=ee.Reducer.sum(), geometry=aoi, scale=30, maxPixels=1e9
-            ).values().get(0))
-            cloud_perc = cloudy.divide(total).multiply(100)
-            return img.set({'CLOUDY_PERC_AOI': cloud_perc})
         
-        #Apply the AOI cloud percentage to the image collection
-        initial_collection = initial_collection.map(add_aoi_cloud)
-        '''
-        #initial_stats = self.get_collection_statistics(initial_collection, compute_detailed_stats)
         stats_object = Reflectance_Stats()
         initial_stats = stats_object.get_collection_statistics(initial_collection, compute_detailed_stats)
         if verbose and compute_detailed_stats and initial_stats.get('total_images', 0) > 0:
             self.logger.info(f"Initial collection (before cloud filtering): {initial_stats['total_images']} images")
             self.logger.info(f"Date range of available images: {initial_stats['date_range']}")
 
-        #Collection after cloud cover filter
+        #Collection after scene-level cloud cover filter
         collection = initial_collection.filter(ee.Filter.lt(config['cloud_property'], cloud_cover))
         filtered_stats = stats_object.get_collection_statistics(collection, compute_detailed_stats)
         #Computing image statistics
@@ -386,7 +493,37 @@ class Reflectance_Data:
         elif verbose:
             self.logger.info("Filtered collection created (use compute_detailed_stats=True for more information)")
 
-        #Apply masking and band renaming to image collection after filtering
+        #Optional: Apply AOI-specific cloud cover filtering
+        aoi_filtered_stats = None
+        if aoi_cloud_cover is not None:
+            if verbose:
+                self.logger.info(f"Computing cloud cover within AOI (this may take time for large areas)...")
+            
+            try:
+                #Apply cloud cover calculation (needs original QA_PIXEL before masking)
+                collection = collection.map(lambda img: self.add_aoi_cloud_cover(
+                    img, aoi, scale=aoi_cloud_scale
+                ))
+                
+                #Filter by AOI cloud cover
+                collection = collection.filter(ee.Filter.lt('CLOUDY_PERC_AOI', aoi_cloud_cover))
+                
+                #Get stats after AOI filtering
+                aoi_filtered_stats = stats_object.get_collection_statistics(collection, compute_detailed_stats)
+                
+                if verbose and compute_detailed_stats:
+                    if aoi_filtered_stats.get('total_images', 0) > 0:
+                        self.logger.info(f"After AOI cloud filtering (<{aoi_cloud_cover}%): {aoi_filtered_stats['total_images']} images")
+                    else:
+                        self.logger.warning(f"No images found with AOI cloud cover < {aoi_cloud_cover}%")
+                        self.logger.info("Consider increasing aoi_cloud_cover threshold or setting it to None")
+            
+            except Exception as e:
+                self.logger.warning(f"AOI cloud filtering failed: {str(e)}")
+                self.logger.info("Continuing without AOI-specific cloud filtering")
+                aoi_filtered_stats = {'error': str(e), 'skipped': True}
+        
+        #Apply masking and band renaming to image collection after all filtering
         collection = (collection
                     .map(lambda img: self.mask_landsat_sr(img))
                     .map(lambda img: self.apply_scale_factors(img))
@@ -398,8 +535,11 @@ class Reflectance_Data:
             'sensor': config['sensor'],
             'date_range_requested': f"{start_date} to {end_date}",
             'cloud_cover_threshold': cloud_cover,
+            'aoi_cloud_cover_threshold': aoi_cloud_cover,
+            'aoi_cloud_scale': aoi_cloud_scale if aoi_cloud_cover is not None else None,
             'initial_collection': initial_stats,
             'filtered_collection': filtered_stats,
+            'aoi_filtered_collection': aoi_filtered_stats,
             'detailed_stats_computed': compute_detailed_stats
         }
     #TOA-based Thermal Bands
@@ -559,6 +699,7 @@ class Reflectance_Stats:
             - 'total_images'
             - 'date_range'
             - 'cloud_cover' (dict with min/max/mean/values)
+            - 'aoi_cloud_cover' (dict with min/max/mean/values, if available)
             - 'path_row_tiles'
             - 'unique_tiles'
             - 'individual_dates'
@@ -583,6 +724,17 @@ class Reflectance_Stats:
                     #add lines to identify collection ID
                     scene_id = collection.aggregate_array('system:index').getInfo()
                     date_range = f"{min(dates_readable)} to {max(dates_readable)}"
+                    
+                    #Check if AOI cloud cover property exists
+                    aoi_cloud_values = None
+                    try:
+                        first_img = collection.first()
+                        has_aoi_cloud = first_img.propertyNames().contains('CLOUDY_PERC_AOI').getInfo()
+                        if has_aoi_cloud:
+                            aoi_cloud_values = collection.aggregate_array('CLOUDY_PERC_AOI').getInfo()
+                    except Exception:
+                        pass
+                    
                     #Get information regarding image's WRS path and row
                     try:
                         first_img = collection.first()
@@ -606,6 +758,12 @@ class Reflectance_Stats:
                             'mean': sum(cloud_values) / len(cloud_values) if cloud_values else None,
                             'values': cloud_values
                         },
+                        'aoi_cloud_cover': {
+                            'min': min(aoi_cloud_values) if aoi_cloud_values else None,
+                            'max': max(aoi_cloud_values) if aoi_cloud_values else None,
+                            'mean': sum(aoi_cloud_values) / len(aoi_cloud_values) if aoi_cloud_values else None,
+                            'values': aoi_cloud_values
+                        } if aoi_cloud_values else None,
                         'path_row_tiles': path_rows,
                         'unique_tiles': len(path_rows),
                         'individual_dates': dates_readable,
@@ -622,6 +780,7 @@ class Reflectance_Stats:
                         'total_images': 0,
                         'date_range': "No images found",
                         'cloud_cover': {'min': None, 'max': None, 'mean': None, 'values': []},
+                        'aoi_cloud_cover': None,
                         'path_row_tiles': [],
                         'unique_tiles': 0,
                         'individual_dates': [],
@@ -672,6 +831,19 @@ class Reflectance_Stats:
         else:
             print("No cloud cover data available")
         print()
+        
+        #AOI Cloud Cover Statistics (if available)
+        if stats.get('aoi_cloud_cover') is not None:
+            print("AOI Cloud Cover Statistics:")
+            print("-" * 30)
+            aoi_cc = stats['aoi_cloud_cover']
+            if aoi_cc['mean'] is not None:
+                print(f"Average AOI Cloud Cover: {aoi_cc['mean']:.1f}%")
+                print(f"Minimum AOI Cloud Cover: {aoi_cc['min']:.1f}%")
+                print(f"Maximum AOI Cloud Cover: {aoi_cc['max']:.1f}%")
+            else:
+                print("No AOI cloud cover data available")
+            print()
         #WRS Path/Row Information
         if stats['path_row_tiles']:
             print("WRS Path/Row Tiles:")

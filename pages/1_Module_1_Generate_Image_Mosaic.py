@@ -272,7 +272,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
 
         #(System Response 1.2: Search and Filter Imagery)
         reflectance = Reflectance_Data()
-        collection, meta = reflectance.get_optical_data(
+        collection, meta = reflectance.get_multispectral_data(
             aoi=aoi,
             start_date=start_date,
             end_date=end_date,
