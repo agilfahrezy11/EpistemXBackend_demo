@@ -1,0 +1,160 @@
+OAUTH2 AUTHENTICATION FLOW - SEQUENCE DIAGRAM
+==============================================
+
+User          Frontend         Backend         Google          Earth Engine    User's Drive
+ |               |                |               |                  |              |
+ |               |                |               |                  |              |
+ |--Load Page--->|                |               |                  |              |
+ |               |                |               |                  |              |
+ |               |--Load gapi.js->|               |                  |              |
+ |               |<-Script--------|               |                  |              |
+ |               |                |               |                  |              |
+ |               |--Init Auth2------------------->|                  |              |
+ |               |   (Client ID)                  |                  |              |
+ |               |<--Auth Object------------------|                  |              |
+ |               |                |               |                  |              |
+ |               |  [Show "Sign in with Google"]  |                  |              |
+ |               |                |               |                  |              |
+ |--Click Sign-->|                |               |                  |              |
+ |               |                |               |                  |              |
+ |               |--grantOfflineAccess()--------->|                  |              |
+ |               |                |               |                  |              |
+ |               |                |          [OAuth Popup]           |              |
+ |<--------------+----------------+--Consent Screen                  |              |
+ |               |                |               |                  |              |
+ |--Allow------->|                |               |                  |              |
+ |               |                |               |                  |              |
+ |               |<--Auth Code--------------------|                  |              |
+ |               |   {code: "4/0AY..."}           |                  |              |
+ |               |                |               |                  |              |
+ |               |--POST /oauth2callback--------->|                  |              |
+ |               |   {code: "4/0AY..."}           |                  |              |
+ |               |                |               |                  |              |
+ |               |                |--Exchange Code+--------------->  |              |
+ |               |                |  (Client ID + Secret)            |              |
+ |               |                |               |                  |              |
+ |               |                |<--Access Token+Refresh Token-----|              |
+ |               |                |               |                  |              |
+ |               |                |--Get User Info---------------->  |              |
+ |               |                |<--Email + User ID---------------|              |
+ |               |                |               |                  |              |
+ |               |                | [Store in Session]               |              |
+ |               |                | - email                          |              |
+ |               |                | - user_id                        |              |
+ |               |                | - credentials (JSON)             |              |
+ |               |                |               |                  |              |
+ |               |<--Success------|               |                  |              |
+ |               |                |               |                  |              |
+ |               | [Update Vuex: serverSignedIn=true]               |              |
+ |               |                |               |                  |              |
+ |               |  [Show "Drive export GeoTIFF" enabled]           |              |
+ |               |                |               |                  |              |
+ |               |                |               |                  |              |
+ |--Click Export>|                |               |                  |              |
+ |               |                |               |                  |              |
+ |               |--POST /api/export------------->|                  |              |
+ |               |   (training data)              |                  |              |
+ |               |                |               |                  |              |
+ |               |                | [Store data in Datastore]        |              |
+ |               |                | [Queue background task]          |              |
+ |               |                | [Pass credentials to worker]     |              |
+ |               |                |               |                  |              |
+ |               |<--OK (immediate)---------------|                  |              |
+ |               |                |               |                  |              |
+ |               | [Start polling every 10s]      |                  |              |
+ |               |                |               |                  |              |
+ |               |                |               |                  |              |
+ |               |                | === BACKGROUND WORKER ===        |              |
+ |               |                |               |                  |              |
+ |               |                |--Classify Region--------------->|              |
+ |               |                |               |                  |              |
+ |               |                |--Export Image------------------>|              |
+ |               |                |   (to temp Drive)                |              |
+ |               |                |               |                  |              |
+ |               |                |               |              [Export to temp]   |
+ |               |                |               |                  |              |
+ |               |                |<--Export Complete---------------|              |
+ |               |                |               |                  |              |
+ |               |                |--Get Temp Files (Service Acct)->|              |
+ |               |                |<--File IDs----------------------|              |
+ |               |                |               |                  |              |
+ |               |                |--Grant User Access------------->|              |
+ |               |                |   (to temp files)                |              |
+ |               |                |               |                  |              |
+ |               |                | [Recreate user credentials]      |              |
+ |               |                | [Create DriveHelper with user creds]           |
+ |               |                |               |                  |              |
+ |               |                |--Create Folder (User Creds)-------------------->|
+ |               |                |<--Folder ID-----------------------------------------|
+ |               |                |               |                  |              |
+ |               |                |--Create Metadata CSV--------------------------->|
+ |               |                |               |                  |              |
+ |               |                |--Copy GeoTIFF---------------------------------->|
+ |               |                |   (from temp to user folder)     |              |
+ |               |                |               |                  |              |
+ |               |                |--Delete Temp Files------------->|              |
+ |               |                |               |                  |              |
+ |               |                | [Update status: COMPLETED]       |              |
+ |               |                |               |                  |              |
+ |               |                |               |                  |              |
+ |               |--GET /api/exportstatus-------->|                  |              |
+ |               |<--IN_PROGRESS------------------|                  |              |
+ |               |                |               |                  |              |
+ |               | [Wait 10 seconds]              |                  |              |
+ |               |                |               |                  |              |
+ |               |--GET /api/exportstatus-------->|                  |              |
+ |               |<--COMPLETED--------------------|                  |              |
+ |               |                |               |                  |              |
+ |<-Toast: "Drive download completed!"            |                  |              |
+ |               |                |               |                  |              |
+ |               |                |               |                  |              |
+ |--Check Drive->|                |               |                  |              |
+ |               |                |               |                  |              |
+ |               |                |               |                  |    [Files in Drive]
+ |               |                |               |                  |    - REMAP Export Folder/
+ |               |                |               |                  |      - export.tif
+ |               |                |               |                  |      - metadata.csv
+
+
+KEY POINTS:
+===========
+
+1. AUTHORIZATION CODE FLOW
+   - Frontend gets authorization code from Google
+   - Backend exchanges code for tokens
+   - Tokens stored server-side (secure)
+
+2. TWO TYPES OF CREDENTIALS
+   - Service Account: For EE and temp Drive operations
+   - User OAuth2: For accessing user's personal Drive
+
+3. OFFLINE ACCESS
+   - Refresh token allows backend to work without user present
+   - Essential for long-running export tasks
+
+4. SESSION MANAGEMENT
+   - Credentials stored in server session (GAE Datastore)
+   - Automatic token refresh on every request
+   - Session cleared if refresh fails
+
+5. BACKGROUND TASK
+   - Export queued immediately (avoids 60s timeout)
+   - Worker uses stored credentials
+   - Frontend polls for status updates
+
+6. DRIVE OPERATIONS
+   - Export to temp location (service account)
+   - Grant user access to temp files
+   - Copy to user's Drive (user credentials)
+   - Cleanup temp files
+
+
+SECURITY:
+=========
+
+✓ Credentials never exposed to frontend
+✓ Tokens stored server-side only
+✓ HTTPS required for all OAuth flows
+✓ Limited scopes (Drive + email only)
+✓ Refresh tokens can be revoked by user
+✓ Session backed by encrypted datastore
