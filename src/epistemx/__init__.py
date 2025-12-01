@@ -16,7 +16,18 @@ from .ee_config import (
     setup_earth_engine,
     reset_ee_initialization,
     get_auth_url,
-    authenticate_with_code
+    authenticate_with_code,
+    export_to_drive_with_oauth,
+    check_export_task_status,
+    wait_for_task_completion,
+    get_export_metadata
+)
+
+from .drive_utils import (
+    DriveAuthManager,
+    DriveHelper,
+    ensure_valid_credentials,
+    SCOPES as DRIVE_SCOPES
 )
 import os
 import warnings
@@ -184,6 +195,7 @@ __author__ = "EpistemX Team"
 
 # Make key functions available at package level
 __all__ = [
+    # Earth Engine authentication
     'initialize_earth_engine',
     'ensure_ee_initialized', 
     'is_ee_initialized',
@@ -195,5 +207,15 @@ __all__ = [
     'reset_ee_initialization',
     'auto_initialize',
     'get_auth_url',
-    'authenticate_with_code'
+    'authenticate_with_code',
+    # Earth Engine export
+    'export_to_drive_with_oauth',
+    'check_export_task_status',
+    'wait_for_task_completion',
+    'get_export_metadata',
+    # Google Drive utilities
+    'DriveAuthManager',
+    'DriveHelper',
+    'ensure_valid_credentials',
+    'DRIVE_SCOPES'
 ]

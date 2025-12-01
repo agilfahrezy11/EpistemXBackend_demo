@@ -4,7 +4,10 @@ Earth Engine Configuration Module
 Centralized Earth Engine authentication and initialization for the epistemx package.
 This module ensures Earth Engine is properly set up before any GEE operations.
 
-Supports both service account authentication and manual user authentication.
+Supports:
+- Service account authentication (for Earth Engine API access)
+- Manual user authentication (OAuth2 for personal accounts)
+- Google Drive export capabilities (OAuth2 for user's Drive)
 """
 
 import ee
@@ -451,3 +454,213 @@ def setup_earth_engine(
         return authenticate_manually(project=project)
     
     return False
+
+
+# ============================================================================
+# GOOGLE DRIVE EXPORT SUPPORT (OAuth2)
+# ============================================================================
+
+def export_to_drive_with_oauth(
+    image: ee.Image,
+    description: str,
+    folder: str,
+    file_name_prefix: str,
+    region: ee.Geometry,
+    scale: int = 30,
+    max_pixels: int = int(1e10),
+    file_format: str = 'GeoTIFF',
+    credentials_dict: Optional[Dict[str, Any]] = None
+) -> ee.batch.Task:
+    """
+    Export Earth Engine image to Google Drive using OAuth2 credentials.
+    
+    This function creates an Earth Engine export task that will export
+    the image to the authenticated user's Google Drive.
+    
+    Parameters
+    ----------
+    image : ee.Image
+        Earth Engine image to export
+    description : str
+        Task description
+    folder : str
+        Drive folder name (will be created if doesn't exist)
+    file_name_prefix : str
+        Prefix for exported file name
+    region : ee.Geometry
+        Region to export
+    scale : int, default 30
+        Export resolution in meters
+    max_pixels : int, default 1e10
+        Maximum number of pixels to export
+    file_format : str, default 'GeoTIFF'
+        Export format ('GeoTIFF', 'TFRecord', etc.)
+    credentials_dict : dict, optional
+        OAuth2 credentials dictionary (if None, uses default EE credentials)
+        
+    Returns
+    -------
+    ee.batch.Task
+        Export task object
+        
+    Example
+    -------
+    >>> from epistemx.ee_config import export_to_drive_with_oauth
+    >>> task = export_to_drive_with_oauth(
+    ...     image=classified_image,
+    ...     description='Land Cover Export',
+    ...     folder='REMAP_Exports',
+    ...     file_name_prefix='lulc_2024',
+    ...     region=study_area,
+    ...     scale=30
+    ... )
+    >>> task.start()
+    >>> print(f"Task ID: {task.id}")
+    """
+    try:
+        # Create export task
+        task = ee.batch.Export.image.toDrive(
+            image=image,
+            description=description,
+            folder=folder,
+            fileNamePrefix=file_name_prefix,
+            scale=scale,
+            region=region.getInfo()['coordinates'] if hasattr(region, 'getInfo') else region,
+            maxPixels=max_pixels,
+            fileFormat=file_format
+        )
+        
+        logger.info(f"Created export task: {description}")
+        return task
+        
+    except Exception as e:
+        logger.error(f"Failed to create export task: {e}")
+        raise
+
+
+def check_export_task_status(task_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Check the status of an Earth Engine export task.
+    
+    Parameters
+    ----------
+    task_id : str
+        Task ID to check
+        
+    Returns
+    -------
+    dict or None
+        Task status dictionary, or None if task not found
+        
+    Example
+    -------
+    >>> status = check_export_task_status(task.id)
+    >>> print(f"State: {status['state']}")
+    """
+    try:
+        tasks = ee.batch.Task.list()
+        for task in tasks:
+            if task.id == task_id:
+                return task.status()
+        
+        logger.warning(f"Task not found: {task_id}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Failed to check task status: {e}")
+        return None
+
+
+def wait_for_task_completion(
+    task: ee.batch.Task,
+    check_interval: int = 10,
+    max_wait: int = 3600
+) -> str:
+    """
+    Wait for an Earth Engine task to complete.
+    
+    Parameters
+    ----------
+    task : ee.batch.Task
+        Task to monitor
+    check_interval : int, default 10
+        Seconds between status checks
+    max_wait : int, default 3600
+        Maximum seconds to wait
+        
+    Returns
+    -------
+    str
+        Final task state ('COMPLETED', 'FAILED', 'CANCELLED', or 'TIMEOUT')
+        
+    Example
+    -------
+    >>> task.start()
+    >>> final_state = wait_for_task_completion(task)
+    >>> if final_state == 'COMPLETED':
+    ...     print("Export successful!")
+    """
+    import time
+    
+    elapsed = 0
+    
+    while elapsed < max_wait:
+        status = task.status()
+        state = status['state']
+        
+        if state in ['COMPLETED', 'FAILED', 'CANCELLED']:
+            logger.info(f"Task {task.id} finished with state: {state}")
+            return state
+        
+        time.sleep(check_interval)
+        elapsed += check_interval
+    
+    logger.warning(f"Task {task.id} timed out after {max_wait} seconds")
+    return 'TIMEOUT'
+
+
+def get_export_metadata(
+    task: ee.batch.Task,
+    training_data: Optional[Dict] = None,
+    classification_params: Optional[Dict] = None
+) -> Dict[str, Any]:
+    """
+    Generate metadata for an export task.
+    
+    Parameters
+    ----------
+    task : ee.batch.Task
+        Export task
+    training_data : dict, optional
+        Training data information
+    classification_params : dict, optional
+        Classification parameters
+        
+    Returns
+    -------
+    dict
+        Metadata dictionary
+        
+    Example
+    -------
+    >>> metadata = get_export_metadata(task, training_data, params)
+    >>> import json
+    >>> with open('metadata.json', 'w') as f:
+    ...     json.dump(metadata, f, indent=2)
+    """
+    import datetime
+    
+    metadata = {
+        'task_id': task.id,
+        'description': task.config.get('description', 'Unknown'),
+        'export_time': datetime.datetime.utcnow().isoformat(),
+        'status': task.status()
+    }
+    
+    if training_data:
+        metadata['training_data'] = training_data
+    
+    if classification_params:
+        metadata['classification_params'] = classification_params
+    
+    return metadata
