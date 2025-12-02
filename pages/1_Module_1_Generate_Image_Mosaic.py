@@ -13,6 +13,7 @@ import geemap.foliumap as geemap
 import geopandas as gpd
 from epistemx.module_1 import Reflectance_Data, Reflectance_Stats
 from epistemx.shapefile_utils import shapefile_validator, EE_converter
+from epistemx import DriveAuthManager, DriveHelper, ensure_valid_credentials
 import tempfile
 import zipfile
 import os
@@ -63,6 +64,10 @@ if 'gdf' not in st.session_state:
     st.session_state.gdf = None
 if 'export_tasks' not in st.session_state:
     st.session_state.export_tasks = []
+if 'drive_credentials' not in st.session_state:
+    st.session_state.drive_credentials = None
+if 'drive_user_email' not in st.session_state:
+    st.session_state.drive_user_email = None
 
 #Task status caching to reduce API calls
 #Lesson learn from multiple exports, since it conflict between user session state
@@ -435,6 +440,123 @@ else:
 #check if the session state is not empty
 if st.session_state.composite is not None and st.session_state.aoi is not None:
     st.subheader("Export Imagery to Google Drive")
+    
+    # Check Drive authentication status
+    drive_authenticated = False
+    if st.session_state.drive_credentials:
+        # Ensure credentials are still valid
+        updated_creds = ensure_valid_credentials(st.session_state.drive_credentials)
+        if updated_creds:
+            st.session_state.drive_credentials = updated_creds
+            drive_authenticated = True
+        else:
+            st.session_state.drive_credentials = None
+            st.session_state.drive_user_email = None
+    
+    # Inline Drive Authentication Section
+    if not drive_authenticated:
+        st.info("🔐 **Authenticate with Google Drive to enable exports**")
+        
+        # Check for OAuth client secrets file
+        oauth_secrets_file = None
+        possible_locations = [
+            'secrets/oauth_client_secret.json',
+            'auth/oauth_client_secret.json',
+            'oauth_client_secret.json',
+            '.streamlit/secrets/oauth_client_secret.json'
+        ]
+        
+        for location in possible_locations:
+            if os.path.exists(location):
+                oauth_secrets_file = location
+                break
+        
+        if not oauth_secrets_file:
+            with st.expander("⚙️ Setup OAuth Credentials (First Time Only)", expanded=False):
+                st.markdown("""
+                **Quick Setup:**
+                1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+                2. Enable Google Drive API
+                3. Create OAuth2 credentials (Web application)
+                4. Add redirect URI: `http://localhost:7860`
+                5. Enter credentials below
+                """)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    client_id = st.text_input("Client ID:", key="oauth_client_id")
+                with col2:
+                    client_secret = st.text_input("Client Secret:", type="password", key="oauth_client_secret")
+                
+                if st.button("💾 Save Credentials", type="secondary"):
+                    if client_id and client_secret:
+                        oauth_config = {
+                            "web": {
+                                "client_id": client_id,
+                                "client_secret": client_secret,
+                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                                "token_uri": "https://oauth2.googleapis.com/token",
+                                "redirect_uris": ["http://localhost:7860"]
+                            }
+                        }
+                        os.makedirs('secrets', exist_ok=True)
+                        oauth_secrets_file = 'secrets/oauth_client_secret.json'
+                        with open(oauth_secrets_file, 'w') as f:
+                            json.dump(oauth_config, f, indent=2)
+                        st.success("✅ Credentials saved!")
+                        st.rerun()
+                    else:
+                        st.error("Please provide both Client ID and Client Secret")
+            st.stop()
+        
+        # Handle OAuth callback
+        query_params = st.query_params
+        if 'code' in query_params:
+            with st.spinner("Completing authentication..."):
+                try:
+                    with open(oauth_secrets_file, 'r') as f:
+                        oauth_config = json.load(f)
+                    redirect_uri = oauth_config['web']['redirect_uris'][0]
+                    auth_manager = DriveAuthManager(oauth_secrets_file, redirect_uri)
+                    credentials, user_info = auth_manager.exchange_code_for_credentials(query_params['code'])
+                    
+                    if credentials and user_info:
+                        st.session_state.drive_credentials = DriveAuthManager.credentials_to_dict(credentials)
+                        st.session_state.drive_user_email = user_info.get('email')
+                        st.query_params.clear()
+                        st.success(f"✅ Authenticated as {user_info.get('email')}!")
+                        st.rerun()
+                    else:
+                        st.error("Authentication failed. Please try again.")
+                except Exception as e:
+                    st.error(f"Authentication error: {str(e)}")
+        
+        # Show sign-in button
+        try:
+            with open(oauth_secrets_file, 'r') as f:
+                oauth_config = json.load(f)
+            redirect_uri = oauth_config['web']['redirect_uris'][0]
+            auth_manager = DriveAuthManager(oauth_secrets_file, redirect_uri)
+            
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                if st.button("🔗 Sign in with Google", type="primary", use_container_width=True):
+                    auth_url, state = auth_manager.get_authorization_url()
+                    st.session_state.oauth_state = state
+                    st.markdown(f'<meta http-equiv="refresh" content="0;url={auth_url}">', unsafe_allow_html=True)
+                    st.info(f"Redirecting to Google... If not redirected, [click here]({auth_url})")
+        except Exception as e:
+            st.error(f"Failed to initialize OAuth: {str(e)}")
+        
+        st.stop()
+    
+    # Show authenticated status
+    st.success(f"✅ Authenticated as: {st.session_state.drive_user_email}")
+    if st.button("🔄 Sign Out", type="secondary", key="signout_btn"):
+        st.session_state.drive_credentials = None
+        st.session_state.drive_user_email = None
+        st.rerun()
+    
     #Create an export setting for the user to filled
     with st.expander("Export Settings", expanded=True):
         col1 = st.columns(1)
@@ -445,12 +567,15 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                 value=default_name,
                 help="The output will be saved as GeoTIFF (.tif)"
             )
-        #Hardcoded folder location so that the export is in one location
-        #Located in My Drive/EPISTEM/EPISTEMX_Landsat_Export folder structure
-        drive_folder = "EPISTEM/EPISTEMX_Landsat_Export"  
-        drive_url = "https://drive.google.com/drive/folders/1JKwqv3q3JyQnkIEuIqTQ2hlwPmM-FQaF?usp=sharing"
+        
+        # Allow user to specify folder name in their Drive
+        drive_folder = st.text_input(
+            "Google Drive Folder:",
+            value="EpistemX_Exports",
+            help="Folder name in your Google Drive where files will be saved. Will be created if it doesn't exist."
+        )
        
-        st.info(f"Files will be exported to [EPISTEM/EPISTEMX_Landsat_Export folder]({drive_url})")
+        st.info(f"📁 Files will be exported to: **My Drive/{drive_folder}/**")
         #Coordinate Reference System (CRS)
         #User can define their own CRS using EPSG code, if not, used WGS 1984 as default option    
         crs_options = {
@@ -483,6 +608,11 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
         #Button to start export the composite
         #System Response 1.3: Imagery Download
         if st.button("Start Export to Google Drive", type="primary"):
+            # Double-check authentication before export
+            if not st.session_state.drive_credentials:
+                st.error("❌ Drive authentication required. Please authenticate first.")
+                st.stop()
+            
             try:
                 with st.spinner("Preparing export task..."):
                     #Use the composite from session state
@@ -535,7 +665,8 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                         'scale': scale,
                         'start_time': datetime.datetime.now(),
                         'last_progress': 0,
-                        'last_update': datetime.datetime.now()
+                        'last_update': datetime.datetime.now(),
+                        'user_email': st.session_state.drive_user_email
                     }
                     #Append to export tasks list
                     st.session_state.export_tasks.append(task_info)
@@ -544,10 +675,12 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     st.info(f"Task ID: {task.id}")
                     st.markdown(f"""
                     **Export Details:**
+                    - Destination: {st.session_state.drive_user_email}'s Google Drive
                     - File location: My Drive/{drive_folder}/{export_name}.tif
                     - CRS: {export_crs}
                     - Resolution: {scale}m
                     
+                    The file will appear in your Google Drive once processing is complete.
                     Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks) or use the task monitor below.
                     """)
                     
@@ -610,6 +743,8 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     with col1:
                         st.write(f"**Task ID:** {task_info['id']}")
                         st.write(f"**Name:** {task_info['name']}")
+                        if 'user_email' in task_info:
+                            st.write(f"**Drive:** {task_info['user_email']}")
                         
                         # Individual task refresh button
                         if st.button(f"🔄", key=f"refresh_{i}", help="Refresh this task"):
@@ -739,8 +874,10 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     # Show completion details
                     if state == 'COMPLETED':
                         st.success("✅ Export completed successfully!")
-                        drive_url = "https://drive.google.com/drive/folders/1JKwqv3q3JyQnkIEuIqTQ2hlwPmM-FQaF?usp=sharing"
-                        st.success(f"File saved to: [EPISTEM/EPISTEMX_Landsat_Export Folder]({drive_url})")
+                        user_email = task_info.get('user_email', 'your')
+                        folder_name = task_info.get('folder', 'EpistemX_Exports')
+                        st.info(f"📁 File saved to: **{user_email}'s Google Drive** in folder **{folder_name}/**")
+                        st.markdown("[Open Google Drive](https://drive.google.com/drive/my-drive)")
                         
                         #Option to remove completed task from monitor
                         if st.button(f"Remove from monitor", key=f"remove_{i}"):

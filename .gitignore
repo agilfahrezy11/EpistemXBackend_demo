@@ -211,3 +211,4 @@ notebooks/Module_3_Generate_ROI.ipynb
 
 /auth
 *.geojson
+secrets/oauth_client_secret.json

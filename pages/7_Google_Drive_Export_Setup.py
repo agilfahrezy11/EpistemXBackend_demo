@@ -41,6 +41,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Redirect notice
+st.info("📌 **Note:** Google Drive authentication is now integrated directly into Module 1 for a streamlined experience.")
+if st.button("Go to Module 1: Generate Image Mosaic", type="primary"):
+    st.switch_page("pages/1_Module_1_Generate_Image_Mosaic.py")
+
+st.divider()
+st.markdown("### Advanced Configuration")
+st.caption("This page provides advanced Drive authentication management and testing.")
+
 # Check Earth Engine authentication first
 if not is_ee_initialized():
     st.warning("⚠️ Earth Engine is not authenticated. Please authenticate Earth Engine first before setting up Drive exports.")
@@ -118,7 +127,7 @@ if not oauth_secrets_file:
         2. Click "Create Credentials" > "OAuth client ID"
         3. Choose "Web application"
         4. Add authorized redirect URIs:
-           - For local development: `http://localhost:8501`
+           - For local development: `http://localhost:7860`
            - For Streamlit Cloud: `https://your-app-name.streamlit.app`
         5. Click "Create"
         
@@ -139,7 +148,7 @@ if not oauth_secrets_file:
             "client_secret": "YOUR_CLIENT_SECRET",
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": ["http://localhost:8501"]
+            "redirect_uris": ["http://localhost:7860"]
           }
         }
         ```
@@ -177,7 +186,7 @@ if not oauth_secrets_file:
         
         redirect_uri = st.text_input(
             "Redirect URI:",
-            value="http://localhost:8501",
+            value="http://localhost:7860",
             help="Must match the redirect URI configured in Google Cloud Console"
         )
         
