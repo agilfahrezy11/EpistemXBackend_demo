@@ -422,7 +422,7 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
         composite = collection.median().clip(aoi).addBands(thermal_median).toFloat()
         #Add section for visualization control
         st.subheader("Visualization Settings")
-        #Add commonly used band combination for Landsat[0.95, 1.1, 1]
+        #Add commonly used band combination for Landsat
         band_combinations = {
             "True Color (RGB)": {
                 'bands': ['RED', 'GREEN', 'BLUE'],
@@ -448,16 +448,75 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
                 'max': 0.4,
                 'gamma': [0.95, 1.1, 1]
             },
+            "Custom Band Combination": {
+                'bands': ['NIR', 'RED', 'GREEN'],  # Default for custom
+                'min': 0.0,
+                'max': 0.4,
+                'gamma': 1.0
+            }
         }
+        
+        # Get available bands from the composite
+        available_bands = composite.bandNames().getInfo()
+        
         #create a select box for the user to select the band combination
         selected_combination = st.selectbox(
             "Select Band Combination:",
             list(band_combinations.keys()),
-            index=1  # Default to False Color
+            index=0  #True color as default value
         )
         
         # Get the selected visualization parameters
         vis_params = band_combinations[selected_combination].copy()
+        
+        # If custom is selected, show band selection interface
+        if selected_combination == "Custom Band Combination":
+            st.info("💡 Select 1 band for grayscale or 3 bands for RGB visualization")
+            
+            col_band1, col_band2, col_band3 = st.columns(3)
+            
+            with col_band1:
+                band1 = st.selectbox(
+                    "Red Channel (or Single Band):",
+                    available_bands,
+                    index=available_bands.index('RED') if 'RED' in available_bands else 0,
+                    key="custom_band1"
+                )
+            
+            with col_band2:
+                band2 = st.selectbox(
+                    "Green Channel (optional):",
+                    ['None'] + available_bands,
+                    index=available_bands.index('GREEN') + 1 if 'GREEN' in available_bands else 0,
+                    key="custom_band2"
+                )
+            
+            with col_band3:
+                band3 = st.selectbox(
+                    "Blue Channel (optional):",
+                    ['None'] + available_bands,
+                    index=available_bands.index('BLUE') + 1 if 'BLUE' in available_bands else 0,
+                    key="custom_band3"
+                )
+            
+            # Build custom band list
+            custom_bands = [band1]
+            if band2 != 'None':
+                custom_bands.append(band2)
+            if band3 != 'None':
+                custom_bands.append(band3)
+            
+            # Update vis_params with custom bands
+            vis_params['bands'] = custom_bands
+            
+            # Show band combination info
+            if len(custom_bands) == 1:
+                st.caption(f"Grayscale visualization using: **{custom_bands[0]}**")
+            elif len(custom_bands) == 3:
+                st.caption(f"RGB visualization: R={custom_bands[0]}, G={custom_bands[1]}, B={custom_bands[2]}")
+            else:
+                st.warning("⚠️ Please select either 1 band (grayscale) or 3 bands (RGB)")
+                vis_params['bands'] = [band1, band1, band1]  # Fallback to grayscale
         
         # Advanced visualization controls in expander
         with st.expander("Advanced Visualization Controls", expanded=False):
@@ -471,7 +530,8 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
                     0.5,
                     float(vis_params['min']),
                     0.01,
-                    help="Adjust the minimum display value"
+                    help="Adjust the minimum display value",
+                    key="vis_min_slider"
                 )
                 max_val = st.slider(
                     "Maximum Value:",
@@ -479,7 +539,8 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
                     1.0,
                     float(vis_params['max']),
                     0.01,
-                    help="Adjust the maximum display value"
+                    help="Adjust the maximum display value",
+                    key="vis_max_slider"
                 )
                 
                 # Update vis_params with user adjustments
@@ -487,28 +548,48 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
                 vis_params['max'] = max_val
             
             with col2:
-                # Gamma controls
-                if isinstance(vis_params['gamma'], list):
+                # Gamma controls - adapt based on number of bands
+                num_bands = len(vis_params['bands'])
+                
+                if num_bands == 3 and isinstance(vis_params['gamma'], list):
                     st.write("**Gamma per band (R, G, B):**")
-                    gamma_r = st.slider("Red Gamma:", 0.1, 2.0, float(vis_params['gamma'][0]), 0.1)
-                    gamma_g = st.slider("Green Gamma:", 0.1, 2.0, float(vis_params['gamma'][1]), 0.1)
-                    gamma_b = st.slider("Blue Gamma:", 0.1, 2.0, float(vis_params['gamma'][2]), 0.1)
+                    gamma_r = st.slider("Red Gamma:", 0.1, 2.0, float(vis_params['gamma'][0]), 0.1, key="gamma_r")
+                    gamma_g = st.slider("Green Gamma:", 0.1, 2.0, float(vis_params['gamma'][1]), 0.1, key="gamma_g")
+                    gamma_b = st.slider("Blue Gamma:", 0.1, 2.0, float(vis_params['gamma'][2]), 0.1, key="gamma_b")
                     vis_params['gamma'] = [gamma_r, gamma_g, gamma_b]
+                elif num_bands == 3:
+                    # RGB but single gamma value
+                    use_per_band = st.checkbox("Use per-band gamma", value=False, key="use_per_band_gamma")
+                    if use_per_band:
+                        st.write("**Gamma per band (R, G, B):**")
+                        gamma_r = st.slider("Red Gamma:", 0.1, 2.0, 1.0, 0.1, key="gamma_r2")
+                        gamma_g = st.slider("Green Gamma:", 0.1, 2.0, 1.0, 0.1, key="gamma_g2")
+                        gamma_b = st.slider("Blue Gamma:", 0.1, 2.0, 1.0, 0.1, key="gamma_b2")
+                        vis_params['gamma'] = [gamma_r, gamma_g, gamma_b]
+                    else:
+                        gamma = st.slider(
+                            "Gamma:",
+                            0.1,
+                            2.0,
+                            float(vis_params['gamma']) if not isinstance(vis_params['gamma'], list) else 1.0,
+                            0.1,
+                            help="Adjust image brightness/contrast",
+                            key="gamma_single"
+                        )
+                        vis_params['gamma'] = gamma
                 else:
+                    # Single band (grayscale)
                     gamma = st.slider(
                         "Gamma:",
                         0.1,
                         2.0,
-                        float(vis_params['gamma']),
+                        float(vis_params['gamma']) if not isinstance(vis_params['gamma'], list) else 1.0,
                         0.1,
-                        help="Adjust image brightness/contrast"
+                        help="Adjust image brightness/contrast",
+                        key="gamma_grayscale"
                     )
                     vis_params['gamma'] = gamma
             
-            # Show current visualization parameters
-            st.write("**Current Visualization Parameters:**")
-            st.json(vis_params)
-        
         # Thermal band visualization parameters
         thermal_vis = {
             'min': 286,
@@ -516,27 +597,27 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
             'gamma': 0.4
         }
         
-        # Store in session state for use in other modules
+        #Store in session state for use in other modules
         st.session_state['composite'] = composite
         st.session_state['Image_metadata'] = detailed_stats
         st.session_state['AOI'] = aoi
         st.session_state['visualization'] = vis_params
         
-        # Display the image using geemap
+        #Display the image using geemap, center around the AOI
         st.subheader("Image Preview")
         centroid = gdf.geometry.centroid.iloc[0]
         m = geemap.Map(center=[centroid.y, centroid.x], zoom=9)
         
-        # Add layers with visibility controls
-        m.addLayer(thermal_median, thermal_vis, "Landsat Thermal Band", shown=False)
-        m.addLayer(collection, vis_params, 'Landsat Collection', shown=False)
-        m.addLayer(composite, vis_params, f'Composite - {selected_combination}', shown=True)
-        m.add_geojson(gdf.__geo_interface__, layer_name="AOI", shown=False)
-        
+        #Add layers with visibility controls
+        m.addLayer(thermal_median, thermal_vis, "Landsat Thermal Band", shown=False) #not shown
+        m.addLayer(collection, vis_params, 'Landsat Collection', shown=False) #not shown
+        m.addLayer(composite, vis_params, f'Composite - {selected_combination}', shown=True) #shown
+        m.add_geojson(gdf.__geo_interface__, layer_name="AOI", shown=False) #not shown
+        #cast the map to streamlit
         m.to_streamlit(height=600)
         
-        # Add a button to clear search results and start over
-        if st.button("🔄 Clear Results and Search Again", type="secondary"):
+        #Add a button to clear search results and start over
+        if st.button("🔄 Clear Results", type="secondary"):
             st.session_state.search_results = None
             st.session_state.thermal_collection = None
             st.session_state.detailed_stats = None
