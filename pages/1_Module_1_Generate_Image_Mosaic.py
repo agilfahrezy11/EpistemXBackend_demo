@@ -20,6 +20,7 @@ import os
 import ee
 import datetime
 import pandas as pd
+import json
 # Page configuration
 st.set_page_config(
     page_title="Search Imagery Composite",
@@ -68,6 +69,13 @@ if 'drive_credentials' not in st.session_state:
     st.session_state.drive_credentials = None
 if 'drive_user_email' not in st.session_state:
     st.session_state.drive_user_email = None
+# Store search results to prevent re-searching on visualization changes
+if 'search_results' not in st.session_state:
+    st.session_state.search_results = None
+if 'thermal_collection' not in st.session_state:
+    st.session_state.thermal_collection = None
+if 'detailed_stats' not in st.session_state:
+    st.session_state.detailed_stats = None
 
 #Task status caching to reduce API calls
 #Lesson learn from multiple exports, since it conflict between user session state
@@ -317,18 +325,22 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
 
         if coll_size == 0:
             st.warning("No images found for the selected criteria, increase cloud cover threshold,  change the date range, or make sure the acquisition date aligned with Landsat Mission Avaliability.")
+        else:
+            # Store search results in session state to prevent re-searching
+            st.session_state.search_results = collection
+            st.session_state.thermal_collection = thermal_collection
+            st.session_state.detailed_stats = detailed_stats
 
-    #get valid pixels (number of cloudless pixel in date range)
-    #valid_px = collection.reduce(ee.Reducer.count()).clip(aoi)
-    #stats = valid_px.reduceRegion(
-    #reducer=ee.Reducer.minMax().combine(
-    #    reducer2=ee.Reducer.mean(), sharedInputs=True),
-    #geometry=aoi,
-    #scale=30,
-    #maxPixels=1e13
-    #).getInfo()
 
 #=========4. Displaying the result of the search===========
+# Display results if they exist in session state (either from new search or previous search)
+if st.session_state.search_results is not None and st.session_state.detailed_stats is not None:
+    collection = st.session_state.search_results
+    thermal_collection = st.session_state.thermal_collection
+    detailed_stats = st.session_state.detailed_stats
+    aoi = st.session_state.aoi
+    gdf = st.session_state.gdf
+    
     #Display the search information as report
     summary_md = f"""
     ### Landsat Imagery Search Summary
@@ -337,6 +349,7 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
     - **Available Date Range:** {detailed_stats.get('date_range', 'N/A')}
     """
     st.markdown(summary_md)
+    
     #Path/Row information in expandable section
     path_row_tiles = detailed_stats.get('path_row_tiles', [])
     if path_row_tiles:
@@ -396,43 +409,143 @@ if st.button("Search Landsat Imagery", type="primary") and st.session_state.aoi 
             st.download_button(
                 label="Download Scene List as CSV",
                 data=csv,
-                file_name=f"landsat_scenes_{start_date}_{end_date}.csv",
+                file_name=f"landsat_scenes_{st.session_state.search_metadata.get('start_date', '')}_{st.session_state.search_metadata.get('end_date', '')}.csv",
                 mime="text/csv"
             )
         else:
             st.info("No scene data available to display")
-    #st.subheader("Detailed Statistics") {'bands': ['RED', 'GREEN', 'BLUE'], 'min': 0, 'max': 0.3}
-    #st.write(detailed_stats)
+    
     if detailed_stats['total_images'] > 0:
-        #visualization parameters
+        #Create and image composite/mosaic for thermal bands
+        thermal_median = thermal_collection.median().clip(aoi)
+        #composite for multispectral data and stacked them with thermal bands. Also convert to float()
+        composite = collection.median().clip(aoi).addBands(thermal_median).toFloat()
+        #Add section for visualization control
+        st.subheader("Visualization Settings")
+        #Add commonly used band combination for Landsat[0.95, 1.1, 1]
+        band_combinations = {
+            "True Color (RGB)": {
+                'bands': ['RED', 'GREEN', 'BLUE'],
+                'min': 0.0,
+                'max': 0.3,
+                'gamma': 1.4
+            },
+            "False Color Infrared (NIR/Red/Green)": {
+                'bands': ['NIR', 'RED', 'GREEN'],
+                'min': 0,
+                'max': 0.4,
+                'gamma': 1.1
+            },
+            "Short-wave Infrared (SWIR2/NIR/RED)": {
+                'bands': ['SWIR2', 'NIR', 'RED'],
+                'min': 0,
+                'max': 0.4,
+                'gamma': 1.2
+            },
+            "Land/Water (NIR/SWIR1/RED)": {
+                'bands': ['NIR','SWIR1','RED'],
+                'min': 0,
+                'max': 0.4,
+                'gamma': [0.95, 1.1, 1]
+            },
+        }
+        #create a select box for the user to select the band combination
+        selected_combination = st.selectbox(
+            "Select Band Combination:",
+            list(band_combinations.keys()),
+            index=1  # Default to False Color
+        )
+        
+        # Get the selected visualization parameters
+        vis_params = band_combinations[selected_combination].copy()
+        
+        # Advanced visualization controls in expander
+        with st.expander("Advanced Visualization Controls", expanded=False):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Min/Max value controls
+                min_val = st.slider(
+                    "Minimum Value:",
+                    0.0,
+                    0.5,
+                    float(vis_params['min']),
+                    0.01,
+                    help="Adjust the minimum display value"
+                )
+                max_val = st.slider(
+                    "Maximum Value:",
+                    0.1,
+                    1.0,
+                    float(vis_params['max']),
+                    0.01,
+                    help="Adjust the maximum display value"
+                )
+                
+                # Update vis_params with user adjustments
+                vis_params['min'] = min_val
+                vis_params['max'] = max_val
+            
+            with col2:
+                # Gamma controls
+                if isinstance(vis_params['gamma'], list):
+                    st.write("**Gamma per band (R, G, B):**")
+                    gamma_r = st.slider("Red Gamma:", 0.1, 2.0, float(vis_params['gamma'][0]), 0.1)
+                    gamma_g = st.slider("Green Gamma:", 0.1, 2.0, float(vis_params['gamma'][1]), 0.1)
+                    gamma_b = st.slider("Blue Gamma:", 0.1, 2.0, float(vis_params['gamma'][2]), 0.1)
+                    vis_params['gamma'] = [gamma_r, gamma_g, gamma_b]
+                else:
+                    gamma = st.slider(
+                        "Gamma:",
+                        0.1,
+                        2.0,
+                        float(vis_params['gamma']),
+                        0.1,
+                        help="Adjust image brightness/contrast"
+                    )
+                    vis_params['gamma'] = gamma
+            
+            # Show current visualization parameters
+            st.write("**Current Visualization Parameters:**")
+            st.json(vis_params)
+        
+        # Thermal band visualization parameters
         thermal_vis = {
             'min': 286,
             'max': 300,
             'gamma': 0.4
         }
-        vis_params = {
-            'min': 0,
-            'max': 0.4,
-            'gamma': [0.5, 0.9, 1],
-            'bands':['NIR', 'RED', 'GREEN']
-        }
-        #Create and image composite/mosaic for thermal bands
-        thermal_median = thermal_collection.median().clip(aoi)
-        #composite for multispectral data and stacked them with thermal bands. Also convert to float()
-        composite = collection.median().clip(aoi).addBands(thermal_median).toFloat()
+        
         # Store in session state for use in other modules
         st.session_state['composite'] = composite
         st.session_state['Image_metadata'] = detailed_stats
         st.session_state['AOI'] = aoi
         st.session_state['visualization'] = vis_params
+        
         # Display the image using geemap
+        st.subheader("Image Preview")
         centroid = gdf.geometry.centroid.iloc[0]
-        m = geemap.Map(center=[centroid.y, centroid.x], zoom=6)
-        m.addLayer(thermal_median, thermal_vis, "Landsat Thermal Band" )
-        m.addLayer(collection, vis_params, 'Landsat Collection', shown=True)
-        m.addLayer(composite, vis_params, 'Landsat Composite', shown= True)
-        m.add_geojson(gdf.__geo_interface__, layer_name="AOI", shown = False)
-        m.to_streamlit(height=600)   
+        m = geemap.Map(center=[centroid.y, centroid.x], zoom=9)
+        
+        # Add layers with visibility controls
+        m.addLayer(thermal_median, thermal_vis, "Landsat Thermal Band", shown=False)
+        m.addLayer(collection, vis_params, 'Landsat Collection', shown=False)
+        m.addLayer(composite, vis_params, f'Composite - {selected_combination}', shown=True)
+        m.add_geojson(gdf.__geo_interface__, layer_name="AOI", shown=False)
+        
+        m.to_streamlit(height=600)
+        
+        # Add a button to clear search results and start over
+        if st.button("🔄 Clear Results and Search Again", type="secondary"):
+            st.session_state.search_results = None
+            st.session_state.thermal_collection = None
+            st.session_state.detailed_stats = None
+            st.session_state.composite = None
+            st.session_state.Image_metadata = None
+            st.rerun()
+            
+elif st.session_state.aoi is not None:
+    st.info("Click 'Search Landsat Imagery' button above to begin searching.")
 else:
     st.info("Upload an AOI and specify search criteria to begin.")
 
