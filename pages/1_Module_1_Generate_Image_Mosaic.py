@@ -13,7 +13,6 @@ import geemap.foliumap as geemap
 import geopandas as gpd
 from epistemx.module_1 import Reflectance_Data, Reflectance_Stats
 from epistemx.shapefile_utils import shapefile_validator, EE_converter
-from epistemx import DriveAuthManager, DriveHelper, ensure_valid_credentials
 import tempfile
 import zipfile
 import os
@@ -633,143 +632,60 @@ else:
 #=========5. Exporting the image collection===========
 #check if the session state is not empty
 if st.session_state.composite is not None and st.session_state.aoi is not None:
-    st.subheader("Export Imagery to Google Drive")
+    st.subheader("Simpan Gabungan Citra")
     
-    # Check Drive authentication status
-    drive_authenticated = False
-    if st.session_state.drive_credentials:
-        # Ensure credentials are still valid
-        updated_creds = ensure_valid_credentials(st.session_state.drive_credentials)
-        if updated_creds:
-            st.session_state.drive_credentials = updated_creds
-            drive_authenticated = True
-        else:
-            st.session_state.drive_credentials = None
-            st.session_state.drive_user_email = None
-    
-    # Inline Drive Authentication Section
-    if not drive_authenticated:
-        st.info("🔐 **Authenticate with Google Drive to enable exports**")
-        
-        # Check for OAuth client secrets file
-        oauth_secrets_file = None
-        possible_locations = [
-            'secrets/oauth_client_secret.json',
-            'auth/oauth_client_secret.json',
-            'oauth_client_secret.json',
-            '.streamlit/secrets/oauth_client_secret.json'
-        ]
-        
-        for location in possible_locations:
-            if os.path.exists(location):
-                oauth_secrets_file = location
-                break
-        
-        if not oauth_secrets_file:
-            with st.expander("⚙️ Setup OAuth Credentials (First Time Only)", expanded=False):
-                st.markdown("""
-                **Quick Setup:**
-                1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-                2. Enable Google Drive API
-                3. Create OAuth2 credentials (Web application)
-                4. Add redirect URI: `http://localhost:7860`
-                5. Enter credentials below
-                """)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    client_id = st.text_input("Client ID:", key="oauth_client_id")
-                with col2:
-                    client_secret = st.text_input("Client Secret:", type="password", key="oauth_client_secret")
-                
-                if st.button("💾 Save Credentials", type="secondary"):
-                    if client_id and client_secret:
-                        oauth_config = {
-                            "web": {
-                                "client_id": client_id,
-                                "client_secret": client_secret,
-                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                                "token_uri": "https://oauth2.googleapis.com/token",
-                                "redirect_uris": ["http://localhost:7860"]
-                            }
-                        }
-                        os.makedirs('secrets', exist_ok=True)
-                        oauth_secrets_file = 'secrets/oauth_client_secret.json'
-                        with open(oauth_secrets_file, 'w') as f:
-                            json.dump(oauth_config, f, indent=2)
-                        st.success("✅ Credentials saved!")
-                        st.rerun()
-                    else:
-                        st.error("Please provide both Client ID and Client Secret")
-            st.stop()
-        
-        # Handle OAuth callback
-        query_params = st.query_params
-        if 'code' in query_params:
-            with st.spinner("Completing authentication..."):
-                try:
-                    with open(oauth_secrets_file, 'r') as f:
-                        oauth_config = json.load(f)
-                    redirect_uri = oauth_config['web']['redirect_uris'][0]
-                    auth_manager = DriveAuthManager(oauth_secrets_file, redirect_uri)
-                    credentials, user_info = auth_manager.exchange_code_for_credentials(query_params['code'])
-                    
-                    if credentials and user_info:
-                        st.session_state.drive_credentials = DriveAuthManager.credentials_to_dict(credentials)
-                        st.session_state.drive_user_email = user_info.get('email')
-                        st.query_params.clear()
-                        st.success(f"✅ Authenticated as {user_info.get('email')}!")
-                        st.rerun()
-                    else:
-                        st.error("Authentication failed. Please try again.")
-                except Exception as e:
-                    st.error(f"Authentication error: {str(e)}")
-        
-        # Show sign-in button
-        try:
-            with open(oauth_secrets_file, 'r') as f:
-                oauth_config = json.load(f)
-            redirect_uri = oauth_config['web']['redirect_uris'][0]
-            auth_manager = DriveAuthManager(oauth_secrets_file, redirect_uri)
-            
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                if st.button("🔗 Sign in with Google", type="primary", use_container_width=True):
-                    auth_url, state = auth_manager.get_authorization_url()
-                    st.session_state.oauth_state = state
-                    st.markdown(f'<meta http-equiv="refresh" content="0;url={auth_url}">', unsafe_allow_html=True)
-                    st.info(f"Redirecting to Google... If not redirected, [click here]({auth_url})")
-        except Exception as e:
-            st.error(f"Failed to initialize OAuth: {str(e)}")
-        
-        st.stop()
-    
-    # Show authenticated status
-    st.success(f"✅ Authenticated as: {st.session_state.drive_user_email}")
-    if st.button("🔄 Sign Out", type="secondary", key="signout_btn"):
-        st.session_state.drive_credentials = None
-        st.session_state.drive_user_email = None
-        st.rerun()
-    
+    # Export destination selection
+    export_destination = st.radio(
+        "Pilih tujuan ekspor:",
+        ["Unduh Langsung", "Google Cloud Storage"],
+        index=0,
+        help="Pilih lokasi untuk menyimpan hasil gabungan citra"
+    )
     #Create an export setting for the user to filled
-    with st.expander("Export Settings", expanded=True):
+    with st.expander("Pengaturan ekspor", expanded=True):
         col1 = st.columns(1)
         #File Naming
         default_name = f"Landsat_{st.session_state.search_metadata.get('sensor', 'unknown')}_{st.session_state.search_metadata.get('start_date', '')}_{st.session_state.search_metadata.get('end_date', '')}_mosaic"
         export_name = st.text_input(
-                "Export Filename:",
+                "Nama berkas ekspor:",
                 value=default_name,
-                help="The output will be saved as GeoTIFF (.tif)"
+                help="Hasil akan disimpan dalam format GeoTIFF (.tif)"
             )
+        # Export destination specific settings
+        if export_destination == "Unduh Langsung":
+            st.info("📥 Berkas akan diunduh langsung ke komputer Anda dalam format GeoTIFF")
+            st.warning("⚠️ Catatan: Unduhan langsung dibatasi maksimal 32 MB. Untuk area yang lebih besar, gunakan Google Cloud Storage.")
         
-        # Allow user to specify folder name in their Drive
-        drive_folder = st.text_input(
-            "Google Drive Folder:",
-            value="EpistemX_Exports",
-            help="Folder name in your Google Drive where files will be saved. Will be created if it doesn't exist."
-        )
-       
-        st.info(f"📁 Files will be exported to: **My Drive/{drive_folder}/**")
+        else:  # Google Cloud Storage
+            st.subheader("Pengaturan Google Cloud Storage")
+            
+            # Nama GCS Bucket
+            gcs_bucket = st.text_input(
+                "Nama GCS Bucket:",
+                value="epistemx",
+                placeholder="epistemx",
+                help="Masukkan nama bucket Google Cloud Storage Anda"
+            )
+            
+            # Awalan jalur file GCS
+            gcs_path_prefix = st.text_input(
+                "Awalan Jalur File (opsional):",
+                value="landsat_exports/",
+                help="Awalan jalur opsional di dalam bucket (misal: 'landsat_exports/' atau 'data/imagery/')"
+            )
+            
+            # Email Akun Layanan (opsional - hanya untuk tampilan, sebagian disembunyikan)
+            service_account_email = st.text_input(
+                "Email Akun Layanan:",
+                value="epistemx@ee-xxx.iam.gserviceaccount.com",
+                placeholder="epistemx@ee-xxx.iam.gserviceaccount.com",
+                help="Email akun layanan untuk autentikasi (disetel secara terpisah)"
+            )
+            
+            if not gcs_bucket:
+                st.warning("⚠️ Nama GCS Bucket wajib diisi untuk ekspor ke Cloud Storage")
+            else:
+                st.info(f"Berkas akan diekspor ke: gs://{gcs_bucket}/{gcs_path_prefix}{export_name}.tif")
         #Coordinate Reference System (CRS)
         #User can define their own CRS using EPSG code, if not, used WGS 1984 as default option    
         crs_options = {
@@ -784,16 +700,16 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
             
         if crs_choice == 'Custom EPSG':
             custom_epsg = st.text_input(
-                "Enter EPSG Code:",
+                "Masukkan EPSG Code:",
                 value="4326",
-                help="Example: 32648 (UTM Zone 48N)"
+                help="Contoh: 32748 (UTM Zona 48S)"
                 )
             export_crs = f"EPSG:{custom_epsg}"
         else:
             export_crs = crs_options[crs_choice]
             #Define the scale/spatial resolution of the imagery
         scale = st.number_input(
-                "Pixel Size (meters):",
+                "Ukuran piksel (meter):",
                 min_value=10,
                 max_value=1000,
                 value=30,
@@ -801,14 +717,16 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
             )
         #Button to start export the composite
         #System Response 1.3: Imagery Download
-        if st.button("Start Export to Google Drive", type="primary"):
-            # Double-check authentication before export
-            if not st.session_state.drive_credentials:
-                st.error("❌ Drive authentication required. Please authenticate first.")
-                st.stop()
+        export_button_text = f"Mulai ekspor ke {export_destination}"
+        export_disabled = False
+        
+        # Disable button if GCS is selected but bucket name is missing
+        if export_destination == "Google Cloud Storage" and not gcs_bucket:
+            export_disabled = True
             
+        if st.button(export_button_text, type="primary", disabled=export_disabled):
             try:
-                with st.spinner("Preparing export task..."):
+                with st.spinner("Menyiapkan tugas ekspor…"):
                     #Use the composite from session state
                     export_image = st.session_state.composite
                     
@@ -830,68 +748,134 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                         try:
                             export_region = aoi_obj.geometry()
                         except:
-                            raise ValueError(f"Cannot extract geometry from AOI object of type: {type(aoi_obj)}")
+                            raise ValueError(f"Tidak dapat mengekstrak geometri dari objek wilayah kajian bertipe: {type(aoi_obj)}")
                     
-                    #Summarize the export parameter from user input
-                    export_params = {
-                        "image": export_image,
-                        "description": export_name.replace(" ", "_"),  #Remove spaces from description
-                        "folder": drive_folder,
-                        "fileNamePrefix": export_name,
-                        "scale": scale,
-                        "crs": export_crs,
-                        "maxPixels": 1e13,
-                        "fileFormat": "GeoTIFF",
-                        "formatOptions": {"cloudOptimized": True},
-                        "region": export_region
-                    }
-                    
-                    #Pass the parameters to earth engine export
-                    task = ee.batch.Export.image.toDrive(**export_params)
-                    task.start()
-                    
-                    #Store task info in session state for monitoring
-                    task_info = {
-                        'id': task.id,
-                        'name': export_name,
-                        'folder': drive_folder,
-                        'crs': export_crs,
-                        'scale': scale,
-                        'start_time': datetime.datetime.now(),
-                        'last_progress': 0,
-                        'last_update': datetime.datetime.now(),
-                        'user_email': st.session_state.drive_user_email
-                    }
-                    #Append to export tasks list
-                    st.session_state.export_tasks.append(task_info)
-                    #note, here the task is submitted, but not yet done
-                    st.success(f"✅ Export task '{export_name}' submitted successfully!")
-                    st.info(f"Task ID: {task.id}")
-                    st.markdown(f"""
-                    **Export Details:**
-                    - Destination: {st.session_state.drive_user_email}'s Google Drive
-                    - File location: My Drive/{drive_folder}/{export_name}.tif
-                    - CRS: {export_crs}
-                    - Resolution: {scale}m
-                    
-                    The file will appear in your Google Drive once processing is complete.
-                    Check progress in the [Earth Engine Task Manager](https://code.earthengine.google.com/tasks) or use the task monitor below.
-                    """)
+                    # Configure export parameters based on destination
+                    if export_destination == "Unduh Langsung":
+                        # Use getDownloadURL for direct download
+                        try:
+                            download_params = {
+                                "name": export_name,
+                                "crs": export_crs,
+                                "scale": scale,
+                                "region": export_region,
+                                "filePerBand": False,
+                                "fileFormat": "GEO_TIFF",
+                                "formatOptions": {"cloudOptimized": True}
+                            }
+                            
+                            # Get download URL
+                            download_url = export_image.getDownloadURL(download_params)
+                            
+                            if download_url:
+                                st.success("✅ URL unduhan berhasil dibuat!")
+                                st.markdown(f"""
+                                **Detail Unduhan:**
+                                - Format: GeoTIFF
+                                - CRS: {export_crs}
+                                - Resolusi: {scale} meter
+                                - Nama berkas: {export_name}.tif
+                                """)
+                                
+                                # Create download link with button styling
+                                st.markdown(f"""
+                                <div style="margin: 1rem 0;">
+                                    <a href="{download_url}" download="{export_name}.tif" target="_blank" style="text-decoration: none;">
+                                        <div style="
+                                            background-color: #ff4b4b;
+                                            color: white;
+                                            padding: 0.75rem 1.5rem;
+                                            border-radius: 0.5rem;
+                                            text-align: center;
+                                            font-weight: 600;
+                                            font-size: 1rem;
+                                            cursor: pointer;
+                                            display: inline-block;
+                                            min-width: 200px;
+                                            transition: background-color 0.3s;
+                                        " onmouseover="this.style.backgroundColor='#e63946'" onmouseout="this.style.backgroundColor='#ff4b4b'">
+                                            📥 Unduh GeoTIFF
+                                        </div>
+                                    </a>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Also provide text link as backup
+                                st.markdown(f"**Link alternatif:** [Unduh {export_name}.tif]({download_url})")
+                                st.info("💡 Klik tombol merah di atas untuk mengunduh berkas GeoTIFF ke komputer Anda.")
+                                
+                            else:
+                                st.error("❌ Gagal membuat URL unduhan. Coba kurangi area atau gunakan Google Cloud Storage.")
+                                
+                        except Exception as download_error:
+                            st.error(f"❌ Error saat membuat unduhan: {str(download_error)}")
+                            st.info("💡 Coba kurangi area kajian atau gunakan Google Cloud Storage untuk area yang lebih besar.")
+                        
+                        # Direct download completed - no task needed
+                        
+                    else:  # Google Cloud Storage
+                        #Summarize the export parameter from user input for GCS
+                        export_params = {
+                            "image": export_image,
+                            "description": export_name.replace(" ", "_"),  #Remove spaces from description
+                            "bucket": gcs_bucket,
+                            "fileNamePrefix": f"{gcs_path_prefix}{export_name}",
+                            "scale": scale,
+                            "crs": export_crs,
+                            "maxPixels": 1e13,
+                            "fileFormat": "GeoTIFF",
+                            "formatOptions": {"cloudOptimized": True},
+                            "region": export_region
+                        }
+                        
+                        #Pass the parameters to earth engine export for Cloud Storage
+                        task = ee.batch.Export.image.toCloudStorage(**export_params)
+                        
+                        task.start()
+                        
+                        #Store task info in session state for monitoring
+                        task_info = {
+                            'id': task.id,
+                            'name': export_name,
+                            'destination': export_destination,
+                            'folder': gcs_bucket,
+                            'crs': export_crs,
+                            'scale': scale,
+                            'start_time': datetime.datetime.now(),
+                            'last_progress': 0,
+                            'last_update': datetime.datetime.now()
+                        }
+                        #Append to export tasks list
+                        st.session_state.export_tasks.append(task_info)
+                        #note, here the task is submitted, but not yet done
+                        st.success(f"✅ Tugas ekspor '{export_name}' berhasil dikirim!")
+                        st.info(f"ID Tugas: {task.id}")
+                        
+                        # Display export details for Google Cloud Storage
+                        st.markdown(f"""
+                        **Detail Ekspor:**
+                        - Tujuan: Google Cloud Storage
+                        - Lokasi berkas: gs://{gcs_bucket}/{gcs_path_prefix}{export_name}.tif
+                        - CRS: {export_crs}
+                        - Resolusi: {scale}m
+                        
+                        Periksa progres di [Earth Engine Task Manager](https://code.earthengine.google.com/tasks) atau gunakan pemantau tugas di bawah ini.
+                        """)
                     
             except Exception as e:
-                st.error(f"Export failed: {str(e)}")
-                st.info("Debugging info:")
-                st.write(f"AOI type: {type(st.session_state.aoi)}")
-                st.write(f"Composite exists: {st.session_state.composite is not None}")
+                st.error(f"Gagal mengekspor: {str(e)}")
+                st.info("Informasi Pemecahan Masalah:")
+                st.write(f"Jenis wilayah kajian: {type(st.session_state.aoi)}")
+                st.write(f"Komposit tersedia: {st.session_state.composite is not None}")
 
     #Earth Engine Export Task Monitor
     if st.session_state.export_tasks:
-        st.subheader("Earth Engine Export Monitor")
+        st.subheader("Pantau Ekspor Earth Engine")
         
         # Manual refresh options with cache control
         col_refresh1, col_refresh2 = st.columns([1, 3])
         with col_refresh1:
-            if st.button("🔄 Refresh All"):
+            if st.button("🔄 Refresh Semua"):
                 # Clear cache to force fresh data
                 st.session_state.task_cache.clear()
                 st.session_state.last_cache_update.clear()
@@ -901,7 +885,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
             # Show cache status
             active_tasks_count = len(get_active_tasks())
             total_tasks_count = len(st.session_state.export_tasks)
-            st.caption(f"Monitoring {active_tasks_count}/{total_tasks_count} active tasks | Manual refresh only")
+            st.caption(f"Pantau {active_tasks_count}/{total_tasks_count} tugas aktif | segarkan ulang manual")
         
         #Summary of active tasks using cached status
         running_tasks = 0
@@ -937,8 +921,6 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     with col1:
                         st.write(f"**Task ID:** {task_info['id']}")
                         st.write(f"**Name:** {task_info['name']}")
-                        if 'user_email' in task_info:
-                            st.write(f"**Drive:** {task_info['user_email']}")
                         
                         # Individual task refresh button
                         if st.button(f"🔄", key=f"refresh_{i}", help="Refresh this task"):
@@ -1035,31 +1017,31 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                         
                         if creation_ts:
                             creation_time = datetime.datetime.fromtimestamp(creation_ts / 1000)
-                            st.write(f"**Started:** {creation_time.strftime('%H:%M:%S')}")
+                            st.write(f"**Mulai:** {creation_time.strftime('%H:%M:%S')}")
                         else:
-                            st.write("**Started:** N/A")
+                            st.write("**Mulai:** N/A")
                         
                         if update_ts:
                             update_time = datetime.datetime.fromtimestamp(update_ts / 1000)
-                            st.write(f"**Updated:** {update_time.strftime('%H:%M:%S')}")
+                            st.write(f"**Waktu terkini:** {update_time.strftime('%H:%M:%S')}")
                         else:
-                            st.write("**Updated:** N/A")
+                            st.write("**Waktu terkini:** N/A")
                         
                         # Show total runtime for completed tasks
                         if state == 'COMPLETED' and creation_ts and update_ts:
                             total_runtime = (update_ts - creation_ts) / 1000 / 60  # minutes
                             if total_runtime > 60:
-                                st.caption(f"Total time: {total_runtime/60:.1f}h {total_runtime%60:.0f}m")
+                                st.caption(f"Total waktu: {total_runtime/60:.1f}jam {total_runtime%60:.0f}menit")
                             else:
-                                st.caption(f"Total time: {total_runtime:.0f} min")
+                                st.caption(f"Total waktu: {total_runtime:.0f} menit")
                         
                         # Show cache status
                         if task_info['id'] in st.session_state.last_cache_update:
                             cache_age = (datetime.datetime.now() - st.session_state.last_cache_update[task_info['id']]).seconds
                             if cache_age < 60:
-                                st.caption(f"📊 Data: {cache_age}s ago")
+                                st.caption(f"📊 Data: {cache_age}detik yang lalu")
                             else:
-                                st.caption(f"📊 Data: {cache_age//60}m ago")
+                                st.caption(f"📊 Data: {cache_age//60}menit yang lalu")
                     
                     # Show error message if failed
                     if state == 'FAILED' and 'error_message' in status:
@@ -1067,20 +1049,18 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                     
                     # Show completion details
                     if state == 'COMPLETED':
-                        st.success("✅ Export completed successfully!")
-                        user_email = task_info.get('user_email', 'your')
-                        folder_name = task_info.get('folder', 'EpistemX_Exports')
-                        st.info(f"📁 File saved to: **{user_email}'s Google Drive** in folder **{folder_name}/**")
-                        st.markdown("[Open Google Drive](https://drive.google.com/drive/my-drive)")
+                        st.success("✅ Ekspor berhasil!")
+                        drive_url = "https://drive.google.com/drive/folders/1JKwqv3q3JyQnkIEuIqTQ2hlwPmM-FQaF?usp=sharing"
+                        st.success(f"Berkas disimpan di: [EPISTEM/EPISTEMX_Landsat_Export Folder]({drive_url})")
                         
                         #Option to remove completed task from monitor
-                        if st.button(f"Remove from monitor", key=f"remove_{i}"):
+                        if st.button(f"Hapus dari pantauan", key=f"remove_{i}"):
                             st.session_state.export_tasks.pop(i)
                             st.rerun()
                 
                 except Exception as e:
-                    st.error(f"Failed to get task status: {str(e)}")
-                    st.write(f"Task ID: {task_info['id']}")
+                    st.error(f"Gagal memuat status tugas: {str(e)}")
+                    st.write(f"ID tugas: {task_info['id']}")
         
         # Clear all completed tasks button
         completed_tasks = []
@@ -1093,7 +1073,7 @@ if st.session_state.composite is not None and st.session_state.aoi is not None:
                 pass
         
         if completed_tasks:
-            if st.button("🗑️ Clear All Completed Tasks"):
+            if st.button("🗑️ Hapus semua tugas yang selesai"):
                 st.session_state.export_tasks = [
                     task for task in st.session_state.export_tasks 
                     if task not in completed_tasks
