@@ -421,7 +421,7 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
         #composite for multispectral data and stacked them with thermal bands. Also convert to float()
         composite = collection.median().clip(aoi).addBands(thermal_median).toFloat()
         #Add section for visualization control
-        st.subheader("Visualization Settings")
+        st.subheader("Kombinasi Kanal Majemuk")
         #Add commonly used band combination for Landsat
         band_combinations = {
             "True Color (RGB)": {
@@ -448,7 +448,7 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
                 'max': 0.4,
                 'gamma': [0.95, 1.1, 1]
             },
-            "Custom Band Combination": {
+            "Kombinasi saluran bebas": {
                 'bands': ['NIR', 'RED', 'GREEN'],  # Default for custom
                 'min': 0.0,
                 'max': 0.4,
@@ -461,7 +461,7 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
         
         #create a select box for the user to select the band combination
         selected_combination = st.selectbox(
-            "Select Band Combination:",
+            "Pilih Kombinasi Kanal:",
             list(band_combinations.keys()),
             index=0  #True color as default value
         )
@@ -470,8 +470,8 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
         vis_params = band_combinations[selected_combination].copy()
         
         # If custom is selected, show band selection interface
-        if selected_combination == "Custom Band Combination":
-            st.info("💡 Select 1 band for grayscale or 3 bands for RGB visualization")
+        if selected_combination == "Kombinasi saluran bebas":
+            st.info("💡 Pilih satu kanal untuk kombinasi hitam putih dan 3 kanal untuk visualisasi berwarna")
             
             col_band1, col_band2, col_band3 = st.columns(3)
             
@@ -511,7 +511,7 @@ if st.session_state.search_results is not None and st.session_state.detailed_sta
             
             # Show band combination info
             if len(custom_bands) == 1:
-                st.caption(f"Grayscale visualization using: **{custom_bands[0]}**")
+                st.caption(f"Grayscale visualizati`on using: **{custom_bands[0]}**")
             elif len(custom_bands) == 3:
                 st.caption(f"RGB visualization: R={custom_bands[0]}, G={custom_bands[1]}, B={custom_bands[2]}")
             else:
